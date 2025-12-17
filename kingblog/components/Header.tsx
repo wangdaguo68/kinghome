@@ -57,7 +57,7 @@ export default function Header() {
                   href="/posts/new"
                   className="btn btn-primary"
                 >
-                  写复盘
+                  写笔记
                 </Link>
                 <span className="text-gray-600 text-sm">
                   {user.nickname || user.username}

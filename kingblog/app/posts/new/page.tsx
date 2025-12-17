@@ -181,7 +181,7 @@ export default function NewPost() {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <h1 className="text-3xl font-bold text-gray-900 mb-8">写复盘</h1>
+      <h1 className="text-3xl font-bold text-gray-900 mb-8">写笔记</h1>
 
       {loadingYesterday && (
         <div className="card mb-6 text-center py-4 text-gray-500">
@@ -211,7 +211,7 @@ export default function NewPost() {
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-2">
-              复盘日期 <span className="text-red-500">*</span>
+              笔记日期 <span className="text-red-500">*</span>
             </label>
             <input
               type="date"
@@ -306,21 +306,25 @@ export default function NewPost() {
         </div>
 
         {/* 今日总结 - 富文本编辑器 */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            今日总结
-          </label>
-          <RichTextEditor
-            value={formData.summary}
-            onChange={(value) => setFormData({ ...formData, summary: value })}
-            placeholder="简要总结今天的主要收获和感受..."
-          />
-        </div>
+        {selectedCategories.some(
+          (id) => categories.find((c) => c.id === id)?.name === '日复盘'
+        ) && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              今日总结
+            </label>
+            <RichTextEditor
+              value={formData.summary}
+              onChange={(value) => setFormData({ ...formData, summary: value })}
+              placeholder="简要总结今天的主要收获和感受..."
+            />
+          </div>
+        )}
 
         {/* 复盘内容 - 富文本编辑器 */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            复盘内容 <span className="text-red-500">*</span>
+            笔记内容 <span className="text-red-500">*</span>
           </label>
           <RichTextEditor
             value={formData.content}
@@ -330,16 +334,20 @@ export default function NewPost() {
         </div>
 
         {/* 明日计划 - 富文本编辑器 */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            明日计划
-          </label>
-          <RichTextEditor
-            value={formData.plan}
-            onChange={(value) => setFormData({ ...formData, plan: value })}
-            placeholder="列出明天要完成的主要任务..."
-          />
-        </div>
+        {selectedCategories.some(
+          (id) => categories.find((c) => c.id === id)?.name === '日复盘'
+        ) && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              明日计划
+            </label>
+            <RichTextEditor
+              value={formData.plan}
+              onChange={(value) => setFormData({ ...formData, plan: value })}
+              placeholder="列出明天要完成的主要任务..."
+            />
+          </div>
+        )}
 
         {/* 状态 */}
         <div>
@@ -370,7 +378,7 @@ export default function NewPost() {
             disabled={loading || !formData.content.trim()}
             className="btn btn-primary flex-1"
           >
-            {loading ? '保存中...' : '保存复盘'}
+            {loading ? '保存中...' : '保存笔记'}
           </button>
           <button
             type="button"

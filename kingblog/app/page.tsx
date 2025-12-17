@@ -24,7 +24,7 @@ export default async function Home({ searchParams }: HomeProps) {
       {/* 欢迎区域 */}
       <div className="text-center py-12">
         <h1 className="text-4xl font-bold text-gray-900 mb-4">
-          每日复盘
+          每日笔记
         </h1>
         <p className="text-lg text-gray-600 mb-8">
           记录每一天的思考与成长
@@ -33,7 +33,7 @@ export default async function Home({ searchParams }: HomeProps) {
           href="/posts/new"
           className="btn btn-primary inline-block"
         >
-          写复盘
+          写笔记
         </Link>
       </div>
 
@@ -41,7 +41,7 @@ export default async function Home({ searchParams }: HomeProps) {
       <div className="card space-y-4">
         <form method="get" className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
-            <label className="block text-sm text-gray-600 mb-2">复盘日期</label>
+            <label className="block text-sm text-gray-600 mb-2">笔记日期</label>
             <input
               type="date"
               name="date"
@@ -76,11 +76,11 @@ export default async function Home({ searchParams }: HomeProps) {
         </div>
       </div>
 
-      {/* 复盘列表 */}
+      {/* 笔记列表 */}
       <div className="space-y-6">
         {posts.length === 0 ? (
           <div className="card text-center py-12">
-            <p className="text-gray-500 mb-4">未找到复盘记录</p>
+            <p className="text-gray-500 mb-4">未找到笔记</p>
             <Link href="/posts/new" className="btn btn-primary">
               写一篇
             </Link>

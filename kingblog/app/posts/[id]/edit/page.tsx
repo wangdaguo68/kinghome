@@ -297,18 +297,6 @@ export default function EditPost() {
           )}
         </div>
 
-        {/* 今日总结 - 富文本编辑器 */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            今日总结
-          </label>
-          <RichTextEditor
-            value={formData.summary}
-            onChange={(value) => setFormData({ ...formData, summary: value })}
-            placeholder="简要总结今天的主要收获和感受..."
-          />
-        </div>
-
         {/* 复盘内容 - 富文本编辑器 */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -318,6 +306,18 @@ export default function EditPost() {
             value={formData.content}
             onChange={(value) => setFormData({ ...formData, content: value })}
             placeholder="详细记录今天的思考、遇到的问题、解决方案等..."
+          />
+        </div>
+
+        {/* 今日总结 - 富文本编辑器 */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            今日总结
+          </label>
+          <RichTextEditor
+            value={formData.summary}
+            onChange={(value) => setFormData({ ...formData, summary: value })}
+            placeholder="简要总结今天的主要收获和感受..."
           />
         </div>
 

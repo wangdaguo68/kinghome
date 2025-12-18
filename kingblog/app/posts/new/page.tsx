@@ -305,7 +305,19 @@ export default function NewPost() {
           )}
         </div>
 
-        {/* 今日总结 - 富文本编辑器 */}
+        {/* 笔记内容 - 富文本编辑器 */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            笔记内容 <span className="text-red-500">*</span>
+          </label>
+          <RichTextEditor
+            value={formData.content}
+            onChange={(value) => setFormData({ ...formData, content: value })}
+            placeholder="详细记录今天的思考、遇到的问题、解决方案等..."
+          />
+        </div>
+
+        {/* 今日总结 - 富文本编辑器（仅日复盘显示） */}
         {selectedCategories.some(
           (id) => categories.find((c) => c.id === id)?.name === '日复盘'
         ) && (
@@ -321,19 +333,7 @@ export default function NewPost() {
           </div>
         )}
 
-        {/* 复盘内容 - 富文本编辑器 */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            笔记内容 <span className="text-red-500">*</span>
-          </label>
-          <RichTextEditor
-            value={formData.content}
-            onChange={(value) => setFormData({ ...formData, content: value })}
-            placeholder="详细记录今天的思考、遇到的问题、解决方案等..."
-          />
-        </div>
-
-        {/* 明日计划 - 富文本编辑器 */}
+        {/* 明日计划 - 富文本编辑器（仅日复盘显示） */}
         {selectedCategories.some(
           (id) => categories.find((c) => c.id === id)?.name === '日复盘'
         ) && (

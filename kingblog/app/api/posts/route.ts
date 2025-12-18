@@ -3,16 +3,18 @@ import { getPosts, createPost } from '@/lib/posts';
 import { getCurrentUser } from '@/lib/auth';
 import { setPostCategories } from '@/lib/categories';
 
-// GET - 获取所有复盘（支持状态/日期过滤）
+// GET - 获取所有复盘（支持状态/日期/分类过滤）
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const statusParam = searchParams.get('status') as 'draft' | 'published' | 'all' | null;
     const dateParam = searchParams.get('date');
+    const categoryIdParam = searchParams.get('categoryId');
 
     const posts = await getPosts({
       status: statusParam || 'published',
       date: dateParam || undefined,
+      categoryId: categoryIdParam ? Number(categoryIdParam) : undefined,
     });
 
     return NextResponse.json({ success: true, data: posts });

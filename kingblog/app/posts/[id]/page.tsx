@@ -63,6 +63,14 @@ export default async function PostDetail({
           </div>
         </header>
 
+        {/* 复盘内容 */}
+        <section className="mb-8">
+          <div
+            className="prose max-w-none text-gray-700"
+            dangerouslySetInnerHTML={{ __html: post.content }}
+          />
+        </section>
+
         {/* 今日总结 */}
         {post.summary && (
           <section className="mb-8 p-4 bg-blue-50 rounded-lg border-l-4 border-blue-500">
@@ -73,14 +81,6 @@ export default async function PostDetail({
             />
           </section>
         )}
-
-        {/* 复盘内容 */}
-        <section className="mb-8">
-          <div
-            className="prose max-w-none text-gray-700"
-            dangerouslySetInnerHTML={{ __html: post.content }}
-          />
-        </section>
 
         {/* 明日计划 */}
         {post.plan && (

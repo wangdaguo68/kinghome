@@ -16,38 +16,101 @@ export interface Post {
 }
 
 export interface GetPostsOptions {
-  limit?: number;
   status?: 'draft' | 'published' | 'all';
   date?: string;
+  categoryId?: number;
+  page?: number;
+  pageSize?: number;
 }
 
-// 获取复盘（支持状态/日期过滤）
+// 获取复盘（支持状态/日期/分类/分页过滤）
 export async function getPosts(options: GetPostsOptions = {}) {
-  const { limit, status = 'published', date } = options;
+  const {
+    status = 'published',
+    date,
+    categoryId,
+    page = 1,
+    pageSize,
+  } = options;
 
   const conditions: string[] = [];
   const params: any[] = [];
+  let join = '';
 
   if (status !== 'all') {
-    conditions.push('status = ?');
+    conditions.push('p.status = ?');
     params.push(status);
   }
 
   if (date) {
-    conditions.push('date = ?');
+    conditions.push('p.date = ?');
     params.push(date);
+  }
+
+  if (categoryId) {
+    join = 'INNER JOIN post_categories pc ON p.id = pc.post_id';
+    conditions.push('pc.category_id = ?');
+    params.push(categoryId);
+  }
+
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+  // 计算分页（直接拼到 SQL，避免 MySQL 对 LIMIT 参数类型的限制）
+  const limitClause =
+    pageSize && pageSize > 0
+      ? `LIMIT ${Number(pageSize)} OFFSET ${Number((page - 1) * pageSize)}`
+      : '';
+
+  const sql = `
+    SELECT p.* FROM posts p
+    ${join}
+    ${where}
+    ORDER BY p.date DESC, p.created_at DESC
+    ${limitClause}
+  `;
+
+  return await query(sql, params) as Post[];
+}
+
+// 统计复盘数量（用于分页）
+export async function countPosts(options: Omit<GetPostsOptions, 'page' | 'pageSize'> = {}) {
+  const {
+    status = 'published',
+    date,
+    categoryId,
+  } = options;
+
+  const conditions: string[] = [];
+  const params: any[] = [];
+  let join = '';
+
+  if (status !== 'all') {
+    conditions.push('p.status = ?');
+    params.push(status);
+  }
+
+  if (date) {
+    conditions.push('p.date = ?');
+    params.push(date);
+  }
+
+  if (categoryId) {
+    join = 'INNER JOIN post_categories pc ON p.id = pc.post_id';
+    conditions.push('pc.category_id = ?');
+    params.push(categoryId);
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
   const sql = `
-    SELECT * FROM posts
+    SELECT COUNT(DISTINCT p.id) as total
+    FROM posts p
+    ${join}
     ${where}
-    ORDER BY date DESC, created_at DESC
-    ${limit ? `LIMIT ${limit}` : ''}
   `;
 
-  return await query(sql, params) as Post[];
+  const rows = await query(sql, params) as any[];
+  return rows[0]?.total ?? 0;
 }
 
 // 根据ID获取复盘
@@ -126,6 +189,15 @@ export async function deletePost(id: number) {
   const sql = 'DELETE FROM posts WHERE id = ?';
   await query(sql, [id]);
   return true;
+}
+
+// 批量删除复盘
+export async function deletePosts(ids: number[]) {
+  if (!ids || ids.length === 0) return 0;
+  const placeholders = ids.map(() => '?').join(', ');
+  const sql = `DELETE FROM posts WHERE id IN (${placeholders})`;
+  await query(sql, ids);
+  return ids.length;
 }
 
 // 增加浏览次数

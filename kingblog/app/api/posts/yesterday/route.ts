@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { getLatestDailyPost } from '@/lib/posts';
 import { getCurrentUser } from '@/lib/auth';
 
+// 标记为动态路由，避免构建时静态预渲染使用 cookies 报错
+export const dynamic = 'force-dynamic';
+
 // GET - 获取最近一篇"日复盘"类型的复盘
 export async function GET() {
   try {

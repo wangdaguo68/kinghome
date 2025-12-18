@@ -22,25 +22,41 @@ interface HomeProps {
 export default async function Home({ searchParams }: HomeProps) {
   const date = searchParams?.date || '';
   const status = (searchParams?.status as 'draft' | 'published' | 'all') || 'published';
-  const categoryId = searchParams?.categoryId ? Number(searchParams.categoryId) : undefined;
+  const categoryIdRaw = searchParams?.categoryId;
   const pageParam = Number(searchParams?.page) || 1;
   const sizeParam = Number(searchParams?.pageSize) || 10;
   const pageSize = PAGE_SIZE_OPTIONS.includes(sizeParam) ? sizeParam : 10;
   const page = pageParam > 0 ? pageParam : 1;
 
-  const [posts, categories, total] = await Promise.all([
+  // 先获取所有分类，用于确定默认的“日复盘”分类
+  const categories = await getAllCategories();
+  const defaultDailyCategory = categories.find((c) => c.name === '日复盘');
+
+  // 计算实际生效的分类筛选：
+  // - 未传 categoryId 参数：默认使用“日复盘”
+  // - 传了空字符串 ""：表示全部分类，不做分类过滤
+  // - 传了具体 id：按该分类过滤
+  let effectiveCategoryId: number | undefined;
+  if (categoryIdRaw === undefined) {
+    effectiveCategoryId = defaultDailyCategory?.id;
+  } else if (categoryIdRaw === '') {
+    effectiveCategoryId = undefined;
+  } else {
+    effectiveCategoryId = Number(categoryIdRaw);
+  }
+
+  const [posts, total] = await Promise.all([
     getPosts({
       status,
       date: date || undefined,
-      categoryId,
+      categoryId: effectiveCategoryId,
       page,
       pageSize,
     }),
-    getAllCategories(),
     countPosts({
       status,
       date: date || undefined,
-      categoryId,
+      categoryId: effectiveCategoryId,
     }),
   ]);
 
@@ -50,7 +66,13 @@ export default async function Home({ searchParams }: HomeProps) {
     const params = new URLSearchParams();
     if (date) params.set('date', date);
     if (status) params.set('status', status);
-    if (categoryId) params.set('categoryId', String(categoryId));
+    if (categoryIdRaw !== undefined) {
+      // 用户有显式选择分类（包括空字符串表示全部分类）
+      params.set('categoryId', categoryIdRaw);
+    } else if (effectiveCategoryId) {
+      // 初始默认“日复盘”时，把分类写入 URL，避免分页链接丢失
+      params.set('categoryId', String(effectiveCategoryId));
+    }
     params.set('page', String(targetPage));
     params.set('pageSize', String(pageSize));
     return `/?${params.toString()}`;
@@ -102,7 +124,7 @@ export default async function Home({ searchParams }: HomeProps) {
             <label className="block text-sm text-gray-600 mb-2">分类</label>
             <select
               name="categoryId"
-              defaultValue={categoryId || ''}
+              defaultValue={categoryIdRaw ?? (defaultDailyCategory?.id ?? '')}
               className="input"
             >
               <option value="">全部分类</option>
@@ -140,7 +162,11 @@ export default async function Home({ searchParams }: HomeProps) {
         <div className="text-sm text-gray-500">
           {date ? `筛选日期：${date}` : '未按日期筛选'}
           {status !== 'published' ? `，状态：${status}` : ''}
-          {categoryId ? `，分类ID：${categoryId}` : ''}
+          {categoryIdRaw === ''
+            ? '，分类：全部分类'
+            : effectiveCategoryId
+            ? `，分类ID：${effectiveCategoryId}`
+            : ''}
         </div>
       </div>
 

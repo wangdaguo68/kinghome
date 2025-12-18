@@ -102,6 +102,10 @@ export default function NewPost() {
     e.preventDefault();
     setLoading(true);
 
+    const isDailySelected = selectedCategories.some(
+      (id) => categories.find((c) => c.id === id)?.name === '日复盘'
+    );
+
     try {
       const response = await fetch('/api/posts', {
         method: 'POST',
@@ -110,6 +114,8 @@ export default function NewPost() {
         },
         body: JSON.stringify({
           ...formData,
+          summary: isDailySelected ? formData.summary : '',
+          plan: isDailySelected ? formData.plan : '',
           categoryIds: selectedCategories,
         }),
       });
@@ -172,11 +178,28 @@ export default function NewPost() {
   };
 
   const toggleCategory = (categoryId: number) => {
-    if (selectedCategories.includes(categoryId)) {
-      setSelectedCategories(selectedCategories.filter((id) => id !== categoryId));
-    } else {
-      setSelectedCategories([...selectedCategories, categoryId]);
-    }
+    setSelectedCategories((prev) => {
+      let next: number[];
+      if (prev.includes(categoryId)) {
+        next = prev.filter((id) => id !== categoryId);
+      } else {
+        next = [...prev, categoryId];
+      }
+
+      // 如果取消了“日复盘”，清空今日总结和明日计划
+      const hasDaily = next.some(
+        (id) => categories.find((c) => c.id === id)?.name === '日复盘'
+      );
+      if (!hasDaily) {
+        setFormData((old) => ({
+          ...old,
+          summary: '',
+          plan: '',
+        }));
+      }
+
+      return next;
+    });
   };
 
   return (

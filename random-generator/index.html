@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>随机生成器 - 书单/菜单</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>随机生成器</h1>
+        
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="books">书单</button>
+            <button class="tab-btn" data-tab="menu">明日菜单</button>
+        </div>
+
+        <div class="tab-content active" id="books">
+            <div class="result-box">
+                <h2>今日推荐书籍</h2>
+                <div id="book-result" class="result">点击下方按钮随机生成</div>
+                <button class="btn-generate" onclick="generateBook()">随机生成书籍</button>
+            </div>
+
+            <div class="manage-box">
+                <h3>管理书单</h3>
+                <div class="input-group">
+                    <input type="text" id="book-input" placeholder="输入书名">
+                    <button class="btn-add" onclick="addBook()">添加</button>
+                </div>
+                <ul id="book-list" class="item-list"></ul>
+            </div>
+        </div>
+
+        <div class="tab-content" id="menu">
+            <div class="result-box">
+                <h2>明日菜单</h2>
+                <div id="menu-result" class="result">点击下方按钮随机生成</div>
+                <button class="btn-generate" onclick="generateMenu()">随机生成菜单</button>
+            </div>
+
+            <div class="manage-box">
+                <h3>管理菜单</h3>
+                <div class="input-group">
+                    <input type="text" id="menu-input" placeholder="输入菜名">
+                    <button class="btn-add" onclick="addMenu()">添加</button>
+                </div>
+                <ul id="menu-list" class="item-list"></ul>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

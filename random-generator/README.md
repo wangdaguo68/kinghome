@@ -15,7 +15,7 @@
 
 ## 在线访问
 
-[点击这里访问在线版本](https://你的用户名.github.io/random-generator/)
+[点击这里访问在线版本](https://wangdaguo68.github.io/kinghome/random-generator/)
 
 ## 技术栈
 

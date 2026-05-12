@@ -258,6 +258,7 @@ public partial class MainWindow : Window
 
     private void RefreshFolderList()
     {
+        var previousFolder = _currentFolder;
         var allEntry = new List<string> { "全部文件" };
         if (_vault?.IsUnlocked == true)
         {
@@ -265,7 +266,11 @@ public partial class MainWindow : Window
         }
 
         FolderList.ItemsSource = allEntry;
-        FolderList.SelectedIndex = 0;
+
+        // Restore previous selection
+        var displayName = string.IsNullOrEmpty(previousFolder) ? "全部文件" : previousFolder;
+        var index = allEntry.IndexOf(displayName);
+        FolderList.SelectedIndex = index >= 0 ? index : 0;
     }
 
     private void RefreshFileList()

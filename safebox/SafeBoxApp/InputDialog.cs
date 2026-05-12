@@ -54,6 +54,22 @@ public sealed class InputDialog : Window
         Controls.Grid.SetRow(textBox, 1);
         grid.Children.Add(textBox);
 
+        textBox.KeyDown += (_, e) =>
+        {
+            if (e.Key == System.Windows.Input.Key.Enter)
+            {
+                Result = textBox.Text.Trim();
+                DialogResult = true;
+                Close();
+            }
+            else if (e.Key == System.Windows.Input.Key.Escape)
+            {
+                Result = null;
+                DialogResult = false;
+                Close();
+            }
+        };
+
         var buttons = new Controls.StackPanel { Orientation = Controls.Orientation.Horizontal, HorizontalAlignment = System.Windows.HorizontalAlignment.Right };
         var cancelBtn = new Controls.Button
         {

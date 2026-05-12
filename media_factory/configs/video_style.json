@@ -1,0 +1,15 @@
+{
+  "platform": "shipinhao",
+  "max_chars": 200,
+  "golden_quote_max_chars": 30,
+  "golden_quote_label": {
+    "trading": "今日信号",
+    "wisdom": "今日智慧",
+    "mixed": "每日禅语"
+  },
+  "aspect_ratio": "16:9",
+  "paragraph_max_sentences": 2,
+  "max_paragraphs": 5,
+  "emoji_pool": ["🔥", "⚡", "💡"],
+  "hashtags_default": []
+}

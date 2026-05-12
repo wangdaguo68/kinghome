@@ -1,0 +1,13 @@
+{
+  "platform": "weibo",
+  "max_chars": 280,
+  "hashtag_count": 3,
+  "hashtags_by_mode": {
+    "trading": ["#A股复盘#", "#技术分析#", "#今日看盘#"],
+    "wisdom": ["#每日智慧#", "#深度思考#", "#经典语录#"],
+    "mixed": ["#禅意交易#", "#A股修行#", "#每日复盘#"]
+  },
+  "emoji_pool": ["🧘", "📊", "⚡"],
+  "golden_quote_max_chars": 30,
+  "paragraph_max_chars": 140
+}

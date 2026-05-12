@@ -1,0 +1,28 @@
+from mode_trading.prompts.system_prompts import (
+    TRADING_BASE,
+    TRADING_XHS_SYSTEM,
+    TRADING_WECHAT_SYSTEM,
+    TRADING_WEIBO_SYSTEM,
+    TRADING_SHIPINHAO_SYSTEM,
+)
+from mode_trading.prompts.templates import (
+    TRADING_XHS_TEMPLATE,
+    TRADING_WECHAT_TEMPLATE,
+    TRADING_WEIBO_TEMPLATE,
+    TRADING_SHIPINHAO_TEMPLATE,
+)
+
+SYSTEM_PROMPTS = {
+    "base": TRADING_BASE,
+    "xiaohongshu": TRADING_XHS_SYSTEM,
+    "wechat": TRADING_WECHAT_SYSTEM,
+    "weibo": TRADING_WEIBO_SYSTEM,
+    "shipinhao": TRADING_SHIPINHAO_SYSTEM,
+}
+
+USER_TEMPLATES = {
+    "xiaohongshu": TRADING_XHS_TEMPLATE,
+    "wechat": TRADING_WECHAT_TEMPLATE,
+    "weibo": TRADING_WEIBO_TEMPLATE,
+    "shipinhao": TRADING_SHIPINHAO_TEMPLATE,
+}

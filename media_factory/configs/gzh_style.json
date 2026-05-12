@@ -1,0 +1,14 @@
+{
+  "platform": "wechat",
+  "max_chars": 5000,
+  "include_section_numbers": true,
+  "divider_style": "· ◇ ·",
+  "section_names": {
+    "trading": ["今日概况", "技术解盘", "资金面", "明日推演", "操作计划", "风险提示"],
+    "wisdom": ["引言", "今日经典", "原文", "逐段解读", "学术视角", "当代启示", "实践指南", "延伸阅读", "结语"],
+    "mixed": ["盘面回顾", "技术解盘", "禅意复盘", "无常观市", "因果不虚", "诸法无我", "心理陷阱", "修行建议"]
+  },
+  "quote_style": "「」",
+  "emoji_pool": ["🪷", "📖", "🕯️"],
+  "hashtags_default": []
+}

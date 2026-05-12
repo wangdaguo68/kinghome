@@ -1,0 +1,1 @@
+from mode_trading.pipeline import TradingPipeline

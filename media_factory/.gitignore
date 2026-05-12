@@ -1,0 +1,26 @@
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Output (keep structure, ignore generated files)
+output/**/*.md
+!output/**/.gitkeep
+
+# Input auto-fetched
+input/auto_fetch_*.md
+
+# OS
+.DS_Store
+Thumbs.db

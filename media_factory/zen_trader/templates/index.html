@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Zen Trader · 多模式内容工厂</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --card: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #d4a574;
+    --accent2: #58a6ff;
+    --accent3: #3fb950;
+    --red: #f85149;
+    --radius: 12px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", sans-serif;
+    min-height: 100vh;
+    line-height: 1.6;
+  }
+  .app { max-width: 1400px; margin: 0 auto; padding: 24px; }
+
+  .header {
+    text-align: center;
+    padding: 32px 0 24px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 32px;
+  }
+  .header h1 { font-size: 2rem; font-weight: 700; letter-spacing: 2px; }
+  .header .subtitle { color: var(--muted); margin-top: 4px; font-size: 0.95rem; }
+
+  .main-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  @media (max-width: 900px) { .main-layout { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+  }
+  .card h3 { font-size: 1rem; margin-bottom: 12px; color: var(--accent); }
+
+  textarea {
+    width: 100%;
+    min-height: 260px;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    font-family: "JetBrains Mono", "Cascadia Code", monospace;
+    font-size: 0.85rem;
+    resize: vertical;
+    line-height: 1.5;
+  }
+  textarea:focus { outline: none; border-color: var(--accent); }
+  input[type="text"] {
+    width: 100%;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 0.9rem;
+    margin-bottom: 8px;
+  }
+  input[type="text"]:focus { outline: none; border-color: var(--accent); }
+
+  .btn-row { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; align-items: center; }
+  .btn {
+    padding: 8px 18px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: all 0.15s;
+    background: var(--card);
+    color: var(--text);
+  }
+  .btn:hover { border-color: var(--accent); }
+  .btn-primary { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 600; }
+  .btn-primary:hover { opacity: 0.9; }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-sm { padding: 4px 12px; font-size: 0.8rem; }
+
+  /* Mode selector */
+  .mode-selector { display: flex; gap: 8px; margin-bottom: 14px; }
+  .mode-card {
+    flex: 1;
+    padding: 10px 12px;
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.15s;
+    font-size: 0.85rem;
+    user-select: none;
+  }
+  .mode-card:hover { border-color: var(--muted); }
+  .mode-card.active { border-color: var(--accent); background: rgba(212, 167, 116, 0.08); }
+  .mode-card .mode-icon { font-size: 1.3rem; display: block; margin-bottom: 2px; }
+  .mode-card .mode-name { font-weight: 600; }
+  .mode-card .mode-desc { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+
+  /* Source selector (Wisdom mode) */
+  .source-selector { display: flex; gap: 6px; margin-bottom: 12px; }
+  .source-chip {
+    padding: 5px 12px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    cursor: pointer;
+    font-size: 0.82rem;
+    transition: all 0.15s;
+    user-select: none;
+  }
+  .source-chip:hover { border-color: var(--muted); }
+  .source-chip.active { background: var(--accent2); color: #fff; border-color: var(--accent2); }
+
+  /* Quote picker */
+  .quote-picker { margin-bottom: 10px; }
+  .quote-picker select {
+    width: 100%;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px;
+    font-size: 0.85rem;
+  }
+
+  /* Platform chips */
+  .platform-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .chip { display: flex; align-items: center; gap: 6px; }
+  .chip input { display: none; }
+  .chip label {
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.15s;
+    user-select: none;
+    white-space: nowrap;
+  }
+  .chip input:checked + label { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 600; }
+
+  .progress-bar {
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin: 12px 0;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: width 0.3s;
+    width: 0%;
+  }
+  .status-text { color: var(--muted); font-size: 0.85rem; margin: 8px 0; }
+
+  .tabs { display: flex; gap: 2px; margin-bottom: 12px; flex-wrap: wrap; }
+  .tab {
+    padding: 6px 14px;
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    font-size: 0.85rem;
+    border-radius: 6px 6px 0 0;
+  }
+  .tab.active { background: var(--card); color: var(--accent); border-bottom-color: var(--card); font-weight: 600; }
+
+  .result-body {
+    max-height: 600px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    font-size: 0.9rem;
+    line-height: 1.8;
+    padding: 8px 0;
+  }
+  .result-body h1, .result-body h2 { font-size: 1.1rem; color: var(--accent); margin: 8px 0; }
+  .image-prompt-box {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    margin: 8px 0;
+    font-size: 0.85rem;
+    font-family: monospace;
+    white-space: pre-wrap;
+    max-height: 300px;
+    overflow-y: auto;
+  }
+  .empty-state { color: var(--muted); text-align: center; padding: 40px 20px; font-size: 0.9rem; }
+  .tag { display: inline-block; background: var(--border); color: var(--accent2); padding: 2px 8px; border-radius: 4px; font-size: 0.78rem; margin: 2px; }
+  .error { color: var(--red); background: rgba(248,81,73,0.1); padding: 10px 14px; border-radius: 8px; margin: 8px 0; font-size: 0.9rem; }
+
+  .info-row { display: flex; align-items: center; gap: 12px; font-size: 0.8rem; color: var(--muted); margin-bottom: 8px; }
+  .info-row code { background: var(--border); padding: 2px 6px; border-radius: 4px; }
+
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  #wisdomInputArea { display: none; }
+  #topicInputArea { display: none; }
+  #quoteSelectArea { display: none; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <h1>🪷 多模式内容工厂</h1>
+    <p class="subtitle">Mode A 交易专家 · Mode B 智慧心灵 · Mode C 禅意混合</p>
+  </div>
+
+  <div class="main-layout">
+    <!-- LEFT: Input -->
+    <div class="card">
+      <h3>📝 模式与输入</h3>
+
+      <!-- Mode selector -->
+      <div class="mode-selector" id="modeSelector">
+        <div class="mode-card active" data-mode="mixed" onclick="switchMode('mixed')">
+          <span class="mode-icon">🪷</span>
+          <span class="mode-name">混合模式</span>
+          <span class="mode-desc">技术分析 + 佛学哲学</span>
+        </div>
+        <div class="mode-card" data-mode="trading" onclick="switchMode('trading')">
+          <span class="mode-icon">📊</span>
+          <span class="mode-name">交易专家</span>
+          <span class="mode-desc">纯技术面分析</span>
+        </div>
+        <div class="mode-card" data-mode="wisdom" onclick="switchMode('wisdom')">
+          <span class="mode-icon">🧘</span>
+          <span class="mode-name">智慧心灵</span>
+          <span class="mode-desc">哲学 · 佛学 · 心理学</span>
+        </div>
+      </div>
+
+      <!-- Market data input (trading / mixed mode) -->
+      <div id="marketInputArea">
+        <textarea id="markdownInput" placeholder="Trading / Mixed 模式：在此粘贴 A 股复盘笔记或市场数据...
+
+支持的数据格式：
+- 大盘指数：上证/深证/创业板 + 涨跌幅
+- 技术指标：MACD/KDJ/布林带/均线 + 信号描述
+- 成交量：放量/缩量 + 具体数据
+- 支撑阻力：具体点位
+- 北向资金：流向 + 金额"></textarea>
+      </div>
+
+      <!-- Wisdom mode input area -->
+      <div id="wisdomInputArea">
+        <div class="source-selector" id="sourceSelector">
+          <div class="source-chip active" data-source="daily" onclick="switchWisdomSource('daily')">📅 每日自动</div>
+          <div class="source-chip" data-source="topic" onclick="switchWisdomSource('topic')">✏️ 主题输入</div>
+          <div class="source-chip" data-source="quote" onclick="switchWisdomSource('quote')">📖 指定语录</div>
+        </div>
+
+        <div id="topicInputArea">
+          <input type="text" id="topicInput" placeholder="输入你想探讨的话题，如：如何面对失去、什么是真正的自由...">
+        </div>
+
+        <div id="quoteSelectArea">
+          <div class="quote-picker">
+            <select id="quoteSelect">
+              <option value="">-- 随机选择 --</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="btn-row" style="margin-bottom:10px">
+        <button class="btn btn-sm" id="crawlBtn" onclick="crawlData()">🔍 爬取盘面数据</button>
+        <button class="btn btn-sm" id="loadExampleBtn" onclick="loadExample()">📋 加载示例</button>
+        <button class="btn btn-sm" onclick="clearAll()">🗑️ 清空</button>
+      </div>
+
+      <div style="margin-top:8px">
+        <strong style="font-size:0.9rem">选择平台：</strong>
+        <div class="platform-chips" id="platformChips"></div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" id="generateBtn" onclick="startGenerate()">🪷 开始生成</button>
+        <span class="info-row">
+          模型: <code>deepseek-v4-pro</code>
+        </span>
+      </div>
+
+      <div id="progressArea" style="display:none;margin-top:14px">
+        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+        <p class="status-text" id="statusText"></p>
+        <p id="errorMsg" class="error" style="display:none"></p>
+      </div>
+    </div>
+
+    <!-- RIGHT: Output -->
+    <div class="card">
+      <h3>📤 生成结果</h3>
+      <div class="tabs" id="resultTabs"></div>
+      <div id="resultContent" class="empty-state">👈 选择模式、输入内容、选择平台，点击「开始生成」</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const PLATFORMS = [
+  { id: 'xiaohongshu', name: '📕 小红书', desc: '情绪治愈风' },
+  { id: 'wechat', name: '📰 公众号', desc: '深度长文' },
+  { id: 'xueqiu', name: '📊 雪球/东财', desc: '技术哲学' },
+  { id: 'shipinhao', name: '🎬 视频号/抖音', desc: '金句短视频' },
+  { id: 'weibo', name: '🐦 微博', desc: '短金句' },
+];
+
+let currentMode = 'mixed';
+let currentWisdomSource = 'daily';
+let platformResults = {};
+let activeTab = null;
+let imageResult = null;
+
+// Init platform chips
+const chipsEl = document.getElementById('platformChips');
+PLATFORMS.forEach(p => {
+  const div = document.createElement('div');
+  div.className = 'chip';
+  div.innerHTML = `<input type="checkbox" id="chk_${p.id}" value="${p.id}" checked>
+    <label for="chk_${p.id}" title="${p.desc}">${p.name}</label>`;
+  chipsEl.appendChild(div);
+});
+
+function getSelectedPlatforms() {
+  return PLATFORMS.filter(p => document.getElementById('chk_' + p.id).checked).map(p => p.id);
+}
+
+// Mode switching
+function switchMode(mode) {
+  currentMode = mode;
+  document.querySelectorAll('.mode-card').forEach(c => c.classList.remove('active'));
+  document.querySelector(`[data-mode="${mode}"]`).classList.add('active');
+
+  const marketArea = document.getElementById('marketInputArea');
+  const wisdomArea = document.getElementById('wisdomInputArea');
+  const crawlBtn = document.getElementById('crawlBtn');
+  const loadBtn = document.getElementById('loadExampleBtn');
+
+  if (mode === 'wisdom') {
+    marketArea.style.display = 'none';
+    wisdomArea.style.display = 'block';
+    crawlBtn.style.display = 'none';
+    loadBtn.style.display = 'none';
+    switchWisdomSource(currentWisdomSource);
+  } else {
+    marketArea.style.display = 'block';
+    wisdomArea.style.display = 'none';
+    crawlBtn.style.display = '';
+    loadBtn.style.display = '';
+  }
+
+  clearResults();
+}
+
+// Wisdom source switching
+function switchWisdomSource(source) {
+  currentWisdomSource = source;
+  document.querySelectorAll('.source-chip').forEach(c => c.classList.remove('active'));
+  document.querySelector(`[data-source="${source}"]`).classList.add('active');
+
+  document.getElementById('topicInputArea').style.display = source === 'topic' ? 'block' : 'none';
+  document.getElementById('quoteSelectArea').style.display = source === 'quote' ? 'block' : 'none';
+
+  if (source === 'quote') {
+    loadQuotes();
+  }
+}
+
+// Load quotes for selector
+function loadQuotes() {
+  fetch('/api/quotes')
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok && data.quotes) {
+        const sel = document.getElementById('quoteSelect');
+        sel.innerHTML = '<option value="">-- 随机选择 --</option>';
+        data.quotes.forEach(q => {
+          sel.innerHTML += `<option value="${q.id}">${q.source} — ${(q.text||'').substring(0, 40)}...</option>`;
+        });
+      }
+    });
+}
+
+function loadExample() {
+  fetch('/api/crawl', { method: 'POST' })
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok) document.getElementById('markdownInput').value = data.markdown;
+      else alert('示例加载失败: ' + data.error);
+    })
+    .catch(() => alert('示例加载失败'));
+}
+
+function crawlData() {
+  const btn = event.target;
+  btn.disabled = true;
+  btn.textContent = '⏳ 抓取中...';
+  fetch('/api/crawl', { method: 'POST' })
+    .then(r => r.json())
+    .then(data => {
+      btn.disabled = false;
+      btn.textContent = '🔍 爬取盘面数据';
+      if (data.ok) {
+        document.getElementById('markdownInput').value = data.markdown;
+      } else {
+        alert('爬取失败: ' + data.error);
+      }
+    })
+    .catch(e => {
+      btn.disabled = false;
+      btn.textContent = '🔍 爬取盘面数据';
+      alert('爬取失败: ' + e.message);
+    });
+}
+
+function clearAll() {
+  document.getElementById('markdownInput').value = '';
+  document.getElementById('topicInput').value = '';
+  clearResults();
+}
+
+function clearResults() {
+  platformResults = {};
+  imageResult = null;
+  document.getElementById('resultTabs').innerHTML = '';
+  document.getElementById('resultContent').innerHTML = '<div class="empty-state">👈 选择模式、输入内容、选择平台，点击「开始生成」</div>';
+  document.getElementById('progressArea').style.display = 'none';
+  document.getElementById('errorMsg').style.display = 'none';
+}
+
+function startGenerate() {
+  const platforms = getSelectedPlatforms();
+  if (platforms.length === 0) { alert('请至少选择一个平台'); return; }
+
+  if (currentMode === 'wisdom' && currentWisdomSource === 'topic') {
+    const topic = document.getElementById('topicInput').value.trim();
+    if (!topic) { alert('请输入你想探讨的话题'); return; }
+  }
+
+  if (currentMode !== 'wisdom') {
+    const md = document.getElementById('markdownInput').value.trim();
+    if (!md) { alert('请先输入复盘笔记/市场数据'); return; }
+  }
+
+  platformResults = {};
+  imageResult = null;
+  document.getElementById('resultTabs').innerHTML = '';
+  document.getElementById('resultContent').innerHTML = '<div class="empty-state">⏳ 正在生成中...</div>';
+  document.getElementById('progressArea').style.display = 'block';
+  document.getElementById('errorMsg').style.display = 'none';
+  document.getElementById('generateBtn').disabled = true;
+  document.getElementById('progressFill').style.width = '5%';
+  document.getElementById('statusText').textContent = `模式: ${currentMode} | 正在启动...`;
+
+  const md = document.getElementById('markdownInput').value.trim();
+  const topic = document.getElementById('topicInput').value.trim();
+  const quoteId = document.getElementById('quoteSelect').value;
+
+  const body = {
+    markdown: md,
+    platforms: platforms.join(','),
+    provider: 'anthropic',
+    model: 'deepseek-v4-pro',
+    mode: currentMode,
+    wisdom_source: currentWisdomSource,
+    user_topic: topic,
+    quote_id: quoteId,
+  };
+
+  if (currentMode === 'mixed') {
+    body.generate_image = false;
+    generateSSE(body);
+  } else {
+    generateJSON(body);
+  }
+}
+
+function generateJSON(body) {
+  fetch('/api/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+    .then(r => r.json())
+    .then(data => {
+      document.getElementById('generateBtn').disabled = false;
+      document.getElementById('progressFill').style.width = '100%';
+      if (data.ok && data.results) {
+        document.getElementById('statusText').textContent = `✅ 完成！模式: ${data.mode}，生成 ${data.results.length} 个平台`;
+        data.results.forEach(r => {
+          platformResults[r.platform] = r;
+        });
+        renderTabs();
+        if (data.results.length > 0) {
+          switchTab(data.results[0].platform);
+        }
+      } else {
+        document.getElementById('errorMsg').style.display = 'block';
+        document.getElementById('errorMsg').textContent = '❌ ' + (data.error || '未知错误');
+      }
+    })
+    .catch(e => {
+      document.getElementById('generateBtn').disabled = false;
+      document.getElementById('errorMsg').style.display = 'block';
+      document.getElementById('errorMsg').textContent = '连接失败: ' + e.message;
+    });
+}
+
+function generateSSE(body) {
+  fetch('/api/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }).then(async resp => {
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try { handleSSE(JSON.parse(line.slice(6))); } catch(e) {}
+        }
+      }
+    }
+    document.getElementById('generateBtn').disabled = false;
+    document.getElementById('progressFill').style.width = '100%';
+    document.getElementById('statusText').textContent = '✅ 生成完毕';
+  }).catch(e => {
+    document.getElementById('generateBtn').disabled = false;
+    document.getElementById('errorMsg').style.display = 'block';
+    document.getElementById('errorMsg').textContent = '连接失败: ' + e.message;
+  });
+}
+
+function handleSSE(msg) {
+  switch (msg.type) {
+    case 'status':
+      document.getElementById('statusText').textContent = msg.message;
+      if (msg.step === 'stage1') document.getElementById('progressFill').style.width = '20%';
+      if (msg.step === 'enriched') document.getElementById('progressFill').style.width = '40%';
+      if (msg.step === 'generating') document.getElementById('progressFill').style.width = '50%';
+      if (msg.step === 'image') document.getElementById('progressFill').style.width = '85%';
+      break;
+    case 'platform_done':
+      platformResults[msg.platform] = msg;
+      document.getElementById('progressFill').style.width = (50 + Object.keys(platformResults).length * 8) + '%';
+      renderTabs();
+      switchTab(Object.keys(platformResults)[Object.keys(platformResults).length - 1]);
+      break;
+    case 'image_done':
+      imageResult = msg;
+      renderTabs();
+      break;
+    case 'complete':
+      document.getElementById('progressFill').style.width = '100%';
+      document.getElementById('statusText').textContent = `✅ 全部完成！共生成 ${msg.total} 个平台内容`;
+      break;
+    case 'error':
+      document.getElementById('errorMsg').style.display = 'block';
+      document.getElementById('errorMsg').textContent = '❌ ' + msg.message;
+      document.getElementById('generateBtn').disabled = false;
+      break;
+  }
+}
+
+function renderTabs() {
+  const tabsEl = document.getElementById('resultTabs');
+  let html = '';
+  for (const p of PLATFORMS) {
+    if (platformResults[p.id]) {
+      html += `<button class="tab${activeTab === p.id ? ' active' : ''}" onclick="switchTab('${p.id}')">${p.name}</button>`;
+    }
+  }
+  if (imageResult) {
+    html += `<button class="tab${activeTab === 'image' ? ' active' : ''}" onclick="switchTab('image')">🎨 封面图</button>`;
+  }
+  tabsEl.innerHTML = html;
+}
+
+function switchTab(id) {
+  activeTab = id;
+  renderTabs();
+  const el = document.getElementById('resultContent');
+
+  if (id === 'image') {
+    const img = imageResult;
+    el.innerHTML = `
+      <div class="image-prompt-box"><strong>🎨 Midjourney Prompt</strong><br><br>${escapeHTML(img.midjourney)}</div>
+      <div class="image-prompt-box"><strong>🤖 DALL-E Prompt</strong><br><br>${escapeHTML(img.dalle)}</div>
+      <div class="image-prompt-box"><strong>🇨🇳 中文描述</strong><br><br>${escapeHTML(img.description_cn)}</div>
+      <p style="font-size:0.8rem;color:var(--muted);margin-top:8px">文件: ${escapeHTML(img.file)}</p>`;
+    return;
+  }
+
+  const r = platformResults[id];
+  if (!r) { el.innerHTML = '<div class="empty-state">暂无结果</div>'; return; }
+
+  let tagsHtml = (r.hashtags || []).map(t => `<span class="tag">${escapeHTML(t)}</span>`).join(' ');
+  el.innerHTML = `
+    <h2 style="color:var(--accent);margin-bottom:8px">${escapeHTML(r.title)}</h2>
+    <div style="margin-bottom:8px">${tagsHtml}</div>
+    <div class="result-body">${escapeHTML(r.body)}</div>`;
+}
+
+function escapeHTML(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(C:\\\\Users\\\\Administrator\\\\.claude\\\\plugins\\\\cache\\\\claude-plugins-official\\\\superpowers\\\\5.1.0\\\\skills\\\\brainstorming\\\\scripts\\\\start-server.sh *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(dotnet build *)",
+      "Bash(dotnet publish *)",
+      "Bash(cmd.exe *)",
+      "Bash(taskkill /f /im 保险箱.exe)",
+      "Bash(tasklist)",
+      "Bash(D:/software/safebox/dist/保险箱.exe *)"
+    ]
+  }
+}

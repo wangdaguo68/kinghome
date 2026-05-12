@@ -1,0 +1,39 @@
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - heading "🪷 多模式内容工厂" [level=1] [ref=e4]
+    - paragraph [ref=e5]: Mode A 交易专家 · Mode B 智慧心灵 · Mode C 禅意混合
+  - generic [ref=e6]:
+    - generic [ref=e7]:
+      - heading "📝 模式与输入" [level=3] [ref=e8]
+      - generic [ref=e9]:
+        - generic [ref=e10] [cursor=pointer]:
+          - generic [ref=e11]: 🪷
+          - text: 混合模式 技术分析 + 佛学哲学
+        - generic [ref=e12] [cursor=pointer]:
+          - generic [ref=e13]: 📊
+          - text: 交易专家 纯技术面分析
+        - generic [ref=e14] [cursor=pointer]:
+          - generic [ref=e15]: 🧘
+          - text: 智慧心灵 哲学 · 佛学 · 心理学
+      - textbox "Trading / Mixed 模式：在此粘贴 A 股复盘笔记或市场数据... 支持的数据格式： - 大盘指数：上证/深证/创业板 + 涨跌幅 - 技术指标：MACD/KDJ/布林带/均线 + 信号描述 - 成交量：放量/缩量 + 具体数据 - 支撑阻力：具体点位 - 北向资金：流向 + 金额" [ref=e17]:
+        - /placeholder: "Trading / Mixed 模式：在此粘贴 A 股复盘笔记或市场数据...\n\n支持的数据格式：\n- 大盘指数：上证/深证/创业板 + 涨跌幅\n- 技术指标：MACD/KDJ/布林带/均线 + 信号描述\n- 成交量：放量/缩量 + 具体数据\n- 支撑阻力：具体点位\n- 北向资金：流向 + 金额"
+      - generic [ref=e18]:
+        - button "🔍 爬取盘面数据" [ref=e19] [cursor=pointer]
+        - button "📋 加载示例" [ref=e20] [cursor=pointer]
+        - button "🗑️ 清空" [ref=e21] [cursor=pointer]
+      - generic [ref=e22]:
+        - strong [ref=e23]: 选择平台：
+        - generic [ref=e24]:
+          - generic "情绪治愈风" [ref=e26] [cursor=pointer]: 📕 小红书
+          - generic "深度长文" [ref=e28] [cursor=pointer]: 📰 公众号
+          - generic "技术哲学" [ref=e30] [cursor=pointer]: 📊 雪球/东财
+          - generic "金句短视频" [ref=e32] [cursor=pointer]: 🎬 视频号/抖音
+          - generic "短金句" [ref=e34] [cursor=pointer]: 🐦 微博
+      - generic [ref=e35]:
+        - button "🪷 开始生成" [ref=e36] [cursor=pointer]
+        - generic [ref=e37]:
+          - text: "模型:"
+          - code [ref=e38]: deepseek-v4-pro
+    - generic [ref=e39]:
+      - heading "📤 生成结果" [level=3] [ref=e40]
+      - generic [ref=e41]: 👈 选择模式、输入内容、选择平台，点击「开始生成」

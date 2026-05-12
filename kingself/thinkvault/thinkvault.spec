@@ -1,0 +1,188 @@
+# -*- mode: python ; coding: utf-8 -*-
+"""PyInstaller spec for ThinkVault."""
+
+import sys
+from pathlib import Path
+
+block_cipher = None
+
+# chromadb 完整模块列表（通过 pkgutil.walk_packages 扫描所得）
+hidden_imports = [
+    # ── chromadb 全部子模块 ──────────────────────────────────────────────────
+    "chromadb",
+    "chromadb.api",
+    "chromadb.api.async_api",
+    "chromadb.api.async_client",
+    "chromadb.api.async_fastapi",
+    "chromadb.api.base_http_client",
+    "chromadb.api.client",
+    "chromadb.api.collection_configuration",
+    "chromadb.api.configuration",
+    "chromadb.api.fastapi",
+    "chromadb.api.functions",
+    "chromadb.api.rust",           # 依赖 chromadb_rust_bindings.pyd
+    "chromadb.api.segment",
+    "chromadb.api.shared_system_client",
+    "chromadb.api.types",
+    "chromadb.app",
+    "chromadb.auth",
+    "chromadb.auth.basic_authn",
+    "chromadb.auth.simple_rbac_authz",
+    "chromadb.auth.token_authn",
+    "chromadb.auth.utils",
+    "chromadb.base_types",
+    "chromadb.config",
+    "chromadb.db",
+    "chromadb.db.base",
+    "chromadb.db.impl",
+    "chromadb.db.impl.sqlite",
+    "chromadb.db.impl.sqlite_pool",
+    "chromadb.db.migrations",
+    "chromadb.db.system",
+    "chromadb.errors",
+    "chromadb.execution",
+    "chromadb.execution.expression",
+    "chromadb.execution.expression.operator",
+    "chromadb.execution.expression.plan",
+    "chromadb.ingest",
+    "chromadb.migrations",
+    "chromadb.proto",
+    "chromadb.proto.convert",
+    "chromadb.proto.utils",
+    "chromadb.quota",
+    "chromadb.quota.simple_quota_enforcer",
+    "chromadb.rate_limit",
+    "chromadb.rate_limit.simple_rate_limit",
+    "chromadb.segment",
+    "chromadb.segment.distributed",
+    "chromadb.segment.impl",
+    "chromadb.segment.impl.manager",
+    "chromadb.segment.impl.manager.cache",
+    "chromadb.segment.impl.manager.cache.cache",
+    "chromadb.segment.impl.manager.distributed",
+    "chromadb.segment.impl.manager.local",
+    "chromadb.serde",
+    "chromadb.telemetry",
+    "chromadb.telemetry.opentelemetry",
+    "chromadb.telemetry.opentelemetry.fastapi",
+    "chromadb.telemetry.opentelemetry.grpc",
+    "chromadb.telemetry.product",
+    "chromadb.telemetry.product.events",
+    "chromadb.telemetry.product.posthog",
+    "chromadb.types",
+    "chromadb.utils",
+    "chromadb.utils.async_to_sync",
+    "chromadb.utils.batch_utils",
+    "chromadb.utils.delete_file",
+    "chromadb.utils.directory",
+    "chromadb.utils.distance_functions",
+    "chromadb.utils.embedding_functions",
+    "chromadb.utils.embedding_functions.onnx_mini_lm_l6_v2",
+    "chromadb.utils.embedding_functions.openai_embedding_function",
+    "chromadb.utils.embedding_functions.schemas",
+    "chromadb.utils.embedding_functions.schemas.registry",
+    "chromadb.utils.embedding_functions.schemas.schema_utils",
+    "chromadb.utils.embedding_functions.utils",
+    "chromadb.utils.fastapi",
+    "chromadb.utils.lru_cache",
+    "chromadb.utils.messageid",
+    "chromadb.utils.read_write_lock",
+    "chromadb.utils.results",
+    "chromadb.utils.sparse_embedding_utils",
+    "chromadb.utils.statistics",
+    # ── chromadb Rust 绑定（关键！.pyd 编译扩展）─────────────────────────────
+    "chromadb_rust_bindings",
+    "chromadb_rust_bindings.chromadb_rust_bindings",
+    # ── onnxruntime ─────────────────────────────────────────────────────────
+    "onnxruntime",
+    "onnxruntime.capi",
+    "onnxruntime.capi.onnxruntime_inference_collection",
+    # ── tokenizers ──────────────────────────────────────────────────────────
+    "tokenizers",
+    # ── huggingface_hub ─────────────────────────────────────────────────────
+    "huggingface_hub",
+    "huggingface_hub.file_download",
+    # ── openai ──────────────────────────────────────────────────────────────
+    "openai",
+    "openai.types",
+    "openai.types.chat",
+    "openai._streaming",
+    # ── httpx ───────────────────────────────────────────────────────────────
+    "httpx",
+    "httpx._transports",
+    "httpx._transports.default",
+    # ── pydantic ────────────────────────────────────────────────────────────
+    "pydantic",
+    "pydantic_core",
+    # ── 其他 ────────────────────────────────────────────────────────────────
+    "tqdm",
+    "tqdm.auto",
+    "pypika",
+    "overrides",
+    "mmh3",
+    "orjson",
+    "bcrypt",
+    "grpc",
+    "grpc._channel",
+    "google.protobuf",
+    "anyio",
+    "anyio._backends._asyncio",
+    "sniffio",
+    "PySide6.QtSvg",
+    "PySide6.QtXml",
+]
+
+a = Analysis(
+    ["main.py"],
+    pathex=[str(Path(".").resolve())],
+    binaries=[
+        # chromadb Rust 编译扩展，必须显式包含
+        (
+            r"C:\Python314\Lib\site-packages\chromadb_rust_bindings\chromadb_rust_bindings.pyd",
+            "chromadb_rust_bindings",
+        ),
+    ],
+    datas=[],
+    hiddenimports=hidden_imports,
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=["tkinter", "matplotlib", "pandas", "scipy", "PyQt5", "PyQt6"],
+    win_no_prefer_redirects=False,
+    win_private_assemblies=False,
+    cipher=block_cipher,
+    noarchive=False,
+)
+
+pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+
+exe = EXE(
+    pyz,
+    a.scripts,
+    [],
+    exclude_binaries=True,
+    name="ThinkVault",
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=False,
+    console=False,          # 不显示黑色命令行窗口
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+    icon=None,
+    version=None,
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    strip=False,
+    upx=False,
+    upx_exclude=[],
+    name="ThinkVault",
+)

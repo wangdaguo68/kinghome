@@ -1,0 +1,31 @@
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - heading "🪷 禅意交易员" [level=1] [ref=e4]
+    - paragraph [ref=e5]: A股复盘 × 佛学智慧 × 跨平台内容生成
+  - generic [ref=e6]:
+    - generic [ref=e7]:
+      - heading "📝 复盘笔记输入" [level=3] [ref=e8]
+      - generic [ref=e9]:
+        - button "📋 加载示例" [ref=e10] [cursor=pointer]
+        - button "🔍 自动爬取盘面数据" [ref=e11] [cursor=pointer]
+        - button "🗑️ 清空" [ref=e12] [cursor=pointer]
+      - 'textbox "在此粘贴你的 A 股复盘笔记（Markdown 格式），或点击「自动爬取盘面数据」获取今日数据... 支持的章节： ## 大盘指数 ## 技术指标 ## 成交量 ## 盘面特征 ## 关键观察 ## 关注股票 ## 复盘笔记" [ref=e13]':
+        - /placeholder: "在此粘贴你的 A 股复盘笔记（Markdown 格式），或点击「自动爬取盘面数据」获取今日数据...\n\n支持的章节：\n## 大盘指数\n## 技术指标\n## 成交量\n## 盘面特征\n## 关键观察\n## 关注股票\n## 复盘笔记"
+        - text: "# A股市场情绪快报 ## 日期 2026-05-10 ## 市场概况 - 市场情绪: 强势多头 - 涨跌比: 20:0 - 涨停家数: 30 - 跌停家数: 0 - 总成交额: 2.99亿 - 北向资金: 数据获取失败 ## 连板情况 - 最高连板高度: 3板 - 高位标杆: 鼎熔岩(301028) ## 技术指标 - 市场情绪指标: 强势多头 ## 复盘笔记 涨跌比 20:0 涨停 30 家, 跌停 0 家 高位标杆 鼎熔岩(301028) > 本报告由 Zen Trader 爬虫自动生成于 2026-05-10 00:31:02"
+      - generic [ref=e14]:
+        - strong [ref=e15]: 选择平台：
+        - generic [ref=e16]:
+          - generic "情绪治愈风" [ref=e18] [cursor=pointer]: 📕 小红书
+          - generic "深度禅意复盘" [ref=e20] [cursor=pointer]: 📰 公众号
+          - generic "技术哲学" [ref=e22] [cursor=pointer]: 📊 雪球/东财
+          - generic "每日禅语" [ref=e24] [cursor=pointer]: 🎬 视频号/抖音
+          - generic "短金句" [ref=e26] [cursor=pointer]: 🐦 微博
+      - generic [ref=e27]:
+        - button "🪷 开始生成" [disabled] [ref=e28]
+        - generic [ref=e29]:
+          - text: "模型:"
+          - code [ref=e30]: deepseek-v4-pro
+      - paragraph [ref=e37]: "Stage 1: 技术分析中..."
+    - generic [ref=e31]:
+      - heading "📤 生成结果" [level=3] [ref=e32]
+      - generic [ref=e38]: ⏳ 正在生成中...

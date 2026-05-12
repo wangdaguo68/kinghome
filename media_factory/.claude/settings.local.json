@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(npx claude-mem *)",
+      "Bash(pip install *)",
+      "Bash(python -m pytest tests/ -v)",
+      "Bash(python -m pytest tests/test_parser.py -v)",
+      "Bash(python -m zen_trader.main --help)",
+      "Bash(python -m pytest tests/test_mode_trading.py tests/test_mode_wisdom.py tests/test_router.py tests/test_validator.py -v)",
+      "Bash(python -c ' *)",
+      "Bash(python web_server.py)",
+      "mcp__plugin_playwright_playwright__browser_navigate",
+      "mcp__plugin_playwright_playwright__browser_take_screenshot",
+      "Bash(python *)",
+      "Bash(netstat -ano)",
+      "mcp__plugin_playwright_playwright__browser_snapshot",
+      "mcp__plugin_playwright_playwright__browser_console_messages"
+    ]
+  }
+}

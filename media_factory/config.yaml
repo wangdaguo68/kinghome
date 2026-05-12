@@ -1,0 +1,70 @@
+# ============================================================
+# Zen Trader (禅意交易员) 配置文件
+# CLI 参数 > 环境变量 > 此文件 > 代码默认值
+# ============================================================
+
+# ---- AI 模型配置 ----
+ai:
+  provider: anthropic                      # anthropic | openai | ollama
+  model: claude-sonnet-4-20250514         # 默认模型
+  api_base: null                           # null=官方默认, 或自定义代理地址
+  max_tokens: 4096
+  temperature: 0.7
+
+  # 每个环节可独立指定模型 (null = 使用 ai.model)
+  stage_1_model: null                      # 技术分析阶段
+  stage_2_model: null                      # 哲学映射阶段
+  generator_model: null                    # 各平台生成阶段
+  visual_model: null                       # 封面图提示词阶段
+
+# ---- 重试配置 ----
+retry:
+  max_attempts: 3
+  base_delay_seconds: 1.0
+
+# ---- 路径配置 ----
+paths:
+  input_dir: input
+  output_dir: output
+  output_format: md
+
+# ---- 平台开关 ----
+platforms:
+  enabled:
+    - xiaohongshu
+    - wechat
+    - xueqiu
+    - shipinhao
+    - weibo
+
+  # 各平台参数
+  xiaohongshu:
+    max_chars: 1500
+    emoji_density: high
+
+  wechat:
+    max_chars: 5000
+    include_section_numbers: true
+
+  xueqiu:
+    max_chars: 2000
+
+  shipinhao:
+    max_chars: 200
+    golden_quote_max_chars: 30
+
+  weibo:
+    max_chars: 280
+    hashtag_count: 3
+
+# ---- 封面图配置 ----
+image:
+  default_style: chinese_ink_blend         # 默认风格
+  aspect_ratio: "16:9"
+  generate_midjourney: true
+  generate_dalle: true
+
+# ---- 日志 ----
+logging:
+  level: INFO
+  file: null

@@ -1,0 +1,37 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip list *)",
+      "Bash(pip install *)",
+      "Bash(python -c ' *)",
+      "Bash(python -m py_compile core/database.py core/memory.py core/ai_client.py ui/style.py ui/sidebar.py ui/chat_panel.py ui/insight_dialog.py ui/search_panel.py ui/report_panel.py ui/settings_dialog.py ui/main_window.py main.py)",
+      "Bash(python main.py)",
+      "Bash(grep -v \"^$\")",
+      "Bash(tasklist)",
+      "Bash(taskkill /F /IM python.exe /FI \"WINDOWTITLE eq ThinkVault*\")",
+      "Bash(taskkill /F /PID 43308 /PID 29440 /PID 31216)",
+      "Bash(taskkill //F //PID 43308)",
+      "Bash(taskkill //F //PID 29440)",
+      "Bash(taskkill //F //PID 31216)",
+      "Bash(python *)",
+      "Bash(taskkill //F //PID 28680)",
+      "Bash(pip show *)",
+      "Read(//c/Program Files \\(x86\\)/**)",
+      "Bash(curl -L \"https://jrsoftware.org/download.php/is.exe\" -o /tmp/innosetup.exe)",
+      "Bash(pyinstaller *)",
+      "Bash(dist/ThinkVault/ThinkVault.exe)",
+      "Bash(taskkill //F //IM ThinkVault.exe)",
+      "Bash(/tmp/innosetup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-)",
+      "Bash(cmd /c \"C:/Windows/System32/wscript.exe\")",
+      "Bash(/tmp/innosetup.exe /VERYSILENT /ALLUSERS)",
+      "Read(//c/tmp/**)",
+      "Bash(cygpath -w /tmp/innosetup.exe)",
+      "Bash(powershell -Command 'Start-Process -FilePath '\\\\''__TRACKED_VAR__'\\\\'' -ArgumentList '\\\\''/VERYSILENT'\\\\'','\\\\''/ALLUSERS'\\\\'','\\\\''/SUPPRESSMSGBOXES'\\\\'','\\\\''/NORESTART'\\\\'' -Wait -Verb RunAs')",
+      "Read(//tmp/**)",
+      "Bash(powershell -Command ' *)",
+      "Bash(powershell *)",
+      "Bash($ISCC *)",
+      "Bash('/d/Program Files \\(x86\\)/Inno Setup 6/ISCC.exe' installer.iss)"
+    ]
+  }
+}

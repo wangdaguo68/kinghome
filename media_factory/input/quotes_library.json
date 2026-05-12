@@ -1,0 +1,89 @@
+[
+  {"id": "b01", "source": "金刚经·第五品", "text": "凡所有相，皆是虚妄。若见诸相非相，则见如来。", "tags": ["佛法","空性","执著"], "category": "buddhism", "commentary_hint": "对事物的判断常被表象欺骗，破除外相执着才能接近真相"},
+  {"id": "b02", "source": "金刚经·第三十二品", "text": "一切有为法，如梦幻泡影，如露亦如电，应作如是观。", "tags": ["佛法","无常","放下"], "category": "buddhism", "commentary_hint": "一切因缘和合之物都是暂时的，执着于永恒的确定性只会带来痛苦"},
+  {"id": "b03", "source": "心经", "text": "色不异空，空不异色，色即是空，空即是色。", "tags": ["佛法","空性","二元对立"], "category": "buddhism", "commentary_hint": "物质世界与空性不是两个东西，破除二元对立的思维模式"},
+  {"id": "b04", "source": "心经", "text": "照见五蕴皆空，度一切苦厄。", "tags": ["佛法","觉察","苦难"], "category": "buddhism", "commentary_hint": "通过深度觉察来超越痛苦，不是逃避而是看透"},
+  {"id": "b05", "source": "坛经", "text": "不是风动，不是幡动，仁者心动。", "tags": ["佛法","心念","投射"], "category": "buddhism", "commentary_hint": "外界波动本身不是问题，我们对外界的内在反应才是真正的源头"},
+  {"id": "b06", "source": "法华经", "text": "诸法从本来，常自寂灭相。", "tags": ["佛法","寂静","本性"], "category": "buddhism", "commentary_hint": "万物的本来面目是清净的，是我们赋予了它们各种情绪色彩"},
+  {"id": "b07", "source": "杂阿含经", "text": "此有故彼有，此生故彼生，此无故彼无，此灭故彼灭。", "tags": ["佛法","缘起","因果"], "category": "buddhism", "commentary_hint": "一切现象都是因缘和合，没有一个孤立的事件——理解缘起就是理解世界的运作方式"},
+  {"id": "b08", "source": "维摩诘经", "text": "不入烦恼大海，则不能得一切智宝。", "tags": ["佛法","烦恼","智慧"], "category": "buddhism", "commentary_hint": "烦恼不是敌人，是通往智慧的必经之路"},
+  {"id": "b09", "source": "楞严经", "text": "一切众生，从无始来，生死相续，皆由不知常住真心，性净明体，用诸妄想，此想不真，故有轮转。", "tags": ["佛法","真心","妄想"], "category": "buddhism", "commentary_hint": "痛苦的根源是把妄想当作真实"},
+  {"id": "b10", "source": "华严经", "text": "心如工画师，能画诸世间。五蕴悉从生，无法而不造。", "tags": ["佛法","心","创造"], "category": "buddhism", "commentary_hint": "心是一切的创造者，改变内心就能改变世界"},
+
+  {"id": "d01", "source": "道德经·第一章", "text": "道可道，非常道；名可名，非常名。", "tags": ["道家","本体","语言局限"], "category": "taoism", "commentary_hint": "终极真理无法用语言完全描述——交易系统也是如此，没有哪套系统是完美的"},
+  {"id": "d02", "source": "道德经·第八章", "text": "上善若水。水善利万物而不争，处众人之所恶，故几于道。", "tags": ["道家","柔韧","不争"], "category": "taoism", "commentary_hint": "最高的善像水一样柔软——市场中最有智慧的姿态不是对抗，而是顺应"},
+  {"id": "d03", "source": "道德经·第十六章", "text": "致虚极，守静笃。万物并作，吾以观复。", "tags": ["道家","静观","复归"], "category": "taoism", "commentary_hint": "在极致的安静中观察万物循环——交易中需要保持这种觉察状态"},
+  {"id": "d04", "source": "道德经·第二十二章", "text": "曲则全，枉则直，洼则盈，敝则新，少则得，多则惑。", "tags": ["道家","辩证","简约"], "category": "taoism", "commentary_hint": "少才是多——交易策略也是，精简的比复杂的有用"},
+  {"id": "d05", "source": "道德经·第三十三章", "text": "知人者智，自知者明。胜人者有力，自胜者强。", "tags": ["道家","自知","自制"], "category": "taoism", "commentary_hint": "了解市场是聪明，了解自己才是智慧；战胜市场需要运气，战胜自己才是真正的强大"},
+  {"id": "d06", "source": "道德经·第四十四章", "text": "甚爱必大费，多藏必厚亡。知足不辱，知止不殆，可以长久。", "tags": ["道家","知足","止损"], "category": "taoism", "commentary_hint": "过度执着一笔交易必然付出代价——知足知止，才能长久存活"},
+  {"id": "d07", "source": "道德经·第六十四章", "text": "合抱之木，生于毫末；九层之台，起于累土；千里之行，始于足下。", "tags": ["道家","积累","从小做起"], "category": "taoism", "commentary_hint": "巨大的成果从微小的积累开始——复利的哲学基础"},
+  {"id": "d08", "source": "道德经·第七十一章", "text": "知不知，尚矣；不知知，病也。", "tags": ["道家","认知谦卑"], "category": "taoism", "commentary_hint": "知道自己不知道，是最好的状态——交易中最危险的就是不知道自己不知道"},
+
+  {"id": "z01", "source": "庄子·逍遥游", "text": "且夫水之积也不厚，则其负大舟也无力。", "tags": ["庄子","积累","实力"], "category": "taoism", "commentary_hint": "水深才能载舟——没有足够的积累，无法承受大的波动"},
+  {"id": "z02", "source": "庄子·齐物论", "text": "天地与我并生，而万物与我为一。", "tags": ["庄子","合一","超越对立"], "category": "taoism", "commentary_hint": "打破自我与世界的边界——盈亏是一体的两面"},
+  {"id": "z03", "source": "庄子·人间世", "text": "知其不可奈何而安之若命，德之至也。", "tags": ["庄子","接受","无常"], "category": "taoism", "commentary_hint": "接受不可改变之事——对于市场走势，我们能控制的只有自己的反应"},
+  {"id": "z04", "source": "庄子·大宗师", "text": "相濡以沫，不如相忘于江湖。", "tags": ["庄子","放下","自由"], "category": "taoism", "commentary_hint": "在困境中苦苦支撑，不如放下执着，回归广阔的自由"},
+
+  {"id": "l01", "source": "论语·学而", "text": "学而时习之，不亦说乎？", "tags": ["儒家","学习","实践"], "category": "confucianism", "commentary_hint": "学习和反复实践本身就是一种愉悦——交易是一场终身学习"},
+  {"id": "l02", "source": "论语·为政", "text": "知之为知之，不知为不知，是知也。", "tags": ["儒家","诚实","认知"], "category": "confucianism", "commentary_hint": "承认自己不懂，才是真正的智慧——市场中，承认不确定性是成熟的开始"},
+  {"id": "l03", "source": "论语·述而", "text": "不义而富且贵，于我如浮云。", "tags": ["儒家","义利","价值观"], "category": "confucianism", "commentary_hint": "不正当的利益如浮云般无意义"},
+  {"id": "l04", "source": "论语·卫灵公", "text": "人无远虑，必有近忧。", "tags": ["儒家","远见","风险"], "category": "confucianism", "commentary_hint": "没有长远的规划和风控，就一定会被眼前的波动所困"},
+  {"id": "l05", "source": "大学", "text": "知止而后有定，定而后能静，静而后能安，安而后能虑，虑而后能得。", "tags": ["儒家","止","定","静"], "category": "confucianism", "commentary_hint": "知道什么时候停下来——止盈止损的哲学根基"},
+  {"id": "l06", "source": "中庸", "text": "致中和，天地位焉，万物育焉。", "tags": ["儒家","中庸","平衡"], "category": "confucianism", "commentary_hint": "达到中正平和——极端情绪是交易的大敌"},
+  {"id": "l07", "source": "中庸", "text": "君子居易以俟命，小人行险以侥幸。", "tags": ["儒家","等待","不冒险"], "category": "confucianism", "commentary_hint": "君子安于当下等待时机，小人才靠侥幸冒险——等待确定性机会才是正道"},
+  {"id": "l08", "source": "孟子·告子下", "text": "故天将降大任于是人也，必先苦其心志，劳其筋骨。", "tags": ["儒家","磨砺","成长"], "category": "confucianism", "commentary_hint": "挫折是成长的必经之路——亏损是最好的老师"},
+  {"id": "l09", "source": "孟子·公孙丑上", "text": "虽有智慧，不如乘势。", "tags": ["儒家","趋势","时机"], "category": "confucianism", "commentary_hint": "再聪明也不如顺势而为——趋势的力量大过个人的判断"},
+  {"id": "l10", "source": "周易·系辞", "text": "穷则变，变则通，通则久。", "tags": ["儒家","变化","适应"], "category": "confucianism", "commentary_hint": "走到尽头就要改变，改变才能通达——市场风格切换的哲学依据"},
+  {"id": "l11", "source": "周易", "text": "乐天知命，故不忧。", "tags": ["儒家","接受","无忧"], "category": "confucianism", "commentary_hint": "接纳命运，所以没有忧愁——接受了市场的不确定性，才能内心平静"},
+  {"id": "l12", "source": "尚书·大禹谟", "text": "人心惟危，道心惟微，惟精惟一，允执厥中。", "tags": ["儒家","心法","专注"], "category": "confucianism", "commentary_hint": "人心危险，大道微妙，唯有专注专一、守住中道——交易心法的最高准则"},
+
+  {"id": "w01", "source": "孙子兵法·谋攻篇", "text": "知彼知己，百战不殆；不知彼而知己，一胜一负；不知彼不知己，每战必殆。", "tags": ["兵法","认知","知己知彼"], "category": "strategy", "commentary_hint": "了解市场也了解自己，才能长期不败"},
+  {"id": "w02", "source": "孙子兵法·形篇", "text": "善战者，先为不可胜，以待敌之可胜。", "tags": ["兵法","防守","等待"], "category": "strategy", "commentary_hint": "先确保自己不亏，再等待市场的机会——风控第一"},
+  {"id": "w03", "source": "孙子兵法·势篇", "text": "故善战人之势，如转圆石于千仞之山者，势也。", "tags": ["兵法","趋势","顺势"], "category": "strategy", "commentary_hint": "善于利用趋势的人，就像从高山上滚下圆石一样——不可阻挡"},
+  {"id": "w04", "source": "孙子兵法·虚实篇", "text": "水因地而制流，兵因敌而制胜。故兵无常势，水无常形。", "tags": ["兵法","灵活","应变"], "category": "strategy", "commentary_hint": "没有固定的策略，只有因时而变——交易系统必须随市场调整"},
+
+  {"id": "s01", "source": "爱比克泰德《手册》第一节", "text": "有些事在我们掌控之中，有些事不在。在我们掌控之中的是判断、冲动、欲望、厌恶——简言之，一切属于我们自身行为的事。", "tags": ["斯多葛","控制二分法","焦虑"], "category": "philosophy", "commentary_hint": "焦虑的根源是我们试图控制不可控之事——市场走势、他人评价、外在结果"},
+  {"id": "s02", "source": "马可·奥勒留《沉思录》卷四", "text": "你有控制力的是你的心灵——而非外部事件。意识到这一点，你将找到力量。", "tags": ["斯多葛","内在力量","判断"], "category": "philosophy", "commentary_hint": "外在事件无法伤害我们，伤害我们的是对事件的判断"},
+  {"id": "s03", "source": "塞涅卡《论心灵的平静》", "text": "我们常常不是因为事情本身而痛苦，而是因为我们对事情的看法而痛苦。", "tags": ["斯多葛","认知","痛苦"], "category": "philosophy", "commentary_hint": "与CBT的核心原则完全一致——改变认知可以改变情绪反应"},
+  {"id": "s04", "source": "塞涅卡《论生命之短暂》", "text": "我们不是拥有的时间太少，而是浪费的时间太多。", "tags": ["斯多葛","时间","珍惜"], "category": "philosophy", "commentary_hint": "与其焦虑于短期波动，不如专注于长期价值"},
+  {"id": "s05", "source": "马可·奥勒留《沉思录》卷五", "text": "清晨告诉自己：今天我会遇到好管闲事的人、忘恩负义的人、傲慢的人、欺诈的人、嫉妒的人、不合群的人。他们之所以如此，是因为分不清善恶。", "tags": ["斯多葛","预期管理","接纳"], "category": "philosophy", "commentary_hint": "提前预设市场会不按自己的期望走，就不会在波动时情绪失控"},
+  {"id": "s06", "source": "爱比克泰德", "text": "使人不安的不是事物本身，而是人对事物的判断。", "tags": ["斯多葛","认知","情绪"], "category": "philosophy", "commentary_hint": "不是亏损让我们痛苦，而是我们对亏损的判断让我们痛苦"},
+
+  {"id": "g01", "source": "柏拉图《理想国》", "text": "未经审视的人生不值得过。", "tags": ["古希腊","反思","自觉"], "category": "philosophy", "commentary_hint": "每一笔交易都值得复盘——未经复盘的操作不值得做"},
+  {"id": "g02", "source": "亚里士多德《尼各马可伦理学》", "text": "德性是一种选择的习惯，在于相对于我们而言的中道。", "tags": ["古希腊","中道","习惯"], "category": "philosophy", "commentary_hint": "交易的美德在于在贪婪与恐惧之间找到中道"},
+  {"id": "g03", "source": "亚里士多德", "text": "我们是我们反复做的事。因此，卓越不是一种行为，而是一种习惯。", "tags": ["古希腊","习惯","卓越"], "category": "philosophy", "commentary_hint": "交易纪律不是一次行为，是反复练习形成的习惯"},
+  {"id": "g04", "source": "赫拉克利特", "text": "人不能两次踏入同一条河流。", "tags": ["古希腊","变化","流动"], "category": "philosophy", "commentary_hint": "市场每一刻都在变化，过去的策略不一定适用于现在"},
+
+  {"id": "k01", "source": "康德《实践理性批判》", "text": "有两样东西，我愈是思考愈觉敬畏：头顶的星空和心中的道德法则。", "tags": ["康德","敬畏","自律"], "category": "philosophy", "commentary_hint": "对市场保持敬畏，对规则保持自律"},
+  {"id": "k02", "source": "康德", "text": "人是目的，不是手段。", "tags": ["康德","尊重","独立"], "category": "philosophy", "commentary_hint": "不要把市场当作为自己服务的工具——尊重市场的独立性"},
+  {"id": "n01", "source": "尼采《查拉图斯特拉如是说》", "text": "那些杀不死我的，必使我更强大。", "tags": ["尼采","韧性","成长"], "category": "philosophy", "commentary_hint": "每一次爆仓都是一次重生的机会——前提是活下来"},
+  {"id": "n02", "source": "尼采", "text": "当你在凝视深渊的时候，深渊也正在凝视着你。", "tags": ["尼采","觉察","镜像"], "category": "philosophy", "commentary_hint": "当你过度盯盘的时候，盘也在盯着你——它会吞噬你的心智"},
+  {"id": "n03", "source": "尼采《快乐的科学》", "text": "你必须准备好沐浴在烈火之中。", "tags": ["尼采","勇气","淬炼"], "category": "philosophy", "commentary_hint": "真正的交易者必须准备好承担风险，而不是逃避"},
+
+  {"id": "f01", "source": "弗洛伊德", "text": "无意识是心理活动的主要来源。大多数行为是由无意识的力量驱动的，我们往往意识不到它。", "tags": ["精神分析","无意识","行为驱动力"], "category": "psychology", "commentary_hint": "很多交易失误不是技术问题，是无意识情绪驱动的——恐惧、贪婪、证明自己的需要"},
+  {"id": "f02", "source": "弗洛伊德《超越快乐原则》", "text": "人类有一种重复的强迫——倾向于重复过去的创伤经验。", "tags": ["精神分析","重复","创伤"], "category": "psychology", "commentary_hint": "为什么你总在同一个位置止损？为什么每次都在顶部追高？——重复创伤在交易中的体现"},
+  {"id": "f03", "source": "弗洛伊德", "text": "梦是通往无意识的皇家大道。", "tags": ["精神分析","梦","无意识"], "category": "psychology", "commentary_hint": "你对市场的恐惧和贪婪会出现在你的交易记录里——复盘就是解析你的交易之梦"},
+
+  {"id": "j01", "source": "荣格《心理类型》", "text": "我不是发生在我身上的事，我是我选择成为的人。", "tags": ["荣格","选择","自我定义"], "category": "psychology", "commentary_hint": "不是市场决定了你的盈亏，是你对市场的反应决定了你是谁"},
+  {"id": "j02", "source": "荣格", "text": "往外看的人在做梦，往内看的人已醒来。", "tags": ["荣格","内省","觉醒"], "category": "psychology", "commentary_hint": "天天盯着盘面是做梦，向内审视自己的交易心理才是觉醒"},
+  {"id": "j03", "source": "荣格", "text": "除非你让无意识变为有意识，否则它将主导你的生活，而你会称之为命运。", "tags": ["荣格","无意识","命运"], "category": "psychology", "commentary_hint": "把无意识的交易冲动变成有意识的决策，你才掌握了命运"},
+  {"id": "j04", "source": "荣格《原型与集体无意识》", "text": "阴影是我们不愿承认的自身部分。整合阴影，才能获得完整。", "tags": ["荣格","阴影","整合"], "category": "psychology", "commentary_hint": "接受自己交易中的贪婪和恐惧——不是消灭它们，而是整合它们"},
+
+  {"id": "a01", "source": "阿德勒", "text": "重要的不是被给予了什么，而是如何去利用被给予的东西。", "tags": ["个体心理学","能动性","资源"], "category": "psychology", "commentary_hint": "不管你账户里有多少钱，重要的是你如何使用它"},
+  {"id": "a02", "source": "阿德勒", "text": "一切烦恼都来自人际关系。", "tags": ["个体心理学","比较","烦恼"], "category": "psychology", "commentary_hint": "交易中的焦虑大多来自比较——别人赚了多少，为什么我赚不到"},
+
+  {"id": "v01", "source": "弗兰克尔《活出生命的意义》", "text": "在刺激和反应之间，存在一个空间。在这个空间中，是我们选择反应的自由和力量。", "tags": ["存在主义","选择","自由"], "category": "psychology", "commentary_hint": "盘面的波动是刺激，你的操作是反应——在二者之间留出空间"},
+  {"id": "v02", "source": "弗兰克尔", "text": "当我们不能改变处境时，我们就被挑战去改变自己。", "tags": ["存在主义","适应","改变"], "category": "psychology", "commentary_hint": "改变不了市场，就改变自己——这是交易员成长的唯一路径"},
+  {"id": "v03", "source": "弗兰克尔", "text": "人所需要的，不是没有压力的状态，而是为一个值得的目标而奋斗。", "tags": ["存在主义","意义","目标"], "category": "psychology", "commentary_hint": "交易不是逃避压力，而是有意义地承受压力"},
+
+  {"id": "c01", "source": "阿伦·贝克《认知疗法》", "text": "认知扭曲是一切心理困扰的根源——改变思维模式，情绪和行为随之改变。", "tags": ["CBT","认知扭曲","自助"], "category": "psychology", "commentary_hint": "改变对亏损的认知，就改变了亏损对你的影响"},
+  {"id": "c02", "source": "CBT核心原则", "text": "事件本身不会直接导致情绪反应，是你对事件的解读产生了情绪。", "tags": ["CBT","认知","情绪"], "category": "psychology", "commentary_hint": "同一根大阴线，有人看到恐惧，有人看到机会——解读决定了反应"},
+  {"id": "c03", "source": "CBT常见认知扭曲清单", "text": "灾难化思维：把一次小亏损想象成末日的开始。全有或全无思维：非赚即亏，忽略了过程的成长。情绪推理：因为我害怕，所以市场一定很危险。", "tags": ["CBT","认知扭曲","觉察"], "category": "psychology", "commentary_hint": "检查你的交易日记，这三种扭曲出现最多"},
+  {"id": "c04", "source": "贝克", "text": "先从行为入手，然后思维才会改变。", "tags": ["CBT","行为激活","先做"], "category": "psychology", "commentary_hint": "先执行止损纪律，然后你的思维模式会跟着改变——不是想好了再做，是做了才会想好"},
+
+  {"id": "ka01", "source": "卡巴金《正念：此刻是一枝花》", "text": "你无法平息海浪，但你可以学会冲浪。", "tags": ["正念","接受","技能"], "category": "psychology", "commentary_hint": "你无法平息市场的波动，但你可以学会在波动中交易"},
+  {"id": "ka02", "source": "卡巴金", "text": "正念意味着以一种特定的方式关注：有目的地、在当下、不加评判。", "tags": ["正念","关注","不评判"], "category": "psychology", "commentary_hint": "看盘的最高境界：有觉察、在当下、不急着下判断"},
+
+  {"id": "wj01", "source": "威廉·詹姆斯", "text": "人可以通过改变心态来改变生活，这是我们这个时代最伟大的发现。", "tags": ["实用主义","心态","改变"], "category": "philosophy", "commentary_hint": "改变对交易的看法，就改变了交易的人生"},
+  {"id": "ki01", "source": "克尔凯郭尔", "text": "生活只能倒着理解，但必须正着过。", "tags": ["存在主义","理解","前行"], "category": "philosophy", "commentary_hint": "复盘可以看清历史，但交易必须面向未来"}
+]

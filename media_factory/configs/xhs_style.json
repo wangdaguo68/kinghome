@@ -1,0 +1,29 @@
+{
+  "platform": "xiaohongshu",
+  "max_chars": 1500,
+  "emoji_density": "high",
+  "title_rules": {
+    "trading": {
+      "keywords": ["MACD", "金叉", "信号", "盯盘", "技术面"],
+      "max_length": 25,
+      "template": "[数据信号]出现后，我发现[技术指标]才是关键"
+    },
+    "wisdom": {
+      "keywords": ["停止内耗", "释怀", "我终于懂了", "情绪", "焦虑"],
+      "max_length": 25,
+      "template": "停止内耗后，[经典概念]让我彻底释怀"
+    },
+    "mixed": {
+      "keywords": ["绝了", "家人们"],
+      "max_length": 25,
+      "template": "盯盘[数字]年，[佛学概念]比[指标]更准"
+    }
+  },
+  "body_structure": {
+    "hook_opening": "最近有没有这种感觉...",
+    "close_interaction": "你最近有这种感觉吗？",
+    "emoji_pool": ["🌸", "✨", "🧘", "🌿", "💫", "🍃", "🪷", "🌊", "🕯️", "💛", "🙏"],
+    "paragraph_max_lines": 2
+  },
+  "hashtags_default": ["#禅意交易", "#A股修行", "#情绪管理"]
+}

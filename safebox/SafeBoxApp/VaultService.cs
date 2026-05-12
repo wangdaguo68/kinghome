@@ -194,16 +194,28 @@ public sealed class VaultService
     public void RenameFolder(string oldPath, string newPath)
     {
         EnsureUnlocked();
-        if (!_index.Folders.Remove(oldPath))
-        {
+        if (string.IsNullOrWhiteSpace(newPath))
+            throw new InvalidOperationException("Folder name cannot be empty.");
+
+        if (_index.Folders.Contains(newPath, StringComparer.OrdinalIgnoreCase))
+            throw new InvalidOperationException("A folder with this name already exists.");
+
+        var existingFolder = _index.Folders.FirstOrDefault(f => f.Equals(oldPath, StringComparison.OrdinalIgnoreCase));
+        if (existingFolder is null || !_index.Folders.Remove(existingFolder))
             throw new InvalidOperationException("Folder not found.");
-        }
 
         _index.Folders.Add(newPath);
 
-        foreach (var item in _index.Items.Where(i => i.FolderPath == oldPath || i.FolderPath.StartsWith(oldPath + "/")))
+        foreach (var item in _index.Items.Where(i => i.FolderPath == oldPath || i.FolderPath.StartsWith(oldPath + "/")).ToList())
         {
             item.FolderPath = newPath + item.FolderPath[oldPath.Length..];
+        }
+
+        var childFolders = _index.Folders.Where(f => f.StartsWith(oldPath + "/")).ToList();
+        foreach (var child in childFolders)
+        {
+            _index.Folders.Remove(child);
+            _index.Folders.Add(newPath + child[oldPath.Length..]);
         }
 
         SaveIndex();
@@ -212,10 +224,9 @@ public sealed class VaultService
     public void DeleteFolder(string folderPath)
     {
         EnsureUnlocked();
-        if (!_index.Folders.Remove(folderPath))
-        {
+        var existingFolder = _index.Folders.FirstOrDefault(f => f.Equals(folderPath, StringComparison.OrdinalIgnoreCase));
+        if (existingFolder is null || !_index.Folders.Remove(existingFolder))
             throw new InvalidOperationException("Folder not found.");
-        }
 
         var itemsInFolder = _index.Items.Where(i => i.FolderPath == folderPath || i.FolderPath.StartsWith(folderPath + "/")).ToList();
         foreach (var item in itemsInFolder)
@@ -227,6 +238,12 @@ public sealed class VaultService
             }
 
             _index.Items.Remove(item);
+        }
+
+        var childFolders = _index.Folders.Where(f => f.StartsWith(folderPath + "/")).ToList();
+        foreach (var child in childFolders)
+        {
+            _index.Folders.Remove(child);
         }
 
         SaveIndex();

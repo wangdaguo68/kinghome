@@ -1,0 +1,230 @@
+<Window x:Class="SafeBoxApp.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="保险箱" Height="720" Width="1120" MinHeight="620" MinWidth="980"
+        Background="#1C1C1C" Closing="Window_Closing"
+        WindowStartupLocation="CenterScreen">
+    <Grid>
+        <!-- ===== LOGIN PANEL ===== -->
+        <Grid x:Name="LoginPanel" VerticalAlignment="Center">
+            <Border MaxWidth="380" Padding="0" Background="Transparent">
+                <StackPanel>
+                    <!-- Icon Area -->
+                    <Border Width="64" Height="64" CornerRadius="16"
+                            Background="#252320" BorderBrush="#33302B" BorderThickness="1"
+                            HorizontalAlignment="Center" Margin="0,0,0,20">
+                        <TextBlock Text="箱" FontSize="28" Foreground="#D4A574"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+
+                    <!-- Title -->
+                    <TextBlock Text="保险箱" FontSize="28" FontWeight="Normal"
+                               Foreground="#E0D6CC" TextAlignment="Center" Margin="0,0,0,4" />
+                    <TextBlock Text="本地加密 · 安全存储" FontSize="12" Foreground="#6B5B4F"
+                               TextAlignment="Center" Margin="0,0,0,28" />
+
+                    <!-- Vault Path -->
+                    <TextBlock Text="保险箱文件夹" FontSize="10" Foreground="#6B5B4F"
+                               Margin="0,0,0,6" />
+                    <DockPanel Margin="0,0,0,14">
+                        <Button Content="选择" DockPanel.Dock="Right" Click="BrowseVault_Click"
+                                Style="{StaticResource PrimaryButton}" FontSize="11" Padding="14,8" />
+                        <TextBox x:Name="VaultPathBox" Margin="0,0,8,0" />
+                    </DockPanel>
+
+                    <!-- Password -->
+                    <TextBlock Text="主密码" FontSize="10" Foreground="#6B5B4F"
+                               Margin="0,0,0,6" />
+                    <PasswordBox x:Name="PasswordBox" Margin="0,0,0,10" />
+
+                    <!-- Confirm Password -->
+                    <TextBlock Text="确认密码（创建时填写）" FontSize="10" Foreground="#6B5B4F"
+                               Margin="0,0,0,6" />
+                    <PasswordBox x:Name="ConfirmPasswordBox" Margin="0,0,0,20" />
+
+                    <!-- Action Buttons -->
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,12">
+                        <Button Content="创建保险箱" Click="CreateVault_Click"
+                                Style="{StaticResource SecondaryButton}" Margin="0,0,8,0" />
+                        <Button Content="解 锁" Click="UnlockVault_Click"
+                                Style="{StaticResource PrimaryButton}" />
+                    </StackPanel>
+
+                    <!-- Recovery Section -->
+                    <Expander Header="忘记密码？使用恢复密钥" Margin="0,8,0,0"
+                              Foreground="#6B5B4F" FontSize="11" BorderThickness="0">
+                        <StackPanel Margin="0,14,0,0">
+                            <TextBlock Text="恢复密钥" FontSize="10" Foreground="#6B5B4F"
+                                       Margin="0,0,0,6" />
+                            <TextBox x:Name="RecoveryKeyBox" Margin="0,0,0,10" />
+                            <TextBlock Text="新主密码" FontSize="10" Foreground="#6B5B4F"
+                                       Margin="0,0,0,6" />
+                            <PasswordBox x:Name="NewPasswordBox" Margin="0,0,0,12" />
+                            <Button Content="用恢复密钥重设并解锁" Click="RecoverVault_Click"
+                                    Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left" />
+                        </StackPanel>
+                    </Expander>
+
+                    <!-- Recovery Output -->
+                    <TextBox x:Name="RecoveryOutputBox" Visibility="Collapsed" IsReadOnly="True"
+                             TextWrapping="Wrap" Margin="0,14,0,0"
+                             Background="#252320" Foreground="#D4A574" BorderThickness="0"
+                             FontSize="11" />
+
+                    <!-- Status -->
+                    <TextBlock x:Name="LoginStatusText" Margin="0,16,0,0" Foreground="#C06050"
+                               FontSize="11" TextWrapping="Wrap" TextAlignment="Center" />
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- ===== VAULT PANEL (UNLOCKED) ===== -->
+        <Grid x:Name="VaultPanel" Visibility="Collapsed">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="48" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="28" />
+            </Grid.RowDefinitions>
+
+            <!-- Top Bar -->
+            <Border Grid.Row="0" BorderBrush="#33302B" BorderThickness="0,0,0,1"
+                    Background="#1C1C1C">
+                <Grid Margin="16,0">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="保险箱" FontSize="11" Foreground="#8B7355"
+                                   VerticalAlignment="Center" />
+                        <TextBlock Text=" / " FontSize="11" Foreground="#3A3028"
+                                   VerticalAlignment="Center" />
+                        <TextBlock x:Name="BreadcrumbText" Text="全部文件" FontSize="11"
+                                   Foreground="#D4A574" VerticalAlignment="Center" />
+                    </StackPanel>
+
+                    <Button Content="🔒 锁定" Click="LockVault_Click"
+                            Style="{StaticResource SecondaryButton}"
+                            FontSize="10" Padding="10,5"
+                            HorizontalAlignment="Right" VerticalAlignment="Center" />
+                </Grid>
+            </Border>
+
+            <!-- Main Content -->
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="200" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Left Sidebar -->
+                <Border Grid.Column="0" BorderBrush="#33302B" BorderThickness="0,0,1,0"
+                        Background="#1C1C1C">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <ListView x:Name="FolderList" Grid.Row="0"
+                                  Background="Transparent" BorderThickness="0"
+                                  SelectionChanged="FolderList_SelectionChanged"
+                                  Margin="0,12,0,0">
+                            <ListView.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding}" FontSize="12" Foreground="#888"
+                                               Padding="16,7" />
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+
+                        <Button x:Name="NewFolderBtn" Grid.Row="1"
+                                Content="+ 新建文件夹" Click="NewFolder_Click"
+                                Style="{StaticResource GhostButton}"
+                                FontSize="10" Foreground="#6B5B4F"
+                                HorizontalAlignment="Stretch" Margin="8,0,8,12" />
+                    </Grid>
+                </Border>
+
+                <!-- Center File Grid -->
+                <Grid Grid.Column="1" Background="#1A1A1A">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <!-- Toolbar -->
+                    <StackPanel Orientation="Horizontal" Margin="20,14,20,0" Grid.Row="0">
+                        <Button Content="📥 导入并加密" Click="ImportFiles_Click"
+                                Style="{StaticResource PrimaryButton}" FontSize="11" Padding="14,7" />
+                        <Button Content="📤 导出" Click="ExportFile_Click"
+                                Style="{StaticResource SecondaryButton}" FontSize="11"
+                                Margin="8,0,0,0" />
+                        <Button Content="🗑 删除" Click="DeleteFile_Click"
+                                Style="{StaticResource SecondaryButton}" FontSize="11"
+                                Margin="8,0,0,0" />
+                        <TextBlock x:Name="ItemCountText" Text="0 个项目"
+                                   FontSize="10" Foreground="#4A3F35"
+                                   VerticalAlignment="Center" Margin="16,0,0,0" />
+                    </StackPanel>
+
+                    <!-- File List -->
+                    <ListView x:Name="ItemsList" Grid.Row="1"
+                              SelectionChanged="ItemsList_SelectionChanged"
+                              Margin="20,12,20,12" Background="Transparent"
+                              BorderThickness="0">
+                        <ListView.View>
+                            <GridView>
+                                <GridViewColumn Header="名称" DisplayMemberBinding="{Binding DisplayName}"
+                                                Width="240" />
+                                <GridViewColumn Header="大小" DisplayMemberBinding="{Binding SizeText}"
+                                                Width="80" />
+                                <GridViewColumn Header="类型" DisplayMemberBinding="{Binding TypeText}"
+                                                Width="80" />
+                                <GridViewColumn Header="日期" DisplayMemberBinding="{Binding DateText}"
+                                                Width="120" />
+                            </GridView>
+                        </ListView.View>
+                    </ListView>
+                </Grid>
+
+                <!-- Right Preview Panel -->
+                <Border Grid.Column="2" BorderBrush="#33302B" BorderThickness="1,0,0,0"
+                        Background="#1C1C1C" Width="260">
+                    <Grid Margin="14">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <TextBlock x:Name="PreviewTitle" Grid.Row="0" Text="选择文件预览"
+                                   FontSize="10" Foreground="#6B5B4F"
+                                   Margin="0,0,0,12" />
+
+                        <Border Grid.Row="1" Background="#252320" CornerRadius="6">
+                            <Grid>
+                                <Image x:Name="PreviewImage" Stretch="Uniform" Visibility="Collapsed" />
+                                <MediaElement x:Name="PreviewVideo" LoadedBehavior="Manual"
+                                              UnloadedBehavior="Manual" Stretch="Uniform"
+                                              Visibility="Collapsed" />
+                                <TextBox x:Name="PreviewText" Visibility="Collapsed" IsReadOnly="True"
+                                         TextWrapping="Wrap" AcceptsReturn="True"
+                                         VerticalScrollBarVisibility="Auto"
+                                         Background="#252320" Foreground="#E0D6CC"
+                                         BorderThickness="0" FontSize="12" />
+                                <TextBlock x:Name="PreviewMessage" Text="选择一个文件预览"
+                                           Foreground="#6B5B4F" FontSize="12"
+                                           TextAlignment="Center" VerticalAlignment="Center"
+                                           TextWrapping="Wrap" />
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </Border>
+            </Grid>
+
+            <!-- Bottom Status Bar -->
+            <Border Grid.Row="2" BorderBrush="#33302B" BorderThickness="0,1,0,0"
+                    Background="#1C1C1C">
+                <TextBlock x:Name="StatusText" FontSize="9" Foreground="#4A3F35"
+                           VerticalAlignment="Center" Margin="16,0" TextWrapping="Wrap" />
+            </Border>
+        </Grid>
+    </Grid>
+</Window>

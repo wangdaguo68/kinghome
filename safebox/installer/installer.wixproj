@@ -1,0 +1,10 @@
+<Project Sdk="WixToolset.Sdk/4.0.5">
+  <PropertyGroup>
+    <OutputType>Msi</OutputType>
+    <OutputName>SafeBoxSetup</OutputName>
+    <TargetExt>.msi</TargetExt>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="WixToolset.UI.wixext" Version="4.0.5" />
+  </ItemGroup>
+</Project>

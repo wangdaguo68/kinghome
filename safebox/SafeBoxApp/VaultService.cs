@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Security.Cryptography;
@@ -126,21 +127,19 @@ public sealed class VaultService
         var id = Guid.NewGuid().ToString("N");
         var encryptedName = $"{id}.bin";
         var targetPath = Path.Combine(_dataDir, encryptedName);
-        var plain = File.ReadAllBytes(sourcePath);
+        var fileInfo = new FileInfo(sourcePath);
         var item = new VaultItem
         {
             Id = id,
             DisplayName = Path.GetFileName(sourcePath),
             ContentType = GuessContentType(sourcePath),
-            Size = plain.LongLength,
+            Size = fileInfo.Length,
             ImportedAt = DateTimeOffset.UtcNow,
             EncryptedFileName = encryptedName,
             FolderPath = folderPath
         };
 
-        var encrypted = _crypto.Encrypt(_masterKey!, plain, Encoding.UTF8.GetBytes(id));
-        File.WriteAllBytes(targetPath, encrypted);
-        Array.Clear(plain);
+        _crypto.EncryptChunked(_masterKey!, sourcePath, targetPath, Encoding.UTF8.GetBytes(id));
 
         DeleteSourceFile(sourcePath);
         _index.Items.Add(item);
@@ -152,7 +151,15 @@ public sealed class VaultService
     {
         EnsureUnlocked();
         var path = Path.Combine(_dataDir, item.EncryptedFileName);
-        return _crypto.Decrypt(_masterKey!, File.ReadAllBytes(path), Encoding.UTF8.GetBytes(item.Id));
+        // Try new chunked format first, fall back to legacy single-chunk format
+        var payload = File.ReadAllBytes(path);
+        var version = BinaryPrimitives.ReadInt32LittleEndian(payload.AsSpan(0, 4));
+        if (version == 2)
+        {
+            Array.Clear(payload);
+            return _crypto.DecryptChunked(_masterKey!, path, Encoding.UTF8.GetBytes(item.Id));
+        }
+        return _crypto.Decrypt(_masterKey!, payload, Encoding.UTF8.GetBytes(item.Id));
     }
 
     public void ExportFile(VaultItem item, string destinationPath)

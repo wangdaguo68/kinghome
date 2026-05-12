@@ -95,6 +95,91 @@ public sealed class CryptoService
         return plaintext;
     }
 
+    private const int ChunkSize = 10 * 1024 * 1024; // 10MB chunks
+
+    public void EncryptChunked(byte[] key, string sourcePath, string destPath, ReadOnlySpan<byte> associatedData)
+    {
+        using var input = File.OpenRead(sourcePath);
+        using var output = File.Create(destPath);
+
+        // Version header
+        var version = new byte[4];
+        BinaryPrimitives.WriteInt32LittleEndian(version, 2);
+        output.Write(version);
+
+        var buffer = new byte[ChunkSize];
+        var lengthBytes = new byte[4];
+        int chunkIndex = 0;
+
+        while (true)
+        {
+            var read = input.Read(buffer, 0, ChunkSize);
+            if (read == 0) break;
+
+            var chunkPlain = buffer.AsSpan(0, read);
+            var nonce = new byte[NonceSize];
+            RandomNumberGenerator.Fill(nonce);
+            var ciphertext = new byte[read];
+            var tag = new byte[TagSize];
+
+            using var aes = new AesGcm(key, TagSize);
+            var chunkAd = new byte[associatedData.Length + 4];
+            associatedData.CopyTo(chunkAd);
+            BinaryPrimitives.WriteInt32LittleEndian(chunkAd.AsSpan(associatedData.Length), chunkIndex);
+            aes.Encrypt(nonce, chunkPlain, ciphertext, tag, chunkAd);
+
+            // Chunk header: [length:4][nonce:12][tag:16][ciphertext:N]
+            BinaryPrimitives.WriteInt32LittleEndian(lengthBytes, read);
+            output.Write(lengthBytes);
+            output.Write(nonce);
+            output.Write(tag);
+            output.Write(ciphertext);
+
+            chunkIndex++;
+        }
+    }
+
+    public byte[] DecryptChunked(byte[] key, string sourcePath, ReadOnlySpan<byte> associatedData)
+    {
+        using var input = File.OpenRead(sourcePath);
+
+        var versionBytes = new byte[4];
+        input.ReadExactly(versionBytes);
+        var version = BinaryPrimitives.ReadInt32LittleEndian(versionBytes);
+        if (version != 2)
+            throw new InvalidDataException("Unsupported encryption version.");
+
+        using var output = new MemoryStream();
+        int chunkIndex = 0;
+
+        while (input.Position < input.Length)
+        {
+            var lengthBytes = new byte[4];
+            input.ReadExactly(lengthBytes);
+            var chunkLength = BinaryPrimitives.ReadInt32LittleEndian(lengthBytes);
+
+            var nonce = new byte[NonceSize];
+            input.ReadExactly(nonce);
+            var tag = new byte[TagSize];
+            input.ReadExactly(tag);
+            var ciphertext = new byte[chunkLength];
+            input.ReadExactly(ciphertext);
+
+            var plaintext = new byte[chunkLength];
+            using var aes = new AesGcm(key, TagSize);
+            var chunkAd = new byte[associatedData.Length + 4];
+            associatedData.CopyTo(chunkAd);
+            BinaryPrimitives.WriteInt32LittleEndian(chunkAd.AsSpan(associatedData.Length), chunkIndex);
+            aes.Decrypt(nonce, ciphertext, tag, plaintext, chunkAd);
+
+            output.Write(plaintext);
+            Array.Clear(plaintext);
+            chunkIndex++;
+        }
+
+        return output.ToArray();
+    }
+
     private static string NormalizeRecoveryKey(string recoveryKey)
     {
         return recoveryKey.Trim().Replace(" ", "", StringComparison.Ordinal).ToLowerInvariant();

@@ -123,17 +123,18 @@
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
-                        <ListView x:Name="FolderList" Grid.Row="0"
-                                  Background="Transparent" BorderThickness="0"
-                                  SelectionChanged="FolderList_SelectionChanged"
-                                  Margin="0,12,0,0">
-                            <ListView.ItemTemplate>
+                        <ListBox x:Name="FolderList" Grid.Row="0"
+                                 Background="Transparent" BorderThickness="0"
+                                 Foreground="#888"
+                                 SelectionChanged="FolderList_SelectionChanged"
+                                 Margin="0,12,0,0">
+                            <ListBox.ItemTemplate>
                                 <DataTemplate>
                                     <TextBlock Text="{Binding}" FontSize="12" Foreground="#888"
                                                Padding="16,7" />
                                 </DataTemplate>
-                            </ListView.ItemTemplate>
-                        </ListView>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
 
                         <Button x:Name="NewFolderBtn" Grid.Row="1"
                                 Content="+ 新建文件夹" Click="NewFolder_Click"

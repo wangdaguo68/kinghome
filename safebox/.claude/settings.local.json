@@ -9,7 +9,14 @@
       "Bash(cmd.exe *)",
       "Bash(taskkill /f /im 保险箱.exe)",
       "Bash(tasklist)",
-      "Bash(D:/software/safebox/dist/保险箱.exe *)"
+      "Bash(D:/software/safebox/dist/保险箱.exe *)",
+      "Bash(powershell *)",
+      "Bash(grep -E \"\\\\.\\(exe|dll\\)$\")",
+      "Bash(dotnet new *)",
+      "Bash(dotnet tool list *)",
+      "WebFetch(domain:wixtoolset.org)",
+      "Bash(dotnet clean *)",
+      "Bash(git reset *)"
     ]
   }
 }

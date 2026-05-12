@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media.Imaging;
 using Forms = System.Windows.Forms;
 using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
@@ -12,6 +13,7 @@ namespace SafeBoxApp;
 public partial class MainWindow : Window
 {
     private VaultService? _vault;
+    private string _currentFolder = "";
     private readonly string _cacheRoot = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "SafeBox",
@@ -25,6 +27,8 @@ public partial class MainWindow : Window
             "保险箱");
         ClearPreviewCache();
     }
+
+    // ===== LOGIN EVENTS =====
 
     private void BrowseVault_Click(object sender, RoutedEventArgs e)
     {
@@ -105,12 +109,11 @@ public partial class MainWindow : Window
         }
     }
 
+    // ===== VAULT EVENTS =====
+
     private void ImportFiles_Click(object sender, RoutedEventArgs e)
     {
-        if (_vault is null)
-        {
-            return;
-        }
+        if (_vault is null) return;
 
         var dialog = new OpenFileDialog
         {
@@ -118,10 +121,7 @@ public partial class MainWindow : Window
             Title = "选择要移动进保险箱的文件"
         };
 
-        if (dialog.ShowDialog() != true)
-        {
-            return;
-        }
+        if (dialog.ShowDialog() != true) return;
 
         try
         {
@@ -129,11 +129,11 @@ public partial class MainWindow : Window
             var imported = 0;
             foreach (var file in dialog.FileNames)
             {
-                _vault.ImportFile(file);
+                _vault.ImportFile(file, _currentFolder);
                 imported++;
             }
 
-            RefreshList();
+            RefreshAll();
             StatusText.Text = $"已导入 {imported} 个文件。源文件已从原位置删除。";
         }
         catch (Exception ex)
@@ -149,10 +149,7 @@ public partial class MainWindow : Window
 
     private void ExportFile_Click(object sender, RoutedEventArgs e)
     {
-        if (_vault is null || ItemsList.SelectedItem is not VaultFileRow row)
-        {
-            return;
-        }
+        if (_vault is null || ItemsList.SelectedItem is not VaultFileRow row) return;
 
         var dialog = new SaveFileDialog
         {
@@ -160,10 +157,7 @@ public partial class MainWindow : Window
             Title = "导出解密后的文件"
         };
 
-        if (dialog.ShowDialog() != true)
-        {
-            return;
-        }
+        if (dialog.ShowDialog() != true) return;
 
         try
         {
@@ -178,19 +172,14 @@ public partial class MainWindow : Window
 
     private void DeleteFile_Click(object sender, RoutedEventArgs e)
     {
-        if (_vault is null || ItemsList.SelectedItem is not VaultFileRow row)
-        {
-            return;
-        }
+        if (_vault is null || ItemsList.SelectedItem is not VaultFileRow row) return;
 
-        if (WinMessageBox.Show($"确定从保险箱删除“{row.Item.DisplayName}”？", "删除文件", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
-        {
-            return;
-        }
+        if (WinMessageBox.Show($"确定从保险箱删除“{row.Item.DisplayName}”？", "删除文件",
+                MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
 
         ClearPreview();
         _vault.DeleteItem(row.Item);
-        RefreshList();
+        RefreshAll();
         StatusText.Text = "文件已从保险箱删除。";
     }
 
@@ -199,22 +188,47 @@ public partial class MainWindow : Window
         LockAndReturnToLogin();
     }
 
-    private void ItemsList_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    // ===== FOLDER EVENTS =====
+
+    private void FolderList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (FolderList.SelectedItem is string folderPath)
+        {
+            // "全部文件" is the root pseudo-folder
+            _currentFolder = folderPath == "全部文件" ? "" : folderPath;
+            BreadcrumbText.Text = string.IsNullOrEmpty(_currentFolder) ? "全部文件" : _currentFolder;
+            RefreshFileList();
+        }
+    }
+
+    private void NewFolder_Click(object sender, RoutedEventArgs e)
+    {
+        if (_vault is null) return;
+
+        var dialog = new InputDialog("新建文件夹", "请输入文件夹名称：", this);
+        if (dialog.ShowDialog() != true || string.IsNullOrWhiteSpace(dialog.Result))
+        {
+            return;
+        }
+
+        try
+        {
+            _vault.CreateFolder(dialog.Result);
+            RefreshFolderList();
+            StatusText.Text = $"文件夹“{dialog.Result}”已创建。";
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = ex.Message;
+        }
+    }
+
+    private void ItemsList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (ItemsList.SelectedItem is VaultFileRow row)
         {
             ShowPreview(row.Item);
         }
-    }
-
-    private void FolderList_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
-    {
-        // TODO: Task 5
-    }
-
-    private void NewFolder_Click(object sender, RoutedEventArgs e)
-    {
-        // TODO: Task 5
     }
 
     private void Window_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
@@ -224,28 +238,58 @@ public partial class MainWindow : Window
         ClearPreviewCache();
     }
 
+    // ===== UI STATE =====
+
     private void ShowVault()
     {
         LoginPanel.Visibility = Visibility.Collapsed;
         VaultPanel.Visibility = Visibility.Visible;
-        RefreshList();
+        _currentFolder = "";
+        BreadcrumbText.Text = "全部文件";
+        RefreshAll();
         StatusText.Text = $"已解锁：{_vault?.VaultDirectory}";
     }
 
-    private void RefreshList()
+    private void RefreshAll()
     {
-        ItemsList.ItemsSource = _vault?.Items
+        RefreshFolderList();
+        RefreshFileList();
+    }
+
+    private void RefreshFolderList()
+    {
+        var allEntry = new List<string> { "全部文件" };
+        if (_vault?.IsUnlocked == true)
+        {
+            allEntry.AddRange(_vault.Index.Folders.OrderBy(f => f));
+        }
+
+        FolderList.ItemsSource = allEntry;
+        FolderList.SelectedIndex = 0;
+    }
+
+    private void RefreshFileList()
+    {
+        if (_vault is null) return;
+
+        var items = string.IsNullOrEmpty(_currentFolder)
+            ? _vault.Index.Items
+            : _vault.GetItemsInFolder(_currentFolder);
+
+        var rows = items
             .OrderByDescending(i => i.ImportedAt)
             .Select(i => new VaultFileRow(i))
             .ToList();
+
+        ItemsList.ItemsSource = rows;
+        ItemCountText.Text = $"{rows.Count} 个项目";
     }
+
+    // ===== PREVIEW =====
 
     private void ShowPreview(VaultItem item)
     {
-        if (_vault is null)
-        {
-            return;
-        }
+        if (_vault is null) return;
 
         ClearPreview();
         PreviewTitle.Text = item.DisplayName;
@@ -322,7 +366,7 @@ public partial class MainWindow : Window
         PreviewImage.Visibility = Visibility.Collapsed;
         PreviewText.Text = "";
         PreviewText.Visibility = Visibility.Collapsed;
-        PreviewMessage.Text = "没有预览内容";
+        PreviewMessage.Text = "选择一个文件预览";
         PreviewMessage.Visibility = Visibility.Visible;
     }
 
@@ -339,7 +383,7 @@ public partial class MainWindow : Window
         }
         catch
         {
-            // Preview cache cleanup is best effort because media codecs can hold files briefly.
+            // Preview cache cleanup is best effort.
         }
     }
 
@@ -347,6 +391,7 @@ public partial class MainWindow : Window
     {
         _vault?.Lock();
         _vault = null;
+        _currentFolder = "";
         ClearPreview();
         ClearPreviewCache();
         VaultPanel.Visibility = Visibility.Collapsed;
@@ -355,8 +400,10 @@ public partial class MainWindow : Window
         ConfirmPasswordBox.Clear();
         NewPasswordBox.Clear();
         StatusText.Text = "";
-        LoginStatusText.Text = "保险箱已锁定，预览缓存已清理。";
+        LoginStatusText.Text = "保险箱已锁定。";
     }
+
+    // ===== HELPERS =====
 
     private string RequireVaultPath()
     {
@@ -382,7 +429,8 @@ public partial class MainWindow : Window
         public VaultItem Item { get; } = item;
         public string DisplayName => Item.DisplayName;
         public string SizeText => FormatSize(Item.Size);
-        public string TypeText => Item.ContentType.Split('/')[0];
+        public string TypeText => item.ContentType.Split('/')[0];
+        public string DateText => Item.ImportedAt.ToString("yyyy-MM-dd");
 
         private static string FormatSize(long bytes)
         {

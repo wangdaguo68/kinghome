@@ -33,6 +33,7 @@ public sealed class VaultService
     public string VaultDirectory { get; }
     public bool Exists => File.Exists(_manifestPath);
     public bool IsUnlocked => _masterKey is not null;
+    public VaultIndex Index => _index;
     public ObservableCollection<VaultItem> Items => _index.Items;
 
     public string Create(string password)

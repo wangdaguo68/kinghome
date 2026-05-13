@@ -112,7 +112,7 @@ public partial class MainWindow : Window
 
     // ===== VAULT EVENTS =====
 
-    private void ImportFiles_Click(object sender, RoutedEventArgs e)
+    private async void ImportFiles_Click(object sender, RoutedEventArgs e)
     {
         if (_vault is null) return;
 
@@ -127,12 +127,18 @@ public partial class MainWindow : Window
         try
         {
             System.Windows.Input.Mouse.OverrideCursor = System.Windows.Input.Cursors.Wait;
+            var vault = _vault;
+            var currentFolder = _currentFolder;
             var imported = 0;
-            foreach (var file in dialog.FileNames)
+
+            await Task.Run(() =>
             {
-                _vault.ImportFile(file, _currentFolder);
-                imported++;
-            }
+                foreach (var file in dialog.FileNames)
+                {
+                    vault.ImportFile(file, currentFolder);
+                    imported++;
+                }
+            });
 
             RefreshAll();
             StatusText.Text = $"已导入 {imported} 个文件。源文件已从原位置删除。";
@@ -148,13 +154,114 @@ public partial class MainWindow : Window
         }
     }
 
-    private void ExportFile_Click(object sender, RoutedEventArgs e)
+    private async void ExportFile_Click(object sender, RoutedEventArgs e)
     {
-        if (_vault is null || ItemsList.SelectedItem is not VaultFileRow row) return;
+        if (_vault is null) return;
+
+        var checkedItems = GetCheckedItems();
+        if (checkedItems.Count > 0)
+        {
+            await BatchExportAsync(checkedItems);
+            return;
+        }
+
+        if (ItemsList.SelectedItem is not VaultFileRow row) return;
+        await SingleExportWithChoiceAsync(row.Item);
+    }
+
+    private async void DeleteFile_Click(object sender, RoutedEventArgs e)
+    {
+        if (_vault is null) return;
+
+        var checkedItems = GetCheckedItems();
+        if (checkedItems.Count > 0)
+        {
+            if (WinMessageBox.Show($"确定从保险箱删除 {checkedItems.Count} 个文件？", "批量删除",
+                    MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
+
+            ClearPreview();
+            foreach (var item in checkedItems)
+            {
+                _vault.DeleteItem(item);
+            }
+            RefreshAll();
+            StatusText.Text = $"已删除 {checkedItems.Count} 个文件。";
+            return;
+        }
+
+        if (ItemsList.SelectedItem is not VaultFileRow row) return;
+
+        if (WinMessageBox.Show($"确定从保险箱删除\"{row.Item.DisplayName}\"？", "删除文件",
+                MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
+
+        ClearPreview();
+        _vault.DeleteItem(row.Item);
+        RefreshAll();
+        StatusText.Text = "文件已从保险箱删除。";
+    }
+
+    private async Task BatchExportAsync(IReadOnlyList<VaultItem> items)
+    {
+        using var dialog = new Forms.FolderBrowserDialog
+        {
+            Description = "选择导出目标文件夹",
+            UseDescriptionForTitle = true
+        };
+
+        if (dialog.ShowDialog() != Forms.DialogResult.OK) return;
+
+        var deleteAfter = WinMessageBox.Show("导出后是否从保险箱删除这些文件？", "导出选项",
+                MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
+
+        try
+        {
+            System.Windows.Input.Mouse.OverrideCursor = System.Windows.Input.Cursors.Wait;
+            var vault = _vault!;
+            var targetDir = dialog.SelectedPath;
+
+            await Task.Run(() =>
+            {
+                foreach (var item in items)
+                {
+                    var destPath = Path.Combine(targetDir, item.DisplayName);
+                    destPath = GetUniqueFilePath(destPath);
+                    vault.ExportFile(item, destPath);
+                }
+            });
+
+            if (deleteAfter)
+            {
+                foreach (var item in items)
+                {
+                    vault.DeleteItem(item);
+                }
+            }
+
+            RefreshAll();
+            var action = deleteAfter ? "导出并删除" : "导出";
+            StatusText.Text = $"已{action} {items.Count} 个文件到：{targetDir}";
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = ex.Message;
+        }
+        finally
+        {
+            System.Windows.Input.Mouse.OverrideCursor = null;
+        }
+    }
+
+    private async Task SingleExportWithChoiceAsync(VaultItem item)
+    {
+        var deleteAfter = WinMessageBox.Show(
+            $"导出\"{item.DisplayName}\"后是否从保险箱删除？\n\n是 = 导出后删除\n否 = 仅导出",
+            "导出选项",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question) == MessageBoxResult.Yes;
 
         var dialog = new SaveFileDialog
         {
-            FileName = row.Item.DisplayName,
+            FileName = item.DisplayName,
             Title = "导出解密后的文件"
         };
 
@@ -162,26 +269,29 @@ public partial class MainWindow : Window
 
         try
         {
-            _vault.ExportFile(row.Item, dialog.FileName);
-            StatusText.Text = $"已导出到：{dialog.FileName}";
+            System.Windows.Input.Mouse.OverrideCursor = System.Windows.Input.Cursors.Wait;
+            var vault = _vault!;
+            var destPath = dialog.FileName;
+
+            await Task.Run(() => vault.ExportFile(item, destPath));
+
+            if (deleteAfter)
+            {
+                vault.DeleteItem(item);
+                RefreshAll();
+            }
+
+            var action = deleteAfter ? "导出并删除" : "导出";
+            StatusText.Text = $"已{action}到：{destPath}";
         }
         catch (Exception ex)
         {
             StatusText.Text = ex.Message;
         }
-    }
-
-    private void DeleteFile_Click(object sender, RoutedEventArgs e)
-    {
-        if (_vault is null || ItemsList.SelectedItem is not VaultFileRow row) return;
-
-        if (WinMessageBox.Show($"确定从保险箱删除“{row.Item.DisplayName}”？", "删除文件",
-                MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
-
-        ClearPreview();
-        _vault.DeleteItem(row.Item);
-        RefreshAll();
-        StatusText.Text = "文件已从保险箱删除。";
+        finally
+        {
+            System.Windows.Input.Mouse.OverrideCursor = null;
+        }
     }
 
     private void LockVault_Click(object sender, RoutedEventArgs e)
@@ -482,6 +592,36 @@ public partial class MainWindow : Window
     }
 
     // ===== HELPERS =====
+
+    private IReadOnlyList<VaultItem> GetCheckedItems()
+    {
+        var result = new List<VaultItem>();
+        foreach (var item in ItemsList.Items)
+        {
+            if (item is VaultFileRow row && row.IsChecked)
+            {
+                result.Add(row.Item);
+                row.IsChecked = false;
+            }
+        }
+        return result;
+    }
+
+    private static string GetUniqueFilePath(string path)
+    {
+        if (!File.Exists(path)) return path;
+        var dir = Path.GetDirectoryName(path) ?? "";
+        var name = Path.GetFileNameWithoutExtension(path);
+        var ext = Path.GetExtension(path);
+        var counter = 1;
+        string newPath;
+        do
+        {
+            newPath = Path.Combine(dir, $"{name} ({counter}){ext}");
+            counter++;
+        } while (File.Exists(newPath));
+        return newPath;
+    }
 
     private string RequireVaultPath()
     {

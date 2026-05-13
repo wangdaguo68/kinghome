@@ -416,7 +416,8 @@ public partial class MainWindow : Window
             var plain = _vault.ReadPlainBytes(item);
             var ext = Path.GetExtension(item.DisplayName);
             if (string.IsNullOrWhiteSpace(ext)) ext = ".tmp";
-            var tmpPath = Path.Combine(Path.GetTempPath(), $"safebox-open-{Guid.NewGuid():N}{ext}");
+            Directory.CreateDirectory(_cacheRoot);
+            var tmpPath = Path.Combine(_cacheRoot, $"safebox-open-{Guid.NewGuid():N}{ext}");
             File.WriteAllBytes(tmpPath, plain);
             Array.Clear(plain);
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo

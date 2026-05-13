@@ -376,10 +376,10 @@ public partial class MainWindow : Window
         OpenFileWithDefaultApp(row.Item);
     }
 
-    private void ContextMenu_Export_Click(object sender, RoutedEventArgs e)
+    private async void ContextMenu_Export_Click(object sender, RoutedEventArgs e)
     {
         if (_vault is null || ItemsList.SelectedItem is not VaultFileRow row) return;
-        _ = SingleExportWithChoiceAsync(row.Item);
+        await SingleExportWithChoiceAsync(row.Item);
     }
 
     private async void ContextMenu_ExportDelete_Click(object sender, RoutedEventArgs e)
@@ -393,6 +393,8 @@ public partial class MainWindow : Window
         };
 
         if (dialog.ShowDialog() != true) return;
+
+        ClearPreview();
 
         try
         {
@@ -635,12 +637,13 @@ public partial class MainWindow : Window
         LoginStatusText.Text = "保险箱已锁定。";
     }
 
-    private void OpenFileWithDefaultApp(VaultItem item)
+    private async void OpenFileWithDefaultApp(VaultItem item)
     {
         if (_vault is null) return;
         try
         {
-            var plain = _vault.ReadPlainBytes(item);
+            var vault = _vault;
+            var plain = await Task.Run(() => vault.ReadPlainBytes(item));
             var ext = Path.GetExtension(item.DisplayName);
             if (string.IsNullOrWhiteSpace(ext)) ext = ".tmp";
             Directory.CreateDirectory(_cacheRoot);

@@ -169,7 +169,7 @@ public partial class MainWindow : Window
         await SingleExportWithChoiceAsync(row.Item);
     }
 
-    private async void DeleteFile_Click(object sender, RoutedEventArgs e)
+    private void DeleteFile_Click(object sender, RoutedEventArgs e)
     {
         if (_vault is null) return;
 
@@ -184,6 +184,7 @@ public partial class MainWindow : Window
             {
                 _vault.DeleteItem(item);
             }
+            ClearAllCheckboxes();
             RefreshAll();
             StatusText.Text = $"已删除 {checkedItems.Count} 个文件。";
             return;
@@ -221,11 +222,25 @@ public partial class MainWindow : Window
 
             await Task.Run(() =>
             {
+                var failed = new List<string>();
                 foreach (var item in items)
                 {
-                    var destPath = Path.Combine(targetDir, item.DisplayName);
-                    destPath = GetUniqueFilePath(destPath);
-                    vault.ExportFile(item, destPath);
+                    try
+                    {
+                        var destPath = Path.Combine(targetDir, item.DisplayName);
+                        destPath = GetUniqueFilePath(destPath);
+                        vault.ExportFile(item, destPath);
+                    }
+                    catch (Exception ex)
+                    {
+                        failed.Add($"{item.DisplayName}: {ex.Message}");
+                    }
+                }
+
+                if (failed.Count > 0)
+                {
+                    throw new InvalidOperationException(
+                        $"成功导出 {items.Count - failed.Count}/{items.Count} 个文件。\n以下失败：\n{string.Join("\n", failed)}");
                 }
             });
 
@@ -237,6 +252,7 @@ public partial class MainWindow : Window
                 }
             }
 
+            ClearAllCheckboxes();
             RefreshAll();
             var action = deleteAfter ? "导出并删除" : "导出";
             StatusText.Text = $"已{action} {items.Count} 个文件到：{targetDir}";
@@ -278,6 +294,7 @@ public partial class MainWindow : Window
             if (deleteAfter)
             {
                 vault.DeleteItem(item);
+                ClearAllCheckboxes();
                 RefreshAll();
             }
 
@@ -601,10 +618,20 @@ public partial class MainWindow : Window
             if (item is VaultFileRow row && row.IsChecked)
             {
                 result.Add(row.Item);
-                row.IsChecked = false;
             }
         }
         return result;
+    }
+
+    private void ClearAllCheckboxes()
+    {
+        foreach (var item in ItemsList.Items)
+        {
+            if (item is VaultFileRow row)
+            {
+                row.IsChecked = false;
+            }
+        }
     }
 
     private static string GetUniqueFilePath(string path)

@@ -317,19 +317,22 @@ public partial class MainWindow : Window
 
     // ===== PREVIEW =====
 
-    private void ShowPreview(VaultItem item)
+    private async void ShowPreview(VaultItem item)
     {
         if (_vault is null) return;
 
         ClearPreview();
         PreviewTitle.Text = item.DisplayName;
 
+        var contentType = item.ContentType;
+        var vault = _vault;
+
         try
         {
-            var plain = _vault.ReadPlainBytes(item);
-            try
+            if (contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
             {
-                if (item.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+                var plain = await Task.Run(() => vault.ReadPlainBytes(item));
+                try
                 {
                     using var stream = new MemoryStream(plain);
                     var bitmap = new BitmapImage();
@@ -341,27 +344,43 @@ public partial class MainWindow : Window
                     PreviewImage.Source = bitmap;
                     PreviewImage.Visibility = Visibility.Visible;
                 }
-                else if (item.ContentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase))
+                finally
+                {
+                    Array.Clear(plain);
+                }
+            }
+            else if (contentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase))
+            {
+                var plain = await Task.Run(() => vault.ReadPlainBytes(item));
+                try
                 {
                     var cachePath = WritePreviewCacheFile(item, plain);
                     PreviewVideo.Source = new Uri(cachePath);
                     PreviewVideo.Visibility = Visibility.Visible;
                     PreviewVideo.Play();
                 }
-                else if (item.ContentType == "text/plain")
+                finally
+                {
+                    Array.Clear(plain);
+                }
+            }
+            else if (contentType == "text/plain")
+            {
+                var plain = await Task.Run(() => vault.ReadPlainBytes(item));
+                try
                 {
                     PreviewText.Text = System.Text.Encoding.UTF8.GetString(plain);
                     PreviewText.Visibility = Visibility.Visible;
                 }
-                else
+                finally
                 {
-                    PreviewMessage.Text = "此类型暂不支持内置预览，可以导出后打开。";
-                    PreviewMessage.Visibility = Visibility.Visible;
+                    Array.Clear(plain);
                 }
             }
-            finally
+            else
             {
-                Array.Clear(plain);
+                PreviewMessage.Text = "此类型暂不支持内置预览，可以导出后打开。";
+                PreviewMessage.Visibility = Visibility.Visible;
             }
         }
         catch (Exception ex)
@@ -373,7 +392,6 @@ public partial class MainWindow : Window
 
     private string WritePreviewCacheFile(VaultItem item, byte[] plain)
     {
-        ClearPreviewCache();
         Directory.CreateDirectory(_cacheRoot);
         var extension = Path.GetExtension(item.DisplayName);
         if (string.IsNullOrWhiteSpace(extension))
@@ -398,6 +416,7 @@ public partial class MainWindow : Window
         PreviewText.Visibility = Visibility.Collapsed;
         PreviewMessage.Text = "选择一个文件预览";
         PreviewMessage.Visibility = Visibility.Visible;
+        ClearPreviewCache();
     }
 
     private void ClearPreviewCache()

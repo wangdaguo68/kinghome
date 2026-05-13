@@ -63,6 +63,7 @@
       <ComponentRef Id="StartMenuShortcut" />
     </Feature>
 
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
     <ui:WixUI Id="WixUI_InstallDir" />
   </Package>
 </Wix>

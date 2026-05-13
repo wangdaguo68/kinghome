@@ -231,6 +231,31 @@ public partial class MainWindow : Window
         }
     }
 
+    private void ItemsList_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        // TODO: Implement in Task 5
+    }
+
+    private void ContextMenu_Export_Click(object sender, RoutedEventArgs e)
+    {
+        // TODO: Implement in Task 5
+    }
+
+    private void ContextMenu_ExportDelete_Click(object sender, RoutedEventArgs e)
+    {
+        // TODO: Implement in Task 5
+    }
+
+    private void ContextMenu_Delete_Click(object sender, RoutedEventArgs e)
+    {
+        // TODO: Implement in Task 5
+    }
+
+    private void ContextMenu_Open_Click(object sender, RoutedEventArgs e)
+    {
+        // TODO: Implement in Task 5
+    }
+
     private void Window_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
         _vault?.Lock();

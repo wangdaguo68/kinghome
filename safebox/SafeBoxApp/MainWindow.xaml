@@ -169,12 +169,21 @@
                     <!-- File List -->
                     <ListView x:Name="ItemsList" Grid.Row="1"
                               SelectionChanged="ItemsList_SelectionChanged"
+                              MouseDoubleClick="ItemsList_MouseDoubleClick"
                               Margin="20,12,20,12" Background="Transparent"
                               BorderThickness="0">
                         <ListView.View>
                             <GridView>
+                                <GridViewColumn Width="32">
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <CheckBox IsChecked="{Binding IsChecked, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                      VerticalAlignment="Center" HorizontalAlignment="Center" />
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
                                 <GridViewColumn Header="名称" DisplayMemberBinding="{Binding DisplayName}"
-                                                Width="240" />
+                                                Width="220" />
                                 <GridViewColumn Header="大小" DisplayMemberBinding="{Binding SizeText}"
                                                 Width="80" />
                                 <GridViewColumn Header="类型" DisplayMemberBinding="{Binding TypeText}"
@@ -183,6 +192,16 @@
                                                 Width="120" />
                             </GridView>
                         </ListView.View>
+                        <ListView.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem Header="📤 导出" Click="ContextMenu_Export_Click" />
+                                <MenuItem Header="📤🗑 导出后删除" Click="ContextMenu_ExportDelete_Click" />
+                                <Separator />
+                                <MenuItem Header="🗑 删除" Click="ContextMenu_Delete_Click" />
+                                <Separator />
+                                <MenuItem Header="📂 打开" Click="ContextMenu_Open_Click" />
+                            </ContextMenu>
+                        </ListView.ContextMenu>
                     </ListView>
                 </Grid>
 

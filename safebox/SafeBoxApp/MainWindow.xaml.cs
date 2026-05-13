@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Forms = System.Windows.Forms;
 using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
@@ -361,27 +362,77 @@ public partial class MainWindow : Window
 
     private void ItemsList_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
-        // TODO: Implement in Task 5
+        if (e.OriginalSource is DependencyObject source)
+        {
+            var parent = VisualTreeHelper.GetParent(source);
+            while (parent is not null)
+            {
+                if (parent is System.Windows.Controls.CheckBox) return;
+                parent = VisualTreeHelper.GetParent(parent);
+            }
+        }
+
+        if (_vault is null || ItemsList.SelectedItem is not VaultFileRow row) return;
+        OpenFileWithDefaultApp(row.Item);
     }
 
     private void ContextMenu_Export_Click(object sender, RoutedEventArgs e)
     {
-        // TODO: Implement in Task 5
+        if (_vault is null || ItemsList.SelectedItem is not VaultFileRow row) return;
+        _ = SingleExportWithChoiceAsync(row.Item);
     }
 
-    private void ContextMenu_ExportDelete_Click(object sender, RoutedEventArgs e)
+    private async void ContextMenu_ExportDelete_Click(object sender, RoutedEventArgs e)
     {
-        // TODO: Implement in Task 5
+        if (_vault is null || ItemsList.SelectedItem is not VaultFileRow row) return;
+
+        var dialog = new SaveFileDialog
+        {
+            FileName = row.Item.DisplayName,
+            Title = "导出解密后的文件"
+        };
+
+        if (dialog.ShowDialog() != true) return;
+
+        try
+        {
+            System.Windows.Input.Mouse.OverrideCursor = System.Windows.Input.Cursors.Wait;
+            var vault = _vault;
+            var item = row.Item;
+            var destPath = dialog.FileName;
+
+            await Task.Run(() => vault.ExportFile(item, destPath));
+            vault.DeleteItem(item);
+            RefreshAll();
+            StatusText.Text = $"已导出并删除到：{destPath}";
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = ex.Message;
+        }
+        finally
+        {
+            System.Windows.Input.Mouse.OverrideCursor = null;
+        }
     }
 
     private void ContextMenu_Delete_Click(object sender, RoutedEventArgs e)
     {
-        // TODO: Implement in Task 5
+        if (_vault is null || ItemsList.SelectedItem is not VaultFileRow row) return;
+
+        if (WinMessageBox.Show($"确定从保险箱删除\"{row.Item.DisplayName}\"？", "删除文件",
+                MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
+
+        ClearPreview();
+        _vault.DeleteItem(row.Item);
+        RefreshAll();
+        StatusText.Text = "文件已从保险箱删除。";
     }
 
     private void ContextMenu_Open_Click(object sender, RoutedEventArgs e)
     {
-        // TODO: Implement in Task 5
+        if (_vault is null || ItemsList.SelectedItem is not VaultFileRow row) return;
+        OpenFileWithDefaultApp(row.Item);
     }
 
     private void Window_Closing(object? sender, System.ComponentModel.CancelEventArgs e)

@@ -18,6 +18,7 @@ public partial class MainWindow : Window
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "SafeBox",
         "preview-cache");
+    private string? _previewingItemId;
 
     public MainWindow()
     {
@@ -321,6 +322,7 @@ public partial class MainWindow : Window
     {
         if (_vault is null) return;
 
+        _previewingItemId = item.Id;
         ClearPreview();
         PreviewTitle.Text = item.DisplayName;
 
@@ -332,6 +334,7 @@ public partial class MainWindow : Window
             if (contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
             {
                 var plain = await Task.Run(() => vault.ReadPlainBytes(item));
+                if (_previewingItemId != item.Id) { Array.Clear(plain); return; }
                 try
                 {
                     using var stream = new MemoryStream(plain);
@@ -352,6 +355,7 @@ public partial class MainWindow : Window
             else if (contentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase))
             {
                 var plain = await Task.Run(() => vault.ReadPlainBytes(item));
+                if (_previewingItemId != item.Id) { Array.Clear(plain); return; }
                 try
                 {
                     var cachePath = WritePreviewCacheFile(item, plain);
@@ -367,6 +371,7 @@ public partial class MainWindow : Window
             else if (contentType == "text/plain")
             {
                 var plain = await Task.Run(() => vault.ReadPlainBytes(item));
+                if (_previewingItemId != item.Id) { Array.Clear(plain); return; }
                 try
                 {
                     PreviewText.Text = System.Text.Encoding.UTF8.GetString(plain);

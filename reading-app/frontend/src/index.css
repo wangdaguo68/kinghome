@@ -73,6 +73,32 @@ body {
   color: var(--color-text-secondary);
 }
 
+/* ---- Page-turning reader ---- */
+.reader-page-container {
+  height: 100%; overflow: hidden; display: flex; align-items: center; justify-content: center;
+  transition: max-width 0.3s;
+}
+.page-flip-enter { animation: pageFlipIn 0.3s ease; }
+.page-flip-exit { animation: pageFlipOut 0.3s ease; }
+@keyframes pageFlipIn {
+  from { opacity: 0; transform: translateX(40px) rotateY(-10deg); }
+  to { opacity: 1; transform: translateX(0) rotateY(0); }
+}
+@keyframes pageFlipOut {
+  from { opacity: 1; transform: translateX(0) rotateY(0); }
+  to { opacity: 0; transform: translateX(-40px) rotateY(10deg); }
+}
+
+/* ---- Focus mode ---- */
+.reader-focus .reader-bar-auto,
+.reader-focus .reader-bar-auto.reader-bottom-bar {
+  opacity: 0; transition: opacity 0.3s;
+}
+.reader-focus .reader-bar-auto:hover,
+.reader-focus .reader-bar-auto.reader-bottom-bar:hover {
+  opacity: 1;
+}
+
 /* Reader themes */
 .theme-white { background: #FFFFFF; color: #1A1A1A; }
 .theme-beige { background: #FFF9E6; color: #3E3E3E; }

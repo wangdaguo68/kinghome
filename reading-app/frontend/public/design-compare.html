@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reading UI - Design Comparison</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#1a1a1a; color:#ccc; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif; padding:24px; }
+  h1 { text-align:center; margin-bottom:8px; font-size:22px; color:#fff; }
+  .subtitle { text-align:center; color:#888; font-size:13px; margin-bottom:32px; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:24px; max-width:1400px; margin:0 auto; }
+  .card { border-radius:16px; overflow:hidden; border:1px solid #333; transition:transform 0.2s,box-shadow 0.2s; cursor:pointer; }
+  .card:hover { transform:translateY(-2px); box-shadow:0 12px 40px rgba(0,0,0,0.5); }
+  .card-label { padding:12px 16px; background:#222; display:flex; justify-content:space-between; align-items:center; }
+  .card-label h3 { font-size:14px; color:#fff; }
+  .card-label span { font-size:11px; color:#888; }
+  .preview { height:420px; position:relative; overflow:hidden; }
+
+  /* --- A: Apple Books --- */
+  .theme-a { background:#F5F5F7; color:#1d1d1f; font-family:-apple-system,"SF Pro Display","PingFang SC",sans-serif; }
+  .theme-a .topbar { height:52px; background:rgba(245,245,247,0.8); backdrop-filter:blur(20px); border-bottom:0.5px solid rgba(0,0,0,0.1); display:flex; align-items:center; padding:0 20px; justify-content:space-between; }
+  .theme-a .topbar button { background:none; border:none; font-size:13px; color:#007AFF; cursor:pointer; }
+  .theme-a .topbar .title { font-size:13px; font-weight:500; color:#1d1d1f; }
+  .theme-a .topbar .actions { display:flex; gap:16px; }
+  .theme-a .topbar .actions span { font-size:13px; color:#007AFF; }
+  .theme-a .content { padding:40px 80px; max-width:720px; margin:0 auto; }
+  .theme-a .content h2 { font-size:21px; font-weight:600; margin-bottom:24px; letter-spacing:-0.3px; }
+  .theme-a .content p { font-size:15px; line-height:1.7; color:#3a3a3a; margin-bottom:14px; }
+  .theme-a .bottombar { height:42px; background:rgba(245,245,247,0.8); backdrop-filter:blur(20px); border-top:0.5px solid rgba(0,0,0,0.1); display:flex; align-items:center; justify-content:center; font-size:11px; color:#8e8e93; }
+
+  /* --- B: Kindle / Paper --- */
+  .theme-b { background:#F5F0E8; color:#3E3232; font-family:Georgia,"Songti SC","KaiTi",serif; }
+  .theme-b .topbar { height:48px; background:#EDE4D3; border-bottom:1px solid #D4C5A9; display:flex; align-items:center; padding:0 20px; justify-content:space-between; }
+  .theme-b .topbar button { background:none; border:none; font-size:13px; color:#5C4B3A; cursor:pointer; }
+  .theme-b .topbar .title { font-size:13px; font-style:italic; color:#5C4B3A; }
+  .theme-b .content { padding:36px 60px; max-width:640px; margin:0 auto; background:linear-gradient(to bottom, #F5F0E8 0%, #F0E8D8 100%); }
+  .theme-b .content h2 { font-size:22px; font-weight:bold; margin-bottom:20px; text-align:center; }
+  .theme-b .content p { font-size:15px; line-height:1.9; text-indent:2em; margin-bottom:12px; }
+  .theme-b .bottombar { height:40px; background:#EDE4D3; border-top:1px solid #D4C5A9; display:flex; align-items:center; justify-content:center; font-size:11px; color:#8B7355; }
+
+  /* --- C: Notion / Modern Dark --- */
+  .theme-c { background:#191919; color:#e0e0e0; font-family:-apple-system,"Inter","PingFang SC",sans-serif; }
+  .theme-c .topbar { height:48px; background:#1E1E1E; border-bottom:1px solid #2a2a2a; display:flex; align-items:center; padding:0 20px; justify-content:space-between; }
+  .theme-c .topbar button { background:none; border:none; font-size:13px; color:#9B9B9B; cursor:pointer; transition:color 0.15s; }
+  .theme-c .topbar button:hover { color:#fff; }
+  .theme-c .topbar .title { font-size:13px; font-weight:500; color:#ccc; }
+  .theme-c .content { padding:40px 70px; max-width:680px; margin:0 auto; }
+  .theme-c .content h2 { font-size:20px; font-weight:600; margin-bottom:20px; color:#f0f0f0; }
+  .theme-c .content p { font-size:14px; line-height:1.75; color:#999; margin-bottom:12px; }
+  .theme-c .bottombar { height:40px; background:#1E1E1E; border-top:1px solid #2a2a2a; display:flex; align-items:center; justify-content:center; font-size:11px; color:#555; }
+
+  /* --- D: VS Code / Geek --- */
+  .theme-d { background:#1E1E1E; color:#D4D4D4; font-family:"Cascadia Code","Fira Code","JetBrains Mono","PingFang SC",monospace; }
+  .theme-d .topbar { height:44px; background:#252526; border-bottom:1px solid #3E3E3E; display:flex; align-items:center; padding:0 16px; justify-content:space-between; }
+  .theme-d .topbar button { background:none; border:none; font-size:12px; color:#858585; cursor:pointer; }
+  .theme-d .topbar button:hover { color:#CCCCCC; }
+  .theme-d .topbar .title { font-size:12px; color:#CCCCCC; }
+  .theme-d .content { padding:32px 60px; max-width:700px; margin:0 auto; }
+  .theme-d .content h2 { font-size:18px; font-weight:600; margin-bottom:18px; color:#569CD6; }
+  .theme-d .content p { font-size:13px; line-height:1.8; color:#D4D4D4; margin-bottom:10px; }
+  .theme-d .bottombar { height:22px; background:#007ACC; display:flex; align-items:center; justify-content:center; font-size:11px; color:#fff; }
+
+  /* Shared reader elements */
+  .page-nav { display:flex; align-items:center; gap:8px; }
+  .page-nav kbd { font-size:10px; padding:2px 6px; background:rgba(0,0,0,0.08); border-radius:3px; }
+  .progress-indicator { font-size:11px; opacity:0.6; }
+</style>
+</head>
+<body>
+
+<h1>My Study — Reading UI Design Comparison</h1>
+<p class="subtitle">四种风格方案 · 点击选择偏好</p>
+
+<div class="grid">
+
+  <!-- A: Apple Books -->
+  <div class="card" onclick="select('A')">
+    <div class="card-label"><h3>A · Apple Books / 苹果风</h3><span>极简 · 毛玻璃 · San Francisco</span></div>
+    <div class="preview theme-a">
+      <div class="topbar">
+        <button>← 返回</button>
+        <span class="title">财务模型与估值</span>
+        <div class="actions">
+          <span>Aa</span><span>☰</span><span>⛶</span>
+        </div>
+      </div>
+      <div class="content">
+        <h2>第一章 财务建模概述</h2>
+        <p>财务建模是将公司的经营状况、未来预期和外部环境等因素，通过一套结构化的数学模型进行量化和分析的过程。对于投资银行和私募股权从业者而言，掌握财务建模技能是不可或缺的核心竞争力。</p>
+        <p>本章将从最基础的财务概念入手，帮助你逐步建立起对财务模型的整体认识。无论你是初学者还是有一定基础的从业者，都可以从中获得有价值的参考。</p>
+        <p>一个好的财务模型应该具备三个核心特征：准确性、灵活性和可读性。准确性要求模型能够真实反映公司的财务状况；灵活性意味着模型可以适应不同的假设条件；可读性则确保他人能够理解和使用你的模型。</p>
+      </div>
+      <div class="bottombar">
+        <div class="page-nav">← <span style="margin:0 12px">1 / 420</span> →</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- B: Kindle / Paper -->
+  <div class="card" onclick="select('B')">
+    <div class="card-label"><h3>B · Kindle / 纸质书感</h3><span>暖黄 · 衬线体 · 仿纸页</span></div>
+    <div class="preview theme-b">
+      <div class="topbar">
+        <button>← 书架</button>
+        <span class="title">财务模型与估值</span>
+        <div class="page-nav"><span>Aa</span><span>☰</span></div>
+      </div>
+      <div class="content">
+        <h2>第一章 财务建模概述</h2>
+        <p>财务建模是将公司的经营状况、未来预期和外部环境等因素，通过一套结构化的数学模型进行量化和分析的过程。对于投资银行和私募股权从业者而言，掌握财务建模技能是不可或缺的核心竞争力。</p>
+        <p>本章将从最基础的财务概念入手，帮助你逐步建立起对财务模型的整体认识。无论你是初学者还是有一定基础的从业者，都可以从中获得有价值的参考。</p>
+        <p>一个好的财务模型应该具备三个核心特征：准确性、灵活性和可读性。</p>
+      </div>
+      <div class="bottombar">
+        <span class="progress-indicator">第 1 页 · 共 420 页 · 0.2%</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- C: Notion Dark -->
+  <div class="card" onclick="select('C')">
+    <div class="card-label"><h3>C · Notion / 现代暗色</h3><span>深色 · 无衬线 · 低饱和</span></div>
+    <div class="preview theme-c">
+      <div class="topbar">
+        <button>← 返回</button>
+        <span class="title">财务模型与估值</span>
+        <div class="actions">
+          <button>Aa</button><button>☰</button><button>⛶</button>
+        </div>
+      </div>
+      <div class="content">
+        <h2>第一章 财务建模概述</h2>
+        <p>财务建模是将公司的经营状况、未来预期和外部环境等因素，通过一套结构化的数学模型进行量化和分析的过程。对于投资银行和私募股权从业者而言，掌握财务建模技能是不可或缺的核心竞争力。</p>
+        <p>本章将从最基础的财务概念入手，帮助你逐步建立起对财务模型的整体认识。无论你是初学者还是有一定基础的从业者，都可以从中获得有价值的参考。</p>
+        <p>一个好的财务模型应该具备三个核心特征：准确性、灵活性和可读性。准确性要求模型能够真实反映公司的财务状况。</p>
+      </div>
+      <div class="bottombar">
+        <span class="progress-indicator">← 1 / 420 → · 0.2%</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- D: VS Code / Geek -->
+  <div class="card" onclick="select('D')">
+    <div class="card-label"><h3>D · VS Code / 极客风</h3><span>暗色 · 等宽体 · 高对比</span></div>
+    <div class="preview theme-d">
+      <div class="topbar">
+        <button>← Back</button>
+        <span class="title">📖 财务模型与估值</span>
+        <div class="actions">
+          <button>Aa</button><button>≡</button><button>⛶</button>
+        </div>
+      </div>
+      <div class="content">
+        <h2>## 第一章 财务建模概述</h2>
+        <p>财务建模是将公司的经营状况、未来预期和外部环境等因素，通过一套结构化的数学模型进行量化和分析的过程。对于投资银行和私募股权从业者而言，掌握财务建模技能是不可或缺的核心竞争力。</p>
+        <p>本章将从最基础的财务概念入手，帮助你逐步建立起对财务模型的整体认识。无论你是初学者还是有一定基础的从业者，都可以从中获得有价值的参考。</p>
+      </div>
+      <div class="bottombar">
+        ← 1 / 420 →
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function select(name) {
+  document.querySelectorAll('.card').forEach(c => c.style.outline = 'none');
+  const card = event.currentTarget;
+  card.style.outline = '2px solid #07c160';
+  card.style.outlineOffset = '4px';
+  const labels = {A:'Apple风',B:'Kindle风',C:'Notion风',D:'极客风'};
+  document.querySelector('.subtitle').textContent = `已选择 ${name} · ${labels[name]} — 确认后告知我`;
+}
+</script>
+</body>
+</html>

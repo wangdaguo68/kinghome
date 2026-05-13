@@ -22,6 +22,7 @@ class CategoryItem(BaseModel):
 class BookOut(BookBase):
     id: int
     format: str
+    file_path: str = ""
     file_size: int = 0
     page_count: int = 0
     word_count: int = 0

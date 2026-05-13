@@ -16,7 +16,16 @@
       "Bash(dotnet tool list *)",
       "WebFetch(domain:wixtoolset.org)",
       "Bash(dotnet clean *)",
-      "Bash(git reset *)"
+      "Bash(git reset *)",
+      "Bash(findstr /n \"cacheRoot\")",
+      "Bash(git -C \"D:/software/safebox\" add SafeBoxApp/MainWindow.xaml.cs)",
+      "Bash(git -C D:/software/safebox commit -m 'fix: async preview decryption and safe video cache cleanup')",
+      "Bash(git *)",
+      "Bash(python3 -c ' *)",
+      "Bash(start *)",
+      "Bash(tasklist /FI \"IMAGENAME eq 保险箱.exe\")",
+      "Bash(GIT_TRACE=1 GIT_CURL_VERBOSE=1 git push origin main)",
+      "Bash(GIT_CURL_VERBOSE=1 git push origin main)"
     ]
   }
 }

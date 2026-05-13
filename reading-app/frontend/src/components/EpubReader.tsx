@@ -9,40 +9,59 @@ interface Props {
   fontSize: number;
   lineHeight: number;
   marginWidth: number;
+  pageMode?: boolean;
+  currentPage?: number;
+  onPageChange?: (page: number) => void;
+  onPageTotal?: (total: number) => void;
 }
 
-export default function EpubReader({ bookId, book, onProgress, theme, fontSize, lineHeight, marginWidth }: Props) {
+export default function EpubReader({ bookId, book, onProgress, theme, fontSize, lineHeight, marginWidth, pageMode, currentPage, onPageChange, onPageTotal }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [chapters, setChapters] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const renditionRef = useRef<any>(null);
+  const locationsRef = useRef<any>(null);
 
   useEffect(() => {
     let cancelled = false;
-    import('epubjs').then((epubjs) => {
-      if (cancelled) return;
-      const bookEpub = epubjs.default(book.file_path);
-      const rendition = bookEpub.renderTo(containerRef.current!, {
-        width: '100%',
-        height: '100%',
-        spread: 'none',
-        flow: 'paginated',
-      });
-      renditionRef.current = rendition;
-      rendition.display();
+    const fileUrl = `/api/reader/${bookId}/file`;
 
-      bookEpub.ready.then(() => {
+    async function init() {
+      try {
+        // Fetch EPUB as ArrayBuffer so epubjs doesn't make sub-requests for ZIP entries
+        const resp = await fetch(fileUrl);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const buffer = await resp.arrayBuffer();
+
+        if (cancelled) return;
+
+        const epubjs = await import('epubjs');
+        const bookEpub = epubjs.default(buffer);
+        const rendition = bookEpub.renderTo(containerRef.current!, {
+          width: '100%',
+          height: '100%',
+          spread: 'none',
+          flow: 'paginated',
+        });
+        renditionRef.current = rendition;
+        rendition.display();
+
+        await bookEpub.ready;
         if (cancelled) return;
         setLoading(false);
-        bookEpub.loaded.navigation.then((nav: any) => {
-          const toc = nav.toc || [];
-          setChapters(toc.map((t: any, i: number) => ({
-            index: i, title: t.label || `Chapter ${i + 1}`, href: t.href || '',
-          })));
-        });
-        return bookEpub.locations.generate(800);
-      }).then((locations: any) => {
+
+        const nav = await bookEpub.loaded.navigation;
+        const toc = nav.toc || [];
+        setChapters(toc.map((t: any, i: number) => ({
+          index: i, title: t.label || `Chapter ${i + 1}`, href: t.href || '',
+        })));
+
+        const locations = await bookEpub.locations.generate(800);
         if (cancelled) return;
+        locationsRef.current = locations;
+        onPageTotal?.(locations.total || 1);
+
         rendition.on('relocated', (loc: any) => {
           const current = loc.start?.displayed?.page || 1;
           const total = locations.total || 1;
@@ -50,22 +69,41 @@ export default function EpubReader({ bookId, book, onProgress, theme, fontSize, 
           const chap = loc.start?.index || 0;
           onProgress({ currentPage: current, totalPages: total, percent, chapter: chapters[chap]?.title || '' });
         });
-      });
 
-      rendition.on('selected', (_cfiRange: string, contents: any) => {
-        const selection = contents.window.getSelection();
-        const text = selection?.toString().trim();
-        if (text && text.length > 5) {
-          const range = selection!.getRangeAt(0);
-          const rect = range.getBoundingClientRect();
-          showHighlightTooltip(rect, text, _cfiRange);
+        rendition.on('selected', (_cfiRange: string, contents: any) => {
+          const selection = contents.window.getSelection();
+          const text = selection?.toString().trim();
+          if (text && text.length > 5) {
+            const range = selection!.getRangeAt(0);
+            const rect = range.getBoundingClientRect();
+            showHighlightTooltip(rect, text, _cfiRange);
+          }
+        });
+      } catch (e: any) {
+        if (!cancelled) {
+          setLoadError(e.message || 'Failed to load EPUB');
+          setLoading(false);
         }
-      });
+      }
+    }
 
-      return () => { if (!cancelled) bookEpub.destroy(); };
-    });
-    return () => { cancelled = true; };
-  }, [book.file_path]);
+    init();
+
+    return () => {
+      cancelled = true;
+      renditionRef.current?.destroy();
+    };
+  }, [bookId]);
+
+  // Navigate to page in page mode
+  useEffect(() => {
+    if (pageMode && currentPage !== undefined && renditionRef.current && locationsRef.current) {
+      try {
+        const loc = locationsRef.current.cfiFromLocation(currentPage);
+        if (loc) renditionRef.current.display(loc);
+      } catch {}
+    }
+  }, [currentPage, pageMode]);
 
   // Apply theme to epub iframe when theme changes
   useEffect(() => {
@@ -120,6 +158,14 @@ export default function EpubReader({ bookId, book, onProgress, theme, fontSize, 
   return (
     <div ref={containerRef} className="epub-container" style={{ maxWidth: `${marginWidth}px`, margin: '0 auto' }}>
       {loading && <div className="flex items-center justify-center h-full text-gray-400">加载中...</div>}
+      {loadError && (
+        <div className="flex items-center justify-center h-full text-gray-500">
+          <div className="text-center">
+            <p className="text-red-400 mb-2">EPUB 加载失败</p>
+            <p className="text-xs">{loadError}</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

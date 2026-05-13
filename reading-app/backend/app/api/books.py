@@ -131,8 +131,10 @@ async def update_progress(book_id: int, data: ReadingProgressUpdate, db: AsyncSe
     p = (await db.execute(select(ReadingProgress).where(ReadingProgress.book_id == book_id))).scalar_one_or_none()
     from datetime import datetime
     if not p:
-        p = ReadingProgress(book_id=book_id)
+        p = ReadingProgress(book_id=book_id, total_reading_seconds=0)
         db.add(p)
+    if p.total_reading_seconds is None:
+        p.total_reading_seconds = 0
     if data.current_page is not None:
         p.current_page = data.current_page
     if data.current_chapter is not None:

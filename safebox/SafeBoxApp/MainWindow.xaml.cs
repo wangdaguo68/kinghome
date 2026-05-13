@@ -408,6 +408,29 @@ public partial class MainWindow : Window
         LoginStatusText.Text = "保险箱已锁定。";
     }
 
+    private void OpenFileWithDefaultApp(VaultItem item)
+    {
+        if (_vault is null) return;
+        try
+        {
+            var plain = _vault.ReadPlainBytes(item);
+            var ext = Path.GetExtension(item.DisplayName);
+            if (string.IsNullOrWhiteSpace(ext)) ext = ".tmp";
+            var tmpPath = Path.Combine(Path.GetTempPath(), $"safebox-open-{Guid.NewGuid():N}{ext}");
+            File.WriteAllBytes(tmpPath, plain);
+            Array.Clear(plain);
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = tmpPath,
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"打开失败：{ex.Message}";
+        }
+    }
+
     // ===== HELPERS =====
 
     private string RequireVaultPath()
@@ -436,6 +459,7 @@ public partial class MainWindow : Window
         public string SizeText => FormatSize(Item.Size);
         public string TypeText => item.ContentType.Split('/')[0];
         public string DateText => Item.ImportedAt.ToString("yyyy-MM-dd");
+        public bool IsChecked { get; set; }
 
         private static string FormatSize(long bytes)
         {

@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getBooks, getScanStatus, startScan, addToShelf, getCategories } from '../api';
+import { getBooks, getContinueReading, getScanStatus, startScan, addToShelf, getCategories } from '../api';
 
 interface Book {
   id: number; title: string; author: string; format: string;
@@ -20,12 +20,13 @@ export default function Shelf() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [filter, setFilter] = useState('');
-  const [sort, setSort] = useState('updated_at');
+  const [sort, setSort] = useState('last_read_at');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
   const [scanInfo, setScanInfo] = useState<any>(null);
+  const [continueBooks, setContinueBooks] = useState<Book[]>([]);
   const navigate = useNavigate();
 
   const fetchBooks = async () => {
@@ -40,6 +41,10 @@ export default function Shelf() {
   };
 
   useEffect(() => { fetchBooks(); }, [page, filter, sort, selectedCategory]);
+
+  useEffect(() => {
+    getContinueReading(20).then(r => setContinueBooks(r.data.items || [])).catch(() => {});
+  }, []);
 
   useEffect(() => {
     getCategories().then(r => setCategories(r.data)).catch(() => {});
@@ -79,20 +84,31 @@ export default function Shelf() {
 
   const getThumbUrl = (coverPath: string) => coverPath.replace(/\.jpg$/i, '_thumb.jpg');
 
-  const readingBooks = books.filter(b => b.shelf_status === 'reading');
+  const handleImgError = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
+    const img = e.currentTarget;
+    const bookId = parseInt(img.dataset.bookId || '0');
+    const idx = bookId % COVER_GRADIENTS.length;
+    const [c1, c2] = COVER_GRADIENTS[idx];
+    img.style.display = 'none';
+    const parent = img.parentElement;
+    if (parent) {
+      parent.style.background = `linear-gradient(135deg, ${c1}, ${c2})`;
+    }
+  }, []);
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6 page-enter">
       {/* Continue Reading Section */}
-      {!filter && readingBooks.length > 0 && (
+      {!filter && continueBooks.length > 0 && (
         <div className="mb-8">
           <h3 className="text-sm font-medium text-(--color-text-secondary) mb-3">继续阅读</h3>
           <div className="flex gap-4 overflow-x-auto pb-2">
-            {readingBooks.slice(0, 6).map(book => (
+            {continueBooks.slice(0, 20).map(book => (
               <div key={book.id} className="flex-shrink-0 w-[120px] cursor-pointer group" onClick={() => handleBookClick(book)}>
                 <div className="book-cover group-hover:shadow-lg" style={!book.cover_path ? getCoverFallback(book) : undefined}>
                   {book.cover_path
-                    ? <img src={getThumbUrl(book.cover_path)} alt={book.title} loading="lazy" className="w-full h-full object-cover rounded-[4px]" />
+                    ? <img src={getThumbUrl(book.cover_path)} alt={book.title} loading="lazy" data-book-id={book.id}
+                        className="w-full h-full object-cover rounded-[4px]" onError={handleImgError} />
                     : <span className="text-xs">{book.title.slice(0, 6)}</span>}
                 </div>
                 <div className="book-title text-xs">{book.title}</div>
@@ -130,6 +146,7 @@ export default function Shelf() {
           </select>
           <select value={sort} onChange={e => setSort(e.target.value)}
             className="text-sm border border-(--color-border) bg-(--color-card) rounded-lg px-3 py-1.5 text-(--color-text) outline-none">
+            <option value="last_read_at">最近阅读</option>
             <option value="updated_at">最近更新</option>
             <option value="title">书名排序</option>
             <option value="author">作者排序</option>
@@ -180,7 +197,8 @@ export default function Shelf() {
             <div key={book.id} className="book-card" onClick={() => handleBookClick(book)}>
               <div className="book-cover" style={!book.cover_path ? getCoverFallback(book) : undefined}>
                 {book.cover_path
-                  ? <img src={getThumbUrl(book.cover_path)} alt={book.title} loading="lazy" className="w-full h-full object-cover rounded-[4px]" />
+                  ? <img src={getThumbUrl(book.cover_path)} alt={book.title} loading="lazy" data-book-id={book.id}
+                      className="w-full h-full object-cover rounded-[4px]" onError={handleImgError} />
                   : <span>{book.title.slice(0, 8)}</span>}
                 <span className="book-format-badge">{FORMAT_LABELS[book.format] || book.format}</span>
               </div>

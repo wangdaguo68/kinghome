@@ -3,7 +3,21 @@
     "allow": [
       "Skill(brainstorming)",
       "Bash(ollama --version)",
-      "Bash(winget install *)"
+      "Bash(winget install *)",
+      "Bash(cmd.exe /c \"sc query Ollama\")",
+      "Bash(taskkill /f /im \"ollama.exe\")",
+      "Bash(taskkill /f /im \"Ollama.exe\")",
+      "Bash(cmd.exe /c \"tasklist 2>NUL | findstr /i ollama\")",
+      "Bash(cmd.exe *)",
+      "Bash(powershell *)",
+      "Bash(curl -s http://localhost:11434/api/tags)",
+      "Read(//c/Users/Administrator/.ollama/**)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(/c/Users/Administrator/AppData/Local/Programs/Ollama/ollama.exe list *)",
+      "Bash(export OLLAMA_MODELS=\"D:\\\\software\\\\ollama_models\")",
+      "Bash(\"/c/Users/Administrator/AppData/Local/Programs/Ollama/ollama.exe\" serve *)",
+      "Bash(export OLLAMA_MODELS=\"D:\\\\\\\\software\\\\\\\\ollama_models\")",
+      "Bash(\"/c/Users/Administrator/AppData/Local/Programs/Ollama/ollama.exe\" pull *)"
     ]
   }
 }

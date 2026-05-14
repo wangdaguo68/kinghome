@@ -21,9 +21,26 @@ interface Props {
   chapters?: Chapter[];
 }
 
+const _forwardedIframes = new WeakSet<HTMLIFrameElement>();
+function forwardKeyboard(iframe: HTMLIFrameElement) {
+  const win = iframe.contentWindow;
+  if (!win || _forwardedIframes.has(iframe)) return;
+  _forwardedIframes.add(iframe);
+  win.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' '].includes(e.key)) {
+      e.preventDefault();
+    }
+    window.dispatchEvent(new KeyboardEvent('keydown', {
+      key: e.key, code: e.code, ctrlKey: e.ctrlKey,
+      shiftKey: e.shiftKey, altKey: e.altKey, metaKey: e.metaKey,
+      repeat: e.repeat,
+    }));
+  });
+}
+
 export default function HtmlEpubReader({
   bookId, onProgress, onChapterList, fontSize, lineHeight,
-  marginWidth, isMobi, mobiContent, pageMode, currentPage, onPageChange, onPageTotal,
+  marginWidth, isMobi, mobiContent, currentPage, onPageChange, onPageTotal,
   chapters: externalChapters,
 }: Props) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -42,12 +59,15 @@ export default function HtmlEpubReader({
       setLoading(false);
       return;
     }
-    if (externalChapters && externalChapters.length > 0) {
+    // If chapters provided by parent, use them directly — don't re-fetch
+    if (externalChapters !== undefined) {
       setChapters(externalChapters);
       onChapterList?.(externalChapters);
       onPageTotal?.(externalChapters.length);
-      setCurrentIdx(0);
-      onProgress({ currentPage: 1, totalPages: externalChapters.length, percent: 0, chapter: externalChapters[0]?.title || '' });
+      if (externalChapters.length > 0) {
+        setCurrentIdx(0);
+        onProgress({ currentPage: 1, totalPages: externalChapters.length, percent: 0, chapter: externalChapters[0]?.title || '' });
+      }
       setLoading(false);
       return;
     }
@@ -70,16 +90,17 @@ export default function HtmlEpubReader({
       });
   }, [bookId, isMobi]);
 
-  // Handle external page change
+  // Handle external page change (from Reader keyboard/TOC/page arrows)
   useEffect(() => {
     if (isMobi) return;
-    if (pageMode && currentPage !== undefined && chapters.length > 0) {
+    if (currentPage !== undefined && chapters.length > 0) {
       const idx = currentPage - 1;
       if (idx >= 0 && idx < chapters.length && idx !== currentIdx) {
         setCurrentIdx(idx);
+        onPageChange?.(idx + 1);
       }
     }
-  }, [currentPage, pageMode, chapters.length, isMobi]);
+  }, [currentPage, chapters.length, isMobi]);
 
   // Load EPUB chapter HTML into iframe
   useEffect(() => {
@@ -138,6 +159,8 @@ export default function HtmlEpubReader({
           </html>
         `);
         doc.close();
+
+        forwardKeyboard(iframe);
       })
       .catch(e => {
         if (currentIdx === idx) {
@@ -176,6 +199,8 @@ export default function HtmlEpubReader({
       </html>
     `);
     doc.close();
+
+    forwardKeyboard(iframe);
   }, [isMobi, mobiContent, fontSize, lineHeight, marginWidth]);
 
   // Apply setting changes without reloading
@@ -211,6 +236,17 @@ export default function HtmlEpubReader({
     );
   }
 
+  if (chapters.length === 0 && !isMobi) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center">
+          <p className="text-(--color-text-secondary) mb-2">无法读取章节</p>
+          <p className="text-xs text-(--color-text-secondary)">请检查文件是否完整</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-full">
       <div className="flex-1 overflow-hidden relative">
@@ -218,7 +254,6 @@ export default function HtmlEpubReader({
           ref={iframeRef}
           className="w-full h-full border-none"
           title="Book Content"
-          sandbox="allow-same-origin"
         />
         {!isMobi && (
           <div className="reader-page-nav">

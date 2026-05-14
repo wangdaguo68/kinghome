@@ -19,7 +19,7 @@ async def list_books(
     category: str | None = None,
     status: str | None = None,
     search: str | None = None,
-    sort: str = "updated_at",
+    sort: str = "last_read_at",
     db: AsyncSession = Depends(get_db),
 ):
     q = select(Book)
@@ -41,8 +41,15 @@ async def list_books(
             BookShelf.status == status
         )
 
-    sort_col = getattr(Book, sort, Book.updated_at)
-    q = q.order_by(sort_col.desc()).offset((page - 1) * page_size).limit(page_size)
+    # Support sorting by last_read_at from ReadingProgress
+    if sort == "last_read_at":
+        q = q.outerjoin(ReadingProgress, Book.id == ReadingProgress.book_id)
+        q = q.order_by(ReadingProgress.last_read_at.desc().nullslast(), Book.updated_at.desc())
+    else:
+        sort_col = getattr(Book, sort, Book.updated_at)
+        q = q.order_by(sort_col.desc())
+
+    q = q.offset((page - 1) * page_size).limit(page_size)
 
     total = (await db.execute(count_q)).scalar()
     rows = (await db.execute(q)).scalars().all()
@@ -71,6 +78,45 @@ async def list_books(
         items.append(out)
 
     return BookListOut(total=total, items=items)
+
+
+@router.get("/continue-reading", response_model=BookListOut)
+async def continue_reading(
+    limit: int = Query(20, ge=1, le=50),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return recently-read books sorted by last_read_at descending."""
+    q = (
+        select(Book)
+        .join(ReadingProgress, Book.id == ReadingProgress.book_id)
+        .where(ReadingProgress.last_read_at.isnot(None))
+        .order_by(ReadingProgress.last_read_at.desc())
+        .limit(limit)
+    )
+    rows = (await db.execute(q)).scalars().all()
+
+    book_ids = [r.id for r in rows]
+    progress_map = {}
+    shelf_map = {}
+    if book_ids:
+        progress_q = select(ReadingProgress).where(ReadingProgress.book_id.in_(book_ids))
+        progress_map = {p.book_id: p for p in (await db.execute(progress_q)).scalars().all()}
+        from ..models.book import BookShelf
+        shelf_q = select(BookShelf).where(BookShelf.book_id.in_(book_ids))
+        shelf_map = {s.book_id: s for s in (await db.execute(shelf_q)).scalars().all()}
+
+    items = []
+    for row in rows:
+        out = BookOut.from_orm_exclude_rels(row)
+        out.progress = ReadingProgressOut.model_validate(progress_map[row.id]) if row.id in progress_map else None
+        if row.id in shelf_map:
+            s = shelf_map[row.id].status
+            out.shelf_status = s.value if hasattr(s, 'value') else s
+        else:
+            out.shelf_status = None
+        items.append(out)
+
+    return BookListOut(total=len(items), items=items)
 
 
 @router.get("/categories")

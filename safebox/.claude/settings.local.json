@@ -32,7 +32,9 @@
       "Bash(dotnet --version)",
       "Bash(cat obj/Release/net*/win-x64/publish/AppName)",
       "Bash(ls /d/software/safebox/dist/*.exe)",
-      "Bash(chmod +x *)"
+      "Bash(chmod +x *)",
+      "Skill(find-skills)",
+      "Bash(npx skills *)"
     ]
   }
 }

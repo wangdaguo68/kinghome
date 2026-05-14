@@ -4,6 +4,7 @@ const api = axios.create({ baseURL: '/api' });
 
 // Books
 export const getBooks = (params?: Record<string, any>) => api.get('/books', { params });
+export const getContinueReading = (limit = 20) => api.get('/books/continue-reading', { params: { limit } });
 export const getBook = (id: number) => api.get(`/books/${id}`);
 export const getCategories = () => api.get('/books/categories');
 export const classifyBooks = () => api.post('/books/classify');

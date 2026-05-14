@@ -131,30 +131,26 @@ def get_epub_chapter_html(file_path: str, chapter_index: int) -> dict:
 
 def convert_epub_to_html(file_path: str, book_id: int) -> dict:
     """Convert EPUB to a JSON structure of chapters with HTML content."""
-    total = 0
+    book = _get_cached_epub_book(file_path)
+    spine = list(book.get_items_of_type(9))
+    if not spine:
+        for item in book.get_items():
+            if item.get_type() == 9:
+                spine.append(item)
+    total = len(spine)
     chapters_meta = []
-    try:
-        book = _get_cached_epub_book(file_path)
-        spine = list(book.get_items_of_type(9))
-        if not spine:
-            for item in book.get_items():
-                if item.get_type() == 9:
-                    spine.append(item)
-        total = len(spine)
-        for i in range(total):
-            title = f"Chapter {i + 1}"
-            try:
-                from bs4 import BeautifulSoup
-                html = spine[i].get_body_content().decode("utf-8", errors="ignore")
-                soup = BeautifulSoup(html, "html.parser")
-                for h in soup.find_all(["h1", "h2", "h3"]):
-                    title = h.get_text().strip()
-                    break
-            except Exception:
-                pass
-            chapters_meta.append({"index": i, "title": title})
-    except Exception:
-        pass
+    for i in range(total):
+        title = f"Chapter {i + 1}"
+        try:
+            from bs4 import BeautifulSoup
+            html = spine[i].get_body_content().decode("utf-8", errors="ignore")
+            soup = BeautifulSoup(html, "html.parser")
+            for h in soup.find_all(["h1", "h2", "h3"]):
+                title = h.get_text().strip()
+                break
+        except Exception:
+            pass
+        chapters_meta.append({"index": i, "title": title})
     return {"chapters": chapters_meta, "total_chapters": total, "format": "epub"}
 
 

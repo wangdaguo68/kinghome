@@ -5,7 +5,7 @@ import HtmlEpubReader from '../components/HtmlEpubReader';
 import PdfReader from '../components/PdfReader';
 import HighlightsPanel from '../components/HighlightsPanel';
 
-type ReadingMode = 'scroll' | 'page' | 'double';
+type ReadingMode = 'scroll' | 'page';
 
 const FONT_SIZES = [14, 16, 18, 20, 22, 24];
 const LINE_HEIGHTS = [1.6, 1.8, 2.0, 2.2];
@@ -94,7 +94,9 @@ export default function Reader() {
       setContent(data);
       if (data.total_pages) setTotalPages(data.total_pages);
       if (data.total_chapters) setTotalPages(data.total_chapters);
-    }).catch(() => {});
+    }).catch((e: any) => {
+      setLoadError('Failed to load book content: ' + (e?.message || e?.response?.status || 'Unknown error'));
+    });
 
     getBookToc(id).then(r => setToc(r.data.toc || [])).catch(() => {});
     setBookmarks(loadBookmarks(id));
@@ -166,11 +168,28 @@ export default function Reader() {
     }
   }, [bookId]);
 
+  const isEpub = format === 'epub';
+  const isPdf = format === 'pdf';
+  const isMobi = format === 'mobi';
+
   const scrollPage = useCallback((dir: 1 | -1) => {
     const container = scrollContainerRef.current;
     if (!container) return;
+    if (isEpub) {
+      const iframe = container.querySelector('iframe');
+      if (iframe?.contentWindow) {
+        iframe.contentWindow.scrollBy({ top: dir * iframe.contentWindow.innerHeight * 0.8, behavior: 'smooth' });
+      }
+      return;
+    }
+    if (isPdf) {
+      // PdfReader renders its own .pdf-container inside the outer one — scroll the inner
+      const inner = container.querySelector('.pdf-container') as HTMLElement | null;
+      (inner || container).scrollBy({ top: dir * (inner || container).clientHeight * 0.8, behavior: 'smooth' });
+      return;
+    }
     container.scrollBy({ top: dir * container.clientHeight * 0.8, behavior: 'smooth' });
-  }, []);
+  }, [isEpub, isPdf]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -179,16 +198,16 @@ export default function Reader() {
 
       if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
         e.preventDefault();
-        if (readingMode === 'scroll') scrollPage(1);
-        else setCurrentPage(p => Math.min(p + 1, totalPages || p + 1));
+        if (readingMode === 'scroll') { scrollPage(1); }
+        else if (totalPages > 0) { setCurrentPage(p => Math.min(p + 1, totalPages)); }
       } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
         e.preventDefault();
-        if (readingMode === 'scroll') scrollPage(-1);
-        else setCurrentPage(p => Math.max(p - 1, 1));
+        if (readingMode === 'scroll') { scrollPage(-1); }
+        else if (totalPages > 0) { setCurrentPage(p => Math.max(p - 1, 1)); }
       } else if (e.key === ' ') {
         e.preventDefault();
-        if (readingMode === 'scroll') scrollPage(1);
-        else setCurrentPage(p => Math.min(p + 1, totalPages || p + 1));
+        if (readingMode === 'scroll') { scrollPage(1); }
+        else if (totalPages > 0) { setCurrentPage(p => Math.min(p + 1, totalPages)); }
       } else if (e.key === 'f' || e.key === 'F') {
         e.preventDefault();
         toggleFullscreen();
@@ -198,7 +217,7 @@ export default function Reader() {
         setFocusMode(false);
         if (document.fullscreenElement) document.exitFullscreen?.();
       } else if (e.key === 'm' || e.key === 'M') {
-        setReadingMode(m => m === 'scroll' ? 'page' : m === 'page' ? 'double' : 'scroll');
+        setReadingMode(m => m === 'scroll' ? 'page' : 'scroll');
       } else if (e.key === 'a' || e.key === 'A') {
         setAutoFlip(f => ({ ...f, enabled: !f.enabled }));
       } else if (e.key === 'b' || e.key === 'B') {
@@ -238,11 +257,8 @@ export default function Reader() {
     }
   };
 
-  const isEpub = format === 'epub';
-  const isPdf = format === 'pdf';
-  const isMobi = format === 'mobi';
-  // EPUB renders without content; PDF/MOBI need it
-  const canRender = book && (isEpub || isPdf || (isMobi && content));
+  // All formats need content before rendering
+  const canRender = book && content && (isEpub || isPdf || isMobi);
 
   if (loadError) {
     return (
@@ -280,10 +296,10 @@ export default function Reader() {
         <div className="flex items-center gap-3">
           <span className="text-sm font-medium truncate max-w-[200px] text-(--color-text)">{book?.title}</span>
           <div className="flex items-center gap-0.5 bg-(--color-bg) rounded-lg p-0.5 border border-(--color-border)">
-            {(['scroll', 'page', 'double'] as ReadingMode[]).map(mode => (
+            {(['scroll', 'page'] as ReadingMode[]).map(mode => (
               <button key={mode} onClick={() => setReadingMode(mode)}
                 className={`px-2 py-1 rounded text-xs transition-colors ${readingMode === mode ? 'bg-(--color-card-raised) text-(--color-primary) font-medium border border-(--color-border)' : 'text-(--color-text-secondary) hover:text-(--color-text)'}`}>
-                {mode === 'scroll' ? '滚动' : mode === 'page' ? '单页' : '双页'}
+                {mode === 'scroll' ? '滚动' : '单页'}
               </button>
             ))}
           </div>
@@ -302,17 +318,17 @@ export default function Reader() {
 
       {/* Content area */}
       <div className="flex-1 relative overflow-hidden">
-        {readingMode !== 'scroll' && (
+        {readingMode !== 'scroll' && totalPages > 0 && (
           <>
             <button className="absolute left-0 top-0 w-[25%] h-full z-10 cursor-pointer opacity-0 hover:opacity-100 transition-opacity"
               onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} title="上一页 (←)" />
             <button className="absolute right-0 top-0 w-[25%] h-full z-10 cursor-pointer opacity-0 hover:opacity-100 transition-opacity"
-              onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages || p + 1))} title="下一页 (→)" />
+              onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} title="下一页 (→)" />
             <button onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
               className="absolute left-4 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full flex items-center justify-center text-lg transition-colors"
               style={{ background: 'rgba(44,31,15,0.88)', backdropFilter: 'blur(12px)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
               title="上一页">‹</button>
-            <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages || p + 1))}
+            <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
               className="absolute right-4 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full flex items-center justify-center text-lg transition-colors"
               style={{ background: 'rgba(44,31,15,0.88)', backdropFilter: 'blur(12px)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
               title="下一页">›</button>
@@ -362,7 +378,32 @@ export default function Reader() {
               {toc.map((item: any, i: number) => (
                 <div key={i} className="text-sm py-1.5 cursor-pointer hover:text-(--color-primary) truncate text-(--color-text)"
                   style={{ paddingLeft: (item.level || 0) * 16 }}
-                  onClick={() => setShowToc(false)}>
+                  onClick={() => {
+                    setShowToc(false);
+                    if (isPdf && item.page !== undefined) {
+                      setCurrentPage(item.page + 1);
+                    } else if (isEpub && content?.chapters) {
+                      // Match: try index first, then title, then href substring
+                      let idx = -1;
+                      const chs = content.chapters;
+                      // 1) same position
+                      if (i < chs.length) idx = i;
+                      // 2) title match
+                      if (idx < 0) {
+                        idx = chs.findIndex((ch: any) =>
+                          ch.title === item.title || item.title?.includes(ch.title) || ch.title?.includes(item.title));
+                      }
+                      // 3) href fragment match against chapter index
+                      if (idx < 0 && item.href) {
+                        const hrefBase = item.href.split('#')[0];
+                        idx = chs.findIndex((_: any, ci: number) => ci === parseInt(hrefBase) || hrefBase.includes(String(ci)));
+                      }
+                      if (idx >= 0) {
+                        if (readingMode === 'scroll') setReadingMode('page');
+                        setCurrentPage(idx + 1);
+                      }
+                    }
+                  }}>
                   {item.title}
                 </div>
               ))}
@@ -395,10 +436,10 @@ export default function Reader() {
             <div className="mb-6">
               <p className="text-sm font-medium mb-3 text-(--color-text)">阅读模式</p>
               <div className="flex gap-2">
-                {(['scroll', 'page', 'double'] as ReadingMode[]).map(mode => (
+                {(['scroll', 'page'] as ReadingMode[]).map(mode => (
                   <button key={mode} onClick={() => setReadingMode(mode)}
                     className={`px-4 py-2 rounded-lg text-sm ${readingMode === mode ? 'bg-(--color-primary) text-(--color-bg) font-medium' : 'bg-(--color-bg) text-(--color-text-secondary) border border-(--color-border)'}`}>
-                    {mode === 'scroll' ? '滚动模式' : mode === 'page' ? '单页翻页' : '双页模式'}
+                    {mode === 'scroll' ? '滚动模式' : '单页翻页'}
                   </button>
                 ))}
               </div>

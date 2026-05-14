@@ -5,6 +5,17 @@
     <TargetExt>.msi</TargetExt>
   </PropertyGroup>
   <ItemGroup>
+    <HarvestDirectory Include="..\dist">
+      <ComponentGroupName>AppComponents</ComponentGroupName>
+      <DirectoryRefId>INSTALLFOLDER</DirectoryRefId>
+      <SuppressRootDirectory>true</SuppressRootDirectory>
+      <SuppressRegistry>true</SuppressRegistry>
+      <SuppressCom>true</SuppressCom>
+    </HarvestDirectory>
+    <BindPath Include="..\dist" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="WixToolset.UI.wixext" Version="4.0.5" />
+    <PackageReference Include="WixToolset.Heat" Version="4.0.5" />
   </ItemGroup>
 </Project>

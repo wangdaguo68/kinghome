@@ -15,40 +15,6 @@
 
     <StandardDirectory Id="DesktopFolder" />
 
-    <!-- App components -->
-    <ComponentGroup Id="AppComponents" Directory="INSTALLFOLDER">
-      <Component Id="AppExe" Guid="*">
-        <File Id="AppExeFile" Name="保险箱.exe" Source="..\dist\保险箱.exe" KeyPath="yes" />
-      </Component>
-      <Component Id="AppDll" Guid="*">
-        <File Id="AppDllFile" Name="保险箱.dll" Source="..\dist\保险箱.dll" />
-      </Component>
-      <Component Id="AppDepsJson" Guid="*">
-        <File Id="AppDepsJsonFile" Name="保险箱.deps.json" Source="..\dist\保险箱.deps.json" />
-      </Component>
-      <Component Id="AppRuntimeConfig" Guid="*">
-        <File Id="AppRuntimeConfigFile" Name="保险箱.runtimeconfig.json" Source="..\dist\保险箱.runtimeconfig.json" />
-      </Component>
-      <Component Id="AppPdb" Guid="*">
-        <File Id="AppPdbFile" Name="保险箱.pdb" Source="..\dist\保险箱.pdb" />
-      </Component>
-      <Component Id="NativeD3D" Guid="*">
-        <File Id="NativeD3DFile" Name="D3DCompiler_47_cor3.dll" Source="..\dist\D3DCompiler_47_cor3.dll" />
-      </Component>
-      <Component Id="NativePenImc" Guid="*">
-        <File Id="NativePenImcFile" Name="PenImc_cor3.dll" Source="..\dist\PenImc_cor3.dll" />
-      </Component>
-      <Component Id="NativePresentation" Guid="*">
-        <File Id="NativePresentationFile" Name="PresentationNative_cor3.dll" Source="..\dist\PresentationNative_cor3.dll" />
-      </Component>
-      <Component Id="NativeVcRuntime" Guid="*">
-        <File Id="NativeVcRuntimeFile" Name="vcruntime140_cor3.dll" Source="..\dist\vcruntime140_cor3.dll" />
-      </Component>
-      <Component Id="NativeWpfGfx" Guid="*">
-        <File Id="NativeWpfGfxFile" Name="wpfgfx_cor3.dll" Source="..\dist\wpfgfx_cor3.dll" />
-      </Component>
-    </ComponentGroup>
-
     <!-- Start Menu shortcut -->
     <Component Id="StartMenuShortcut" Directory="AppStartMenuFolder" Guid="*">
       <Shortcut Id="StartMenuLink" Name="保险箱"

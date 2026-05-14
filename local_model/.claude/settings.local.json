@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(brainstorming)",
+      "Bash(ollama --version)",
+      "Bash(winget install *)"
+    ]
+  }
+}

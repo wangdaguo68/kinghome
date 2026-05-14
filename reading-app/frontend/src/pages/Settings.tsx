@@ -73,28 +73,28 @@ export default function Settings() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8 page-enter">
-      <h2 className="text-xl font-semibold mb-2">设置</h2>
-      <p className="text-sm text-gray-400 mb-8">配置 AI 大模型连接</p>
+      <h2 className="text-xl font-semibold mb-2 text-(--color-text)">设置</h2>
+      <p className="text-sm text-(--color-text-secondary) mb-8">配置 AI 大模型连接</p>
 
       {/* Provider list */}
       {providers.map(p => (
-        <div key={p.id} className="settings-section dark:bg-gray-800 dark:border-gray-700">
+        <div key={p.id} className="settings-section">
           <div className="flex items-center justify-between">
             <div>
               <div className="flex items-center gap-3">
-                <span className="font-medium">{p.name}</span>
-                {p.is_active && <span className="w-2 h-2 rounded-full bg-green-500" title="当前使用" />}
+                <span className="font-medium text-(--color-text)">{p.name}</span>
+                {p.is_active && <span className="w-2 h-2 rounded-full bg-(--color-primary)" title="当前使用" />}
               </div>
-              <p className="text-sm text-gray-400 mt-1">{p.model_id}</p>
-              <p className="text-xs text-gray-400">{p.base_url}</p>
+              <p className="text-sm text-(--color-text-secondary) mt-1">{p.model_id}</p>
+              <p className="text-xs text-(--color-text-secondary)">{p.base_url}</p>
             </div>
             <div className="flex gap-2">
               <button onClick={() => handleEdit(p)}
-                className="px-3 py-1.5 text-sm text-gray-500 hover:text-green-500 border border-gray-200 dark:border-gray-600 rounded-lg transition-colors">
+                className="px-3 py-1.5 text-sm text-(--color-text-secondary) hover:text-(--color-primary) border border-(--color-border) rounded-lg transition-colors">
                 编辑
               </button>
               <button onClick={() => handleDelete(p.id)}
-                className="px-3 py-1.5 text-sm text-gray-400 hover:text-red-500 border border-gray-200 dark:border-gray-600 rounded-lg transition-colors">
+                className="px-3 py-1.5 text-sm text-(--color-text-secondary) hover:text-red-400 border border-(--color-border) rounded-lg transition-colors">
                 删除
               </button>
             </div>
@@ -104,44 +104,44 @@ export default function Settings() {
 
       {!showForm && (
         <button onClick={() => { resetForm(); setShowForm(true); }}
-          className="w-full py-3 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl text-sm text-gray-400 hover:text-green-500 hover:border-green-300 transition-colors">
+          className="w-full py-3 border-2 border-dashed border-(--color-border) rounded-xl text-sm text-(--color-text-secondary) hover:text-(--color-primary) hover:border-(--color-primary) transition-colors">
           + 添加模型配置
         </button>
       )}
 
       {/* Add/Edit form */}
       {showForm && (
-        <div className="settings-section dark:bg-gray-800 dark:border-gray-700 mt-4">
-          <h3 className="font-medium mb-5">{editingId ? '编辑配置' : '添加模型配置'}</h3>
+        <div className="settings-section mt-4">
+          <h3 className="font-medium mb-5 text-(--color-text)">{editingId ? '编辑配置' : '添加模型配置'}</h3>
 
           <div className="space-y-4">
             <div>
               <label className="settings-label">名称</label>
               <input type="text" value={name} onChange={e => setName(e.target.value)}
                 placeholder="例如: DeepSeek, OpenAI, 本地Ollama"
-                className="settings-input dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200" />
+                className="settings-input" />
             </div>
             <div>
               <label className="settings-label">API 地址 (Base URL)</label>
               <input type="text" value={baseUrl} onChange={e => setBaseUrl(e.target.value)}
                 placeholder="例如: https://api.deepseek.com/v1"
-                className="settings-input dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200" />
+                className="settings-input" />
             </div>
             <div>
               <label className="settings-label">API Key</label>
               <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)}
                 placeholder={editingId ? '留空则不修改' : 'sk-xxx'}
-                className="settings-input dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200" />
+                className="settings-input" />
             </div>
             <div>
               <label className="settings-label">模型 ID</label>
               <input type="text" value={modelId} onChange={e => setModelId(e.target.value)}
                 placeholder="例如: deepseek-chat"
-                className="settings-input dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200" />
+                className="settings-input" />
             </div>
             <label className="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" checked={isActive} onChange={e => setIsActive(e.target.checked)} />
-              <span className="text-sm text-gray-500">设为默认模型</span>
+              <span className="text-sm text-(--color-text-secondary)">设为默认模型</span>
             </label>
           </div>
 
@@ -166,15 +166,15 @@ export default function Settings() {
           {/* Actions */}
           <div className="flex gap-3 mt-5">
             <button onClick={handleSave}
-              className="px-5 py-2 bg-green-500 text-white rounded-lg text-sm font-medium hover:bg-green-600 transition-colors">
+              className="px-5 py-2 bg-(--color-primary) text-(--color-bg) rounded-lg text-sm font-medium hover:bg-(--color-primary-dark) transition-colors">
               保存
             </button>
             <button onClick={handleTest} disabled={testing}
-              className="px-5 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-500 hover:border-green-300 disabled:opacity-50 transition-colors">
+              className="px-5 py-2 border border-(--color-border) rounded-lg text-sm text-(--color-text-secondary) hover:border-(--color-primary) disabled:opacity-50 transition-colors">
               {testing ? '测试中...' : '测试连接'}
             </button>
             <button onClick={resetForm}
-              className="px-5 py-2 text-sm text-gray-400 hover:text-gray-600 transition-colors">
+              className="px-5 py-2 text-sm text-(--color-text-secondary) hover:text-(--color-text) transition-colors">
               取消
             </button>
           </div>
@@ -184,7 +184,7 @@ export default function Settings() {
       {/* Quick preset buttons */}
       {!showForm && (
         <div className="mt-8">
-          <p className="text-sm text-gray-400 mb-3">快速配置</p>
+          <p className="text-sm text-(--color-text-secondary) mb-3">快速配置</p>
           <div className="grid grid-cols-2 gap-3">
             {[
               { name: 'DeepSeek', url: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
@@ -196,9 +196,9 @@ export default function Settings() {
                 setName(preset.name); setBaseUrl(preset.url); setModelId(preset.model);
                 setApiKey(''); setIsActive(false); setShowForm(true);
               }}
-                className="p-3 rounded-xl border border-gray-200 dark:border-gray-600 text-left text-sm hover:border-green-300 transition-colors">
+                className="p-3 rounded-xl border border-(--color-border) text-left text-sm hover:border-(--color-primary) transition-colors text-(--color-text)">
                 <p className="font-medium">{preset.name}</p>
-                <p className="text-xs text-gray-400 mt-0.5 truncate">{preset.url}</p>
+                <p className="text-xs text-(--color-text-secondary) mt-0.5 truncate">{preset.url}</p>
               </button>
             ))}
           </div>

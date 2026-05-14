@@ -83,6 +83,8 @@ def extract_metadata_from_epub(file_path: str) -> dict:
 
 def _extract_epub_cover(book, file_path: str) -> str:
     from ebooklib import ITEM_IMAGE
+    from PIL import Image
+    import io
     cover_id = None
     for _key, val in book.get_metadata("OPF", "meta"):
         if val.get("name") == "cover":
@@ -92,24 +94,37 @@ def _extract_epub_cover(book, file_path: str) -> str:
     cover_filename = f"{uuid.uuid4().hex}.jpg"
     cover_dest = CACHE_DIR / "covers" / cover_filename
     cover_dest.parent.mkdir(parents=True, exist_ok=True)
+    image_bytes = None
     if cover_id:
         try:
             item = book.get_item_with_id(cover_id)
             if item:
-                cover_dest.write_bytes(item.content)
-                cover_path = f"/static/cache/covers/{cover_filename}"
-                return cover_path
+                image_bytes = item.content
         except Exception as e:
             logger.debug(f"Cover extraction by ID failed: {e}")
-    # Fallback: use first image
-    for item in book.get_items_of_type(ITEM_IMAGE):
-        try:
-            cover_dest.write_bytes(item.content)
-            cover_path = f"/static/cache/covers/{cover_filename}"
-            break
-        except Exception as e:
-            logger.debug(f"Cover image write failed: {e}")
-            continue
+    if not image_bytes:
+        for item in book.get_items_of_type(ITEM_IMAGE):
+            try:
+                image_bytes = item.content
+                break
+            except Exception as e:
+                logger.debug(f"Cover image write failed: {e}")
+                continue
+    if not image_bytes:
+        return ""
+    cover_dest.write_bytes(image_bytes)
+    cover_path = f"/static/cache/covers/{cover_filename}"
+    # Generate 200px thumbnail (same base name, _thumb suffix)
+    try:
+        thumb_filename = cover_filename.replace(".jpg", "_thumb.jpg")
+        thumb_dest = CACHE_DIR / "covers" / thumb_filename
+        img = Image.open(io.BytesIO(image_bytes))
+        img.thumbnail((200, 300), Image.LANCZOS)
+        if img.mode in ("RGBA", "P"):
+            img = img.convert("RGB")
+        img.save(str(thumb_dest), "JPEG", quality=75)
+    except Exception as e:
+        logger.debug(f"Thumbnail generation failed: {e}")
     return cover_path
 
 

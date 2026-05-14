@@ -71,12 +71,13 @@ export default function Shelf() {
     navigate(`/reader/${book.id}`);
   };
 
-  const getCoverStyle = (book: Book) => {
-    if (book.cover_path) return { backgroundImage: `url(${book.cover_path})`, backgroundSize: 'cover' as const, backgroundPosition: 'center' as const };
+  const getCoverFallback = (book: Book) => {
     const idx = book.id % COVER_GRADIENTS.length;
     const [c1, c2] = COVER_GRADIENTS[idx];
     return { background: `linear-gradient(135deg, ${c1}, ${c2})` };
   };
+
+  const getThumbUrl = (coverPath: string) => coverPath.replace(/\.jpg$/i, '_thumb.jpg');
 
   const readingBooks = books.filter(b => b.shelf_status === 'reading');
 
@@ -85,12 +86,14 @@ export default function Shelf() {
       {/* Continue Reading Section */}
       {!filter && readingBooks.length > 0 && (
         <div className="mb-8">
-          <h3 className="text-sm font-medium text-gray-500 mb-3">继续阅读</h3>
+          <h3 className="text-sm font-medium text-(--color-text-secondary) mb-3">继续阅读</h3>
           <div className="flex gap-4 overflow-x-auto pb-2">
             {readingBooks.slice(0, 6).map(book => (
               <div key={book.id} className="flex-shrink-0 w-[120px] cursor-pointer group" onClick={() => handleBookClick(book)}>
-                <div className="book-cover group-hover:shadow-lg" style={getCoverStyle(book)}>
-                  {!book.cover_path && <span className="text-xs">{book.title.slice(0, 6)}</span>}
+                <div className="book-cover group-hover:shadow-lg" style={!book.cover_path ? getCoverFallback(book) : undefined}>
+                  {book.cover_path
+                    ? <img src={getThumbUrl(book.cover_path)} alt={book.title} loading="lazy" className="w-full h-full object-cover rounded-[4px]" />
+                    : <span className="text-xs">{book.title.slice(0, 6)}</span>}
                 </div>
                 <div className="book-title text-xs">{book.title}</div>
                 {book.progress && (
@@ -109,13 +112,13 @@ export default function Shelf() {
         <div className="flex gap-2">
           {(['', 'reading', 'want_to_read', 'done'] as const).map(f => (
             <button key={f} onClick={() => { setFilter(f); setPage(1); }}
-              className={`px-4 py-1.5 rounded-full text-sm transition-colors ${(filter || '') === f ? 'bg-green-500 text-white' : 'bg-white dark:bg-gray-800 text-gray-500 border border-gray-200 dark:border-gray-700 hover:border-green-300'}`}>
+              className={`px-4 py-1.5 rounded-full text-sm transition-colors ${(filter || '') === f ? 'bg-(--color-primary) text-(--color-bg) font-medium' : 'bg-(--color-card-raised) text-(--color-text-secondary) border border-(--color-border) hover:border-(--color-primary)'}`}>
               {{ '': '全部', reading: '在读', want_to_read: '想读', done: '读完' }[f]}
             </button>
           ))}
         </div>
         <select value={selectedCategory} onChange={e => { setSelectedCategory(e.target.value); setPage(1); }}
-            className="text-sm border border-gray-200 dark:border-gray-700 dark:bg-gray-800 rounded-lg px-3 py-1.5 text-gray-500 outline-none">
+            className="text-sm border border-(--color-border) bg-(--color-card) rounded-lg px-3 py-1.5 text-(--color-text) outline-none">
             <option value="">全部分类</option>
             {categories.map(cat => (
               <optgroup key={cat.category} label={`${cat.category} (${cat.total})`}>
@@ -126,22 +129,22 @@ export default function Shelf() {
             ))}
           </select>
           <select value={sort} onChange={e => setSort(e.target.value)}
-            className="text-sm border border-gray-200 dark:border-gray-700 dark:bg-gray-800 rounded-lg px-3 py-1.5 text-gray-500 outline-none">
+            className="text-sm border border-(--color-border) bg-(--color-card) rounded-lg px-3 py-1.5 text-(--color-text) outline-none">
             <option value="updated_at">最近更新</option>
             <option value="title">书名排序</option>
             <option value="author">作者排序</option>
             <option value="created_at">最近添加</option>
           </select>
           {scanning && scanInfo && (
-            <span className="text-xs text-gray-400">扫描中 {scanInfo.processed}/{scanInfo.total}</span>
+            <span className="text-xs text-(--color-text-secondary)">扫描中 {scanInfo.processed}/{scanInfo.total}</span>
           )}
           <button onClick={handleScan}
-            className="px-4 py-1.5 bg-green-500 text-white rounded-full text-sm hover:bg-green-600 transition-colors">
+            className="px-4 py-1.5 bg-(--color-primary) text-(--color-bg) rounded-full text-sm hover:bg-(--color-primary-dark) transition-colors font-medium">
             {scanning ? '扫描中...' : '扫描书库'}
           </button>
       </div>
 
-      <div className="text-sm text-gray-400 mb-4">共 {total} 本书</div>
+      <div className="text-sm text-(--color-text-secondary) mb-4">共 {total} 本书</div>
 
       {/* Loading skeleton */}
       {loading && (
@@ -158,12 +161,12 @@ export default function Shelf() {
 
       {/* Empty state */}
       {!loading && books.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-24 text-gray-400">
+        <div className="flex flex-col items-center justify-center py-24 text-(--color-text-secondary)">
           <span className="text-5xl mb-4">📚</span>
           <p className="text-lg mb-1">{scanning ? '正在扫描书库...' : '书库还是空的'}</p>
           <p className="text-sm mb-6">{scanning ? '请稍候' : '点击"扫描书库"导入你的书籍'}</p>
           {!scanning && (
-            <button onClick={handleScan} className="px-6 py-2 bg-green-500 text-white rounded-full text-sm hover:bg-green-600">
+            <button onClick={handleScan} className="px-6 py-2 bg-(--color-primary) text-(--color-bg) rounded-full text-sm hover:bg-(--color-primary-dark) font-medium">
               开始扫描
             </button>
           )}
@@ -175,14 +178,16 @@ export default function Shelf() {
         <div className="book-grid">
           {books.map(book => (
             <div key={book.id} className="book-card" onClick={() => handleBookClick(book)}>
-              <div className="book-cover" style={getCoverStyle(book)}>
+              <div className="book-cover" style={!book.cover_path ? getCoverFallback(book) : undefined}>
+                {book.cover_path
+                  ? <img src={getThumbUrl(book.cover_path)} alt={book.title} loading="lazy" className="w-full h-full object-cover rounded-[4px]" />
+                  : <span>{book.title.slice(0, 8)}</span>}
                 <span className="book-format-badge">{FORMAT_LABELS[book.format] || book.format}</span>
-                {!book.cover_path && <span>{book.title.slice(0, 8)}</span>}
               </div>
               <div className="book-title">{book.title}</div>
               <div className="book-author">{book.author || '未知作者'}</div>
               {book.subcategory && (
-                <div className="text-xs text-gray-400 mt-0.5 truncate">{book.category} · {book.subcategory}</div>
+                <div className="text-xs text-(--color-text-secondary) mt-0.5 truncate">{book.category} · {book.subcategory}</div>
               )}
               {book.progress && book.progress.progress_percent > 0 && (
                 <div className="book-progress-bar">
@@ -198,10 +203,10 @@ export default function Shelf() {
       {total > 48 && (
         <div className="flex justify-center gap-4 mt-8">
           <button disabled={page === 1} onClick={() => setPage(p => p - 1)}
-            className="px-4 py-2 rounded-lg text-sm bg-white dark:bg-gray-800 border dark:border-gray-700 disabled:opacity-40 hover:border-green-300 transition-colors">上一页</button>
-          <span className="text-sm leading-10 text-gray-400">{page} / {Math.ceil(total / 48)}</span>
+            className="px-4 py-2 rounded-lg text-sm bg-(--color-card-raised) border border-(--color-border) disabled:opacity-40 hover:border-(--color-primary) transition-colors text-(--color-text)">上一页</button>
+          <span className="text-sm leading-10 text-(--color-text-secondary)">{page} / {Math.ceil(total / 48)}</span>
           <button disabled={page >= Math.ceil(total / 48)} onClick={() => setPage(p => p + 1)}
-            className="px-4 py-2 rounded-lg text-sm bg-white dark:bg-gray-800 border dark:border-gray-700 disabled:opacity-40 hover:border-green-300 transition-colors">下一页</button>
+            className="px-4 py-2 rounded-lg text-sm bg-(--color-card-raised) border border-(--color-border) disabled:opacity-40 hover:border-(--color-primary) transition-colors text-(--color-text)">下一页</button>
         </div>
       )}
     </div>

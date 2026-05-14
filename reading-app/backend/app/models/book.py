@@ -27,19 +27,19 @@ class Book(Base):
     isbn: Mapped[str | None] = mapped_column(String(50), default="")
     cover_path: Mapped[str | None] = mapped_column(String(1000), default="")
     file_path: Mapped[str] = mapped_column(String(1000), unique=True)
-    format: Mapped[BookFormat] = mapped_column(String(10))
+    format: Mapped[BookFormat] = mapped_column(String(10), index=True)
     file_size: Mapped[int | None] = mapped_column(Integer, default=0)
     page_count: Mapped[int | None] = mapped_column(Integer, default=0)
     word_count: Mapped[int | None] = mapped_column(Integer, default=0)
     description: Mapped[str | None] = mapped_column(Text, default="")
-    category: Mapped[str | None] = mapped_column(String(200), default="")
+    category: Mapped[str | None] = mapped_column(String(200), default="", index=True)
     subcategory: Mapped[str | None] = mapped_column(String(200), default="")
     tags: Mapped[str | None] = mapped_column(String(500), default="")
     is_indexed: Mapped[bool] = mapped_column(default=False)
     is_parsed: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow)
     updated_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow,
-                                                           onupdate=datetime.datetime.utcnow)
+                                                           onupdate=datetime.datetime.utcnow, index=True)
 
     progress: Mapped["ReadingProgress | None"] = relationship(back_populates="book", uselist=False, lazy="raise")
     highlights: Mapped[list["Highlight"]] = relationship(back_populates="book", lazy="raise")
@@ -65,7 +65,7 @@ class Highlight(Base):
     __tablename__ = "highlights"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    book_id: Mapped[int] = mapped_column(ForeignKey("books.id", ondelete="CASCADE"))
+    book_id: Mapped[int] = mapped_column(ForeignKey("books.id", ondelete="CASCADE"), index=True)
     chapter: Mapped[str | None] = mapped_column(String(500), default="")
     page: Mapped[int | None] = mapped_column(Integer, default=0)
     cfi: Mapped[str | None] = mapped_column(String(500), default="")

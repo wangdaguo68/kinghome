@@ -1,42 +1,91 @@
 import os
+import time
 from pathlib import Path
 from ..core.config import CACHE_DIR
 
+# ---------- TTL cache for opened documents ----------
+_ttl_cache: dict = {}
+_CACHE_TTL = 300  # 5 minutes
+_CACHE_MAX = 16
 
-def _ensure_epub_images(file_path: str) -> dict[str, str]:
-    """Extract all images from an EPUB to cache and return {orig_name: cache_url} map."""
+def _cache_get(key: str):
+    entry = _ttl_cache.get(key)
+    if entry and time.time() - entry[0] < _CACHE_TTL:
+        _ttl_cache[key] = (time.time(), entry[1])  # bump
+        return entry[1]
+    return None
+
+def _cache_set(key: str, value):
+    if len(_ttl_cache) >= _CACHE_MAX:
+        oldest = min(_ttl_cache, key=lambda k: _ttl_cache[k][0])
+        del _ttl_cache[oldest]
+    _ttl_cache[key] = (time.time(), value)
+
+
+def _get_cached_pdf_doc(file_path: str):
+    """Return a fitz.Document, cached in memory for 5 min."""
+    key = f"pdf_doc:{file_path}"
+    doc = _cache_get(key)
+    if doc is not None:
+        return doc
+    import fitz
+    doc = fitz.open(file_path)
+    _cache_set(key, doc)
+    return doc
+
+
+def _get_cached_epub_book(file_path: str):
+    """Return a parsed epub book object, cached in memory for 5 min."""
+    key = f"epub_book:{file_path}"
+    book = _cache_get(key)
+    if book is not None:
+        return book
     from ebooklib import epub
-    images_map = {}
     book = epub.read_epub(file_path)
+    _cache_set(key, book)
+    return book
+
+
+def _cached_epub_images(file_path: str) -> dict[str, str]:
+    """Extract images from EPUB, cached. Returns {orig_name: cache_url}."""
+    key = f"epub_images:{file_path}"
+    cached = _cache_get(key)
+    if cached is not None:
+        return cached
+    book = _get_cached_epub_book(file_path)
+    images_map = {}
     for item in book.get_items():
         if item.get_type() == 7:  # ITEM_IMAGE
-            ext = Path(item.get_name()).suffix.lower()
-            # Use a stable name based on the original path to avoid duplicates
             safe_name = item.get_name().replace("/", "_").replace("\\", "_")
             img_path = CACHE_DIR / "images" / safe_name
             img_path.parent.mkdir(parents=True, exist_ok=True)
             if not img_path.exists():
                 img_path.write_bytes(item.get_content())
             images_map[item.get_name()] = f"/static/cache/images/{safe_name}"
+    _cache_set(key, images_map)
     return images_map
 
 
-def _get_epub_css(file_path: str) -> str:
-    """Extract all CSS from an EPUB."""
-    from ebooklib import epub
+def _cached_epub_css(file_path: str) -> str:
+    """Extract CSS from EPUB, cached."""
+    key = f"epub_css:{file_path}"
+    cached = _cache_get(key)
+    if cached is not None:
+        return cached
+    book = _get_cached_epub_book(file_path)
     css_parts = []
-    book = epub.read_epub(file_path)
     for item in book.get_items_of_type(5):  # ITEM_STYLE
         css_parts.append(item.get_content().decode("utf-8", errors="ignore"))
-    return "\n".join(css_parts)
+    css = "\n".join(css_parts)
+    _cache_set(key, css)
+    return css
 
 
 def get_epub_chapter_html(file_path: str, chapter_index: int) -> dict:
     """Return a single EPUB chapter as HTML with CSS and resolved image paths."""
-    from ebooklib import epub
     from bs4 import BeautifulSoup
 
-    book = epub.read_epub(file_path)
+    book = _get_cached_epub_book(file_path)
     spine = list(book.get_items_of_type(9))  # ITEM_DOCUMENT
     if not spine:
         for item in book.get_items():
@@ -46,9 +95,8 @@ def get_epub_chapter_html(file_path: str, chapter_index: int) -> dict:
     if chapter_index < 0 or chapter_index >= len(spine):
         return {"html": "", "title": "", "css": "", "index": chapter_index, "total": len(spine)}
 
-    # Extract images once (cached on disk)
-    images_map = _ensure_epub_images(file_path)
-    css = _get_epub_css(file_path)
+    images_map = _cached_epub_images(file_path)
+    css = _cached_epub_css(file_path)
 
     item = spine[chapter_index]
     html = item.get_body_content().decode("utf-8", errors="ignore")
@@ -60,13 +108,11 @@ def get_epub_chapter_html(file_path: str, chapter_index: int) -> dict:
         if src in images_map:
             img["src"] = images_map[src]
         elif src:
-            # Try matching by filename
             for orig, cache_url in images_map.items():
                 if orig.endswith(src) or src.endswith(orig):
                     img["src"] = cache_url
                     break
 
-    # Try to find a title
     title = f"Chapter {chapter_index + 1}"
     for h in soup.find_all(["h1", "h2", "h3"]):
         t = h.get_text().strip()
@@ -88,8 +134,7 @@ def convert_epub_to_html(file_path: str, book_id: int) -> dict:
     total = 0
     chapters_meta = []
     try:
-        from ebooklib import epub
-        book = epub.read_epub(file_path)
+        book = _get_cached_epub_book(file_path)
         spine = list(book.get_items_of_type(9))
         if not spine:
             for item in book.get_items():
@@ -114,35 +159,24 @@ def convert_epub_to_html(file_path: str, book_id: int) -> dict:
 
 
 def convert_pdf_to_html(file_path: str, book_id: int) -> dict:
-    """Return PDF metadata; actual rendering is done client-side with PDF.js."""
-    import fitz
-    doc = fitz.open(file_path)
-    pages = []
-    for i in range(doc.page_count):
-        page = doc[i]
-        pages.append({
-            "index": i,
-            "text": page.get_text(),
-            "width": page.rect.width,
-            "height": page.rect.height,
-        })
-    doc.close()
-    return {"pages": pages, "total_pages": len(pages), "format": "pdf"}
+    """Return PDF page count only — page images are served separately."""
+    doc = _get_cached_pdf_doc(file_path)
+    total = doc.page_count
+    return {"total_pages": total, "format": "pdf"}
 
 
 def convert_pdf_page_to_image(file_path: str, book_id: int, page_num: int) -> str:
-    """Render a PDF page as PNG image."""
+    """Render a PDF page as PNG image (cached on disk)."""
     import fitz
     cache_key = f"pdf_{book_id}_p{page_num}.png"
     cache_path = CACHE_DIR / "pdf_pages" / cache_key
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     if cache_path.exists():
         return str(cache_path)
-    doc = fitz.open(file_path)
+    doc = _get_cached_pdf_doc(file_path)
     page = doc[page_num]
     pix = page.get_pixmap(dpi=150)
     pix.save(str(cache_path))
-    doc.close()
     return str(cache_path)
 
 
@@ -180,8 +214,7 @@ def convert_mobi_to_text(file_path: str) -> str:
 def get_book_toc(file_path: str, fmt: str) -> list[dict]:
     try:
         if fmt == "epub":
-            from ebooklib import epub
-            book = epub.read_epub(file_path)
+            book = _get_cached_epub_book(file_path)
             toc = []
             for item in book.toc:
                 if isinstance(item, tuple) and len(item) >= 2:
@@ -190,10 +223,8 @@ def get_book_toc(file_path: str, fmt: str) -> list[dict]:
                     toc.append({"title": item.title, "href": getattr(item, "href", "")})
             return toc
         elif fmt == "pdf":
-            import fitz
-            doc = fitz.open(file_path)
+            doc = _get_cached_pdf_doc(file_path)
             toc = doc.get_toc()
-            doc.close()
             return [{"level": t[0], "title": t[1], "page": t[2] - 1} for t in toc]
     except Exception:
         pass
@@ -202,9 +233,8 @@ def get_book_toc(file_path: str, fmt: str) -> list[dict]:
 
 def get_chapter_content(file_path: str, fmt: str, chapter_index: int) -> str:
     if fmt == "epub":
-        from ebooklib import epub
         from bs4 import BeautifulSoup
-        book = epub.read_epub(file_path)
+        book = _get_cached_epub_book(file_path)
         items = list(book.get_items_of_type(9))
         if chapter_index < len(items):
             return BeautifulSoup(
@@ -212,9 +242,7 @@ def get_chapter_content(file_path: str, fmt: str, chapter_index: int) -> str:
                 "html.parser"
             ).get_text()
     elif fmt == "pdf":
-        import fitz
-        doc = fitz.open(file_path)
+        doc = _get_cached_pdf_doc(file_path)
         if chapter_index < doc.page_count:
             return doc[chapter_index].get_text()
-        doc.close()
     return ""

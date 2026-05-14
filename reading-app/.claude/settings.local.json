@@ -53,7 +53,9 @@
       "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(f'categories={len\\(d\\)}'\\)\")",
       "Bash(python *)",
       "Bash(taskkill //f //pid 30596)",
-      "Bash(taskkill //f //pid 22164)"
+      "Bash(taskkill //f //pid 22164)",
+      "Bash(npx localtunnel *)",
+      "Bash(ssh *)"
     ]
   }
 }

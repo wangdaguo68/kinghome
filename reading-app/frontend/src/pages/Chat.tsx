@@ -122,11 +122,11 @@ export default function Chat() {
   };
 
   return (
-    <div className="chat-container dark:bg-gray-900">
-      <div className="chat-sidebar dark:bg-gray-800 dark:border-gray-700">
+    <div className="chat-container">
+      <div className="chat-sidebar">
         <div className="p-3">
           <button onClick={handleNewChat}
-            className="w-full py-2.5 bg-green-500 text-white rounded-lg text-sm font-medium hover:bg-green-600 transition-colors">
+            className="w-full py-2.5 bg-(--color-primary) text-(--color-bg) rounded-lg text-sm font-medium hover:bg-(--color-primary-dark) transition-colors">
             + 新对话
           </button>
         </div>
@@ -134,34 +134,34 @@ export default function Chat() {
           {conversations.map(c => (
             <div key={c.id}
               onClick={() => setActiveConv(c.id)}
-              className={`px-3 py-3 rounded-lg cursor-pointer text-sm mb-0.5 flex items-center justify-between group transition-colors ${activeConv === c.id ? 'bg-green-50 dark:bg-green-900/20 text-green-600' : 'hover:bg-gray-50 dark:hover:bg-gray-750'}`}>
+              className={`px-3 py-3 rounded-lg cursor-pointer text-sm mb-0.5 flex items-center justify-between group transition-colors ${activeConv === c.id ? 'bg-(--color-primary)/10 text-(--color-primary)' : 'text-(--color-text-secondary) hover:bg-(--color-card-raised)'}`}>
               <span className="truncate flex-1" onDoubleClick={() => setEditingTitle(c.id)}>
                 {editingTitle === c.id ? (
                   <input autoFocus defaultValue={c.title}
                     onBlur={() => setEditingTitle(null)}
                     onKeyDown={e => { if (e.key === 'Enter') setEditingTitle(null); }}
-                    className="w-full border rounded px-1 py-0.5 text-xs outline-none"
+                    className="w-full border border-(--color-border) rounded px-1 py-0.5 text-xs outline-none bg-(--color-card) text-(--color-text)"
                     onClick={e => e.stopPropagation()} />
                 ) : c.title}
               </span>
               <button onClick={(e) => { e.stopPropagation(); handleDeleteConv(c.id); }}
-                className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 ml-1 text-xs transition-opacity">✕</button>
+                className="opacity-0 group-hover:opacity-100 text-(--color-text-secondary) hover:text-red-400 ml-1 text-xs transition-opacity">✕</button>
             </div>
           ))}
           {conversations.length === 0 && (
-            <p className="text-center text-gray-400 text-sm py-8">暂无对话</p>
+            <p className="text-center text-(--color-text-secondary) text-sm py-8">暂无对话</p>
           )}
         </div>
       </div>
 
       <div className="chat-main">
-        <div className="flex items-center gap-4 px-5 py-2 border-b border-gray-100 dark:border-gray-700 text-xs">
+        <div className="flex items-center gap-4 px-5 py-2 border-b border-(--color-border) text-xs">
           <label className="flex items-center gap-1.5 cursor-pointer">
             <input type="checkbox" checked={useRag} onChange={e => setUseRag(e.target.checked)} />
-            <span className="text-gray-500">知识库增强</span>
+            <span className="text-(--color-text-secondary)">知识库增强</span>
           </label>
           <select value={model} onChange={e => setModel(e.target.value)}
-            className="border rounded-lg px-2 py-1 text-xs dark:bg-gray-700 dark:border-gray-600 outline-none">
+            className="border border-(--color-border) rounded-lg px-2 py-1 text-xs bg-(--color-card) text-(--color-text) outline-none">
             {providers.length > 0 ? providers.map(p => (
               <option key={p.id} value={p.model_id}>{p.name} - {p.model_id}</option>
             )) : (
@@ -176,13 +176,13 @@ export default function Chat() {
 
         <div className="chat-messages">
           {messages.length === 0 && !streamingText && (
-            <div className="flex flex-col items-center justify-center h-full text-gray-400">
+            <div className="flex flex-col items-center justify-center h-full text-(--color-text-secondary)">
               <p className="text-xl mb-2">AI 知识库助手</p>
               <p className="text-sm mb-8">基于你上万本书籍的知识库，随时提问</p>
               <div className="grid grid-cols-2 gap-3 w-full max-w-lg text-xs">
                 {['《思考，快与慢》的核心观点是什么？', '推荐几本关于投资理财的书', '如何提升专注力和效率？', '中国近代史的关键转折点有哪些？'].map(q => (
                   <button key={q} onClick={() => setInput(q)}
-                    className="p-3 rounded-lg border border-gray-200 dark:border-gray-600 hover:border-green-300 dark:hover:border-green-500 text-left transition-colors">
+                    className="p-3 rounded-lg border border-(--color-border) hover:border-(--color-primary) text-left transition-colors text-(--color-text)">
                     {q}
                   </button>
                 ))}
@@ -190,35 +190,35 @@ export default function Chat() {
             </div>
           )}
           {messages.map(m => (
-            <div key={m.id} className={`message-bubble ${m.role === 'user' ? 'message-user' : 'message-assistant dark:bg-gray-700 dark:border-gray-600'}`}>
+            <div key={m.id} className={`message-bubble ${m.role === 'user' ? 'message-user' : 'message-assistant'}`}>
               {m.role === 'assistant' ? (
-                <div className="prose prose-sm dark:text-gray-200 max-w-none">
+                <div className="prose prose-sm max-w-none text-(--color-text)">
                   <ReactMarkdown>{m.content}</ReactMarkdown>
                 </div>
               ) : (
                 <p className="whitespace-pre-wrap">{m.content}</p>
               )}
               {m.citations && m.citations.length > 0 && (
-                <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-600">
-                  <p className="text-xs text-gray-400 mb-1">参考书籍</p>
+                <div className="mt-3 pt-3 border-t border-(--color-border)">
+                  <p className="text-xs text-(--color-text-secondary) mb-1">参考书籍</p>
                   {m.citations.map((c, i) => (
-                    <span key={i} className="citation dark:bg-gray-600 dark:text-gray-300">{c.title}{c.snippet ? ` · ${c.snippet.slice(0, 50)}...` : ''}</span>
+                    <span key={i} className="citation">{c.title}{c.snippet ? ` · ${c.snippet.slice(0, 50)}...` : ''}</span>
                   ))}
                 </div>
               )}
             </div>
           ))}
           {loading && !streamingText && (
-            <div className="message-bubble message-assistant dark:bg-gray-700">
-              <p className="text-sm text-gray-400 mb-2">AI 正在思考...</p>
+            <div className="message-bubble message-assistant">
+              <p className="text-sm text-(--color-text-secondary) mb-2">AI 正在思考...</p>
               <div className="typing-dots">
                 <span /><span /><span />
               </div>
             </div>
           )}
           {streamingText && (
-            <div className="message-bubble message-assistant dark:bg-gray-700">
-              <div className="prose prose-sm dark:text-gray-200 max-w-none">
+            <div className="message-bubble message-assistant">
+              <div className="prose prose-sm max-w-none text-(--color-text)">
                 <ReactMarkdown>{streamingText}</ReactMarkdown>
               </div>
               <div className="typing-dots mt-2">
@@ -229,21 +229,21 @@ export default function Chat() {
           <div ref={messagesEndRef} />
         </div>
 
-        <div className="chat-input-area dark:bg-gray-800 dark:border-gray-700">
+        <div className="chat-input-area">
           <div className="flex gap-3">
             <textarea
               value={input} onChange={e => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="输入问题，基于书库知识回答..."
               rows={2}
-              className="flex-1 resize-none border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-green-400 transition-colors"
+              className="flex-1 resize-none border border-(--color-border) bg-(--color-card) text-(--color-text) rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-(--color-primary) transition-colors placeholder:text-(--color-text-secondary)"
             />
             <button onClick={handleSend} disabled={loading || !input.trim()}
-              className="px-6 py-3 bg-green-500 text-white rounded-xl text-sm font-medium hover:bg-green-600 disabled:opacity-40 disabled:cursor-not-allowed self-end transition-colors">
+              className="px-6 py-3 bg-(--color-primary) text-(--color-bg) rounded-xl text-sm font-medium hover:bg-(--color-primary-dark) disabled:opacity-40 disabled:cursor-not-allowed self-end transition-colors">
               {loading ? '思考中' : '发送'}
             </button>
           </div>
-          <p className="text-xs text-gray-400 mt-2 text-center">Enter 发送 · Shift+Enter 换行</p>
+          <p className="text-xs text-(--color-text-secondary) mt-2 text-center">Enter 发送 · Shift+Enter 换行</p>
         </div>
       </div>
     </div>

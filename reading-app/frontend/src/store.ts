@@ -15,20 +15,11 @@ export const useReadingStore = create<ReadingState>((set) => ({
 }));
 
 interface UIState {
-  darkMode: boolean;
   sidebarOpen: boolean;
-  toggleDarkMode: () => void;
   setSidebarOpen: (open: boolean) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
-  darkMode: false,
   sidebarOpen: true,
-  toggleDarkMode: () =>
-    set((s) => {
-      const next = !s.darkMode;
-      document.documentElement.classList.toggle('dark', next);
-      return { darkMode: next };
-    }),
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
 }));

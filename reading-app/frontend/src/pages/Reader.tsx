@@ -5,13 +5,8 @@ import HtmlEpubReader from '../components/HtmlEpubReader';
 import PdfReader from '../components/PdfReader';
 import HighlightsPanel from '../components/HighlightsPanel';
 
-type Theme = 'white' | 'beige' | 'green' | 'dark';
 type ReadingMode = 'scroll' | 'page' | 'double';
 
-const THEME_CLASSES: Record<Theme, string> = {
-  white: 'theme-white', beige: 'theme-beige', green: 'theme-green', dark: 'theme-dark',
-};
-const THEME_LABELS: Record<Theme, string> = { white: '白色', beige: '米黄', green: '护眼', dark: '夜间' };
 const FONT_SIZES = [14, 16, 18, 20, 22, 24];
 const LINE_HEIGHTS = [1.6, 1.8, 2.0, 2.2];
 const MARGINS: { label: string; value: number }[] = [
@@ -55,24 +50,19 @@ export default function Reader() {
   const [showSettings, setShowSettings] = useState(false);
   const [progress, setProgress] = useState({ currentPage: 0, totalPages: 0, percent: 0, chapter: '' });
 
-  // Reading preferences
-  const [theme, setTheme] = useState<Theme>('white');
   const [fontSize, setFontSize] = useState(16);
-  const [lineHeight, setLineHeight] = useState(1.8);
+  const [lineHeight, setLineHeight] = useState(1.9);
   const [marginWidth, setMarginWidth] = useState(750);
 
-  // New: reading modes
   const [readingMode, setReadingMode] = useState<ReadingMode>('scroll');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [autoFlip, setAutoFlip] = useState({ enabled: false, speed: 10 });
 
-  // Eye protection
   const [blueLight, setBlueLight] = useState(0);
   const [breakReminder, setBreakReminder] = useState({ enabled: false, interval: 30 });
   const [focusMode, setFocusMode] = useState(false);
 
-  // UI toggles
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showGoToPage, setShowGoToPage] = useState(false);
   const [goToPageInput, setGoToPageInput] = useState('');
@@ -81,11 +71,9 @@ export default function Reader() {
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const secondsRef = useRef(0);
-  const lastScrollY = useRef(0);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const breakTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const autoFlipTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const topBarTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [format, setFormat] = useState<string>('');
 
   // Load book info
@@ -99,13 +87,14 @@ export default function Reader() {
     getBook(id).then(r => {
       setBook(r.data);
       setFormat((r.data.format || '').toLowerCase());
-    }).catch(e => setLoadError('Failed to load book info'));
+    }).catch(() => setLoadError('Failed to load book info'));
 
     getBookContent(id).then(r => {
       const data = r.data;
       setContent(data);
       if (data.total_pages) setTotalPages(data.total_pages);
-    }).catch(() => {}); // Non-fatal for EPUB
+      if (data.total_chapters) setTotalPages(data.total_chapters);
+    }).catch(() => {});
 
     getBookToc(id).then(r => setToc(r.data.toc || [])).catch(() => {});
     setBookmarks(loadBookmarks(id));
@@ -138,9 +127,7 @@ export default function Reader() {
   // Break reminder timer
   useEffect(() => {
     if (breakReminder.enabled && !breakActive) {
-      breakTimerRef.current = setInterval(() => {
-        setBreakActive(true);
-      }, breakReminder.interval * 60 * 1000);
+      breakTimerRef.current = setInterval(() => setBreakActive(true), breakReminder.interval * 60 * 1000);
     } else {
       if (breakTimerRef.current) clearInterval(breakTimerRef.current);
     }
@@ -179,6 +166,12 @@ export default function Reader() {
     }
   }, [bookId]);
 
+  const scrollPage = useCallback((dir: 1 | -1) => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    container.scrollBy({ top: dir * container.clientHeight * 0.8, behavior: 'smooth' });
+  }, []);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -186,13 +179,16 @@ export default function Reader() {
 
       if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
         e.preventDefault();
-        if (readingMode !== 'scroll') setCurrentPage(p => Math.min(p + 1, totalPages || p + 1));
+        if (readingMode === 'scroll') scrollPage(1);
+        else setCurrentPage(p => Math.min(p + 1, totalPages || p + 1));
       } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
         e.preventDefault();
-        if (readingMode !== 'scroll') setCurrentPage(p => Math.max(p - 1, 1));
+        if (readingMode === 'scroll') scrollPage(-1);
+        else setCurrentPage(p => Math.max(p - 1, 1));
       } else if (e.key === ' ') {
         e.preventDefault();
-        if (readingMode !== 'scroll') setCurrentPage(p => Math.min(p + 1, totalPages || p + 1));
+        if (readingMode === 'scroll') scrollPage(1);
+        else setCurrentPage(p => Math.min(p + 1, totalPages || p + 1));
       } else if (e.key === 'f' || e.key === 'F') {
         e.preventDefault();
         toggleFullscreen();
@@ -220,14 +216,11 @@ export default function Reader() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [readingMode, totalPages, bookId]);
+  }, [readingMode, totalPages, bookId, scrollPage]);
 
   const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen?.();
-    } else {
-      document.exitFullscreen?.();
-    }
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+    else document.exitFullscreen?.();
   };
 
   const addBookmark = () => {
@@ -245,18 +238,19 @@ export default function Reader() {
     }
   };
 
-  // Determine if we have enough to render
   const isEpub = format === 'epub';
   const isPdf = format === 'pdf';
-  const canRender = book && (isEpub || content); // EPUB can render without content, others need it
+  const isMobi = format === 'mobi';
+  // EPUB renders without content; PDF/MOBI need it
+  const canRender = book && (isEpub || isPdf || (isMobi && content));
 
   if (loadError) {
     return (
-      <div className="flex items-center justify-center h-screen text-gray-500">
+      <div className="flex items-center justify-center h-screen">
         <div className="text-center">
           <p className="text-red-400 text-lg mb-4">加载失败</p>
-          <p className="text-sm mb-6">{loadError}</p>
-          <button onClick={() => navigate('/')} className="px-4 py-2 bg-green-500 text-white rounded-lg text-sm">返回书架</button>
+          <p className="text-sm mb-6 text-(--color-text-secondary)">{loadError}</p>
+          <button onClick={() => navigate('/')} className="px-4 py-2 bg-(--color-primary) text-(--color-bg) rounded-lg text-sm font-medium">返回书架</button>
         </div>
       </div>
     );
@@ -264,7 +258,7 @@ export default function Reader() {
 
   if (!canRender) {
     return (
-      <div className="flex items-center justify-center h-screen text-gray-400">
+      <div className="flex items-center justify-center h-screen">
         <div className="text-center">
           <div className="skeleton w-16 h-16 rounded-full mx-auto mb-4" />
           <div className="skeleton h-5 w-48 mx-auto mb-2" />
@@ -274,86 +268,69 @@ export default function Reader() {
     );
   }
 
-  const readerStyle = {
-    fontSize: `${fontSize}px`,
-    lineHeight: lineHeight,
-    maxWidth: readingMode === 'double' ? '1200px' : `${marginWidth}px`,
-  };
-
-  const blueLightStyle = blueLight > 0 ? {
-    filter: `sepia(${blueLight * 0.3}%) hue-rotate(${-blueLight * 0.5}deg)`,
-  } : {};
-
   return (
-    <div className={`flex flex-col h-screen ${THEME_CLASSES[theme]} ${focusMode ? 'reader-focus' : ''}`} style={blueLightStyle}>
+    <div className={`flex flex-col h-screen ${focusMode ? 'reader-focus' : ''}`}
+      style={blueLight > 0 ? { filter: `sepia(${blueLight * 0.3}%) hue-rotate(${-blueLight * 0.5}deg)` } : undefined}>
+
       {/* Top bar */}
-      <div className={`reader-bar dark:bg-gray-800 dark:border-gray-700 ${focusMode ? 'reader-bar-auto' : ''}`}>
-        <button onClick={() => navigate('/')} className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400">
+      <div className={`reader-bar ${focusMode ? 'reader-bar-auto' : ''}`}>
+        <button onClick={() => navigate('/')} className="text-sm text-(--color-text-secondary) hover:text-(--color-text) transition-colors">
           ← 返回
         </button>
-        <div className="flex items-center gap-4">
-          <span className="text-sm font-medium truncate max-w-[200px]">{book.title}</span>
-          {/* Reading mode */}
-          <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-0.5">
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-medium truncate max-w-[200px] text-(--color-text)">{book?.title}</span>
+          <div className="flex items-center gap-0.5 bg-(--color-bg) rounded-lg p-0.5 border border-(--color-border)">
             {(['scroll', 'page', 'double'] as ReadingMode[]).map(mode => (
               <button key={mode} onClick={() => setReadingMode(mode)}
-                className={`px-2 py-1 rounded text-xs ${readingMode === mode ? 'bg-white dark:bg-gray-600 shadow-sm font-medium' : 'text-gray-500'}`}>
+                className={`px-2 py-1 rounded text-xs transition-colors ${readingMode === mode ? 'bg-(--color-card-raised) text-(--color-primary) font-medium border border-(--color-border)' : 'text-(--color-text-secondary) hover:text-(--color-text)'}`}>
                 {mode === 'scroll' ? '滚动' : mode === 'page' ? '单页' : '双页'}
               </button>
             ))}
           </div>
-          {/* Auto-flip */}
           {readingMode !== 'scroll' && (
             <button onClick={() => setAutoFlip(f => ({ ...f, enabled: !f.enabled }))}
-              className={`text-xs px-2 py-1 rounded ${autoFlip.enabled ? 'bg-green-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-500'}`}>
+              className={`text-xs px-2 py-1 rounded transition-colors ${autoFlip.enabled ? 'bg-(--color-primary) text-(--color-bg) font-medium' : 'bg-(--color-bg) text-(--color-text-secondary) border border-(--color-border)'}`}>
               {autoFlip.enabled ? `自动 ${autoFlip.speed}s` : '自动'}
             </button>
           )}
-          <button onClick={toggleFullscreen} className="text-sm text-gray-400 hover:text-gray-600" title="全屏 (F)">
-            ⛶
-          </button>
-          <button onClick={() => setShowHighlights(!showHighlights)} className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400">
-            笔记
-          </button>
-          <button onClick={() => setShowToc(!showToc)} className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400">
-            目录
-          </button>
-          <button onClick={() => setShowSettings(!showSettings)} className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400">
-            Aa
-          </button>
+          <button onClick={toggleFullscreen} className="text-sm text-(--color-text-secondary) hover:text-(--color-text) transition-colors" title="全屏 (F)">⛶</button>
+          <button onClick={() => setShowHighlights(!showHighlights)} className="text-sm text-(--color-text-secondary) hover:text-(--color-text) transition-colors">笔记</button>
+          <button onClick={() => setShowToc(!showToc)} className="text-sm text-(--color-text-secondary) hover:text-(--color-text) transition-colors">目录</button>
+          <button onClick={() => setShowSettings(!showSettings)} className="text-sm text-(--color-text-secondary) hover:text-(--color-text) transition-colors">Aa</button>
         </div>
       </div>
 
       {/* Content area */}
       <div className="flex-1 relative overflow-hidden">
-        {/* Page mode: click zones and navigation */}
         {readingMode !== 'scroll' && (
           <>
-            <button className="absolute left-0 top-0 w-[30%] h-full z-10 cursor-pointer opacity-0 hover:opacity-100 transition-opacity"
-              onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
-              title="上一页 (←)" />
-            <button className="absolute right-0 top-0 w-[70%] h-full z-10 cursor-pointer opacity-0 hover:opacity-100 transition-opacity"
-              onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages || p + 1))}
-              title="下一页 (→)" />
-            {/* Page flip arrows */}
+            <button className="absolute left-0 top-0 w-[25%] h-full z-10 cursor-pointer opacity-0 hover:opacity-100 transition-opacity"
+              onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} title="上一页 (←)" />
+            <button className="absolute right-0 top-0 w-[25%] h-full z-10 cursor-pointer opacity-0 hover:opacity-100 transition-opacity"
+              onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages || p + 1))} title="下一页 (→)" />
             <button onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
-              className="absolute left-4 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-white/80 dark:bg-gray-800/80 shadow flex items-center justify-center text-lg hover:bg-white dark:hover:bg-gray-700 transition-colors"
+              className="absolute left-4 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full flex items-center justify-center text-lg transition-colors"
+              style={{ background: 'rgba(44,31,15,0.88)', backdropFilter: 'blur(12px)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
               title="上一页">‹</button>
             <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages || p + 1))}
-              className="absolute right-4 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-white/80 dark:bg-gray-800/80 shadow flex items-center justify-center text-lg hover:bg-white dark:hover:bg-gray-700 transition-colors"
+              className="absolute right-4 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full flex items-center justify-center text-lg transition-colors"
+              style={{ background: 'rgba(44,31,15,0.88)', backdropFilter: 'blur(12px)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
               title="下一页">›</button>
           </>
         )}
 
         <div ref={scrollContainerRef}
-          className={readingMode === 'scroll' ? 'epub-view' : 'reader-page-container'}
-          style={readingMode === 'scroll' ? readerStyle : undefined}>
+          className={readingMode === 'scroll' ? (isEpub ? 'epub-view' : 'pdf-container') : 'reader-page-container'}>
+
           {isPdf ? (
-            <PdfReader bookId={+bookId!} book={book} onProgress={handleProgress}
-              pageMode={readingMode !== 'scroll'} currentPage={currentPage} onPageTotal={setTotalPages} />
+            <PdfReader bookId={+bookId!} onProgress={handleProgress}
+              pageMode={readingMode !== 'scroll'} currentPage={currentPage} onPageTotal={setTotalPages}
+              totalPages={content?.total_pages || 0} />
           ) : (
-            <HtmlEpubReader bookId={+bookId!} onProgress={handleProgress} theme={theme}
+            <HtmlEpubReader bookId={+bookId!} onProgress={handleProgress}
               fontSize={fontSize} lineHeight={lineHeight} marginWidth={marginWidth}
+              isMobi={isMobi} mobiContent={isMobi ? content?.content : null}
+              chapters={content?.chapters}
               pageMode={readingMode !== 'scroll'} currentPage={currentPage}
               onPageChange={setCurrentPage} onPageTotal={setTotalPages} />
           )}
@@ -361,52 +338,51 @@ export default function Reader() {
 
         {/* TOC sidebar */}
         {showToc && (
-          <div className="absolute right-0 top-0 w-80 h-full bg-white dark:bg-gray-800 shadow-xl border-l border-gray-200 dark:border-gray-700 overflow-y-auto z-20" style={{ animation: 'slideUp 0.2s ease' } as any}>
+          <div className="absolute right-0 top-0 w-80 h-full shadow-xl border-l overflow-y-auto z-20"
+            style={{ background: 'var(--color-card-raised)', borderColor: 'var(--color-border)', animation: 'slideUp 0.2s ease' } as any}>
             <div className="p-4">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="font-medium">目录</h3>
-                <button onClick={() => setShowToc(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+                <h3 className="font-medium text-(--color-text)">目录</h3>
+                <button onClick={() => setShowToc(false)} className="text-(--color-text-secondary) hover:text-(--color-text)">✕</button>
               </div>
-              {/* Bookmarks tab */}
               {bookmarks.length > 0 && (
                 <div className="mb-4">
-                  <p className="text-xs font-medium text-gray-400 mb-2">书签 ({bookmarks.length})</p>
+                  <p className="text-xs font-medium text-(--color-text-secondary) mb-2">书签 ({bookmarks.length})</p>
                   {bookmarks.map((bm: any, i: number) => (
-                    <div key={i} className="text-sm py-1.5 cursor-pointer hover:text-green-500 flex items-center gap-2"
+                    <div key={i} className="text-sm py-1.5 cursor-pointer hover:text-(--color-primary) flex items-center gap-2 text-(--color-text)"
                       onClick={() => { setCurrentPage(bm.page); setReadingMode('page'); setShowToc(false); }}>
-                      <span className="text-green-400">🔖</span>
+                      <span>🔖</span>
                       <span>第 {bm.page} 页</span>
-                      <span className="text-xs text-gray-400">{new Date(bm.time).toLocaleDateString()}</span>
+                      <span className="text-xs text-(--color-text-secondary)">{new Date(bm.time).toLocaleDateString()}</span>
                     </div>
                   ))}
                 </div>
               )}
-              <p className="text-xs font-medium text-gray-400 mb-2">章节</p>
+              <p className="text-xs font-medium text-(--color-text-secondary) mb-2">章节</p>
               {toc.map((item: any, i: number) => (
-                <div key={i} className="text-sm py-1.5 cursor-pointer hover:text-green-500 truncate"
+                <div key={i} className="text-sm py-1.5 cursor-pointer hover:text-(--color-primary) truncate text-(--color-text)"
                   style={{ paddingLeft: (item.level || 0) * 16 }}
                   onClick={() => setShowToc(false)}>
                   {item.title}
                 </div>
               ))}
-              {toc.length === 0 && <p className="text-sm text-gray-400">暂无目录</p>}
+              {toc.length === 0 && <p className="text-sm text-(--color-text-secondary)">暂无目录</p>}
             </div>
           </div>
         )}
 
         {/* Highlights sidebar */}
         {showHighlights && (
-          <div className="absolute right-0 top-0 w-80 h-full bg-white dark:bg-gray-800 shadow-xl border-l border-gray-200 dark:border-gray-700 overflow-y-auto z-20" style={{ animation: 'slideUp 0.2s ease' } as any}>
+          <div className="absolute right-0 top-0 w-80 h-full shadow-xl border-l overflow-y-auto z-20"
+            style={{ background: 'var(--color-card-raised)', borderColor: 'var(--color-border)', animation: 'slideUp 0.2s ease' } as any}>
             <HighlightsPanel bookId={+bookId!} onClose={() => setShowHighlights(false)} />
           </div>
         )}
       </div>
 
       {/* Bottom bar */}
-      <div className={`reader-bottom-bar dark:bg-gray-800 dark:border-gray-700 ${focusMode ? 'reader-bar-auto' : ''}`}>
-        <span className="text-xs text-gray-400 mr-4">{
-          readingMode !== 'scroll' ? `${currentPage} / ${totalPages || '?'} 页` : ''
-        }</span>
+      <div className={`reader-bottom-bar ${focusMode ? 'reader-bar-auto' : ''}`}>
+        <span className="mr-4">{readingMode !== 'scroll' ? `${currentPage} / ${totalPages || '?'} 页` : ''}</span>
         <span className="truncate max-w-[40%]">{progress.chapter || ''}</span>
         <span className="ml-4">{progress.currentPage} / {progress.totalPages} · {Math.round(progress.percent)}%</span>
       </div>
@@ -417,11 +393,11 @@ export default function Reader() {
           <div className="reader-settings-panel" onClick={e => e.stopPropagation()}>
             {/* Reading mode */}
             <div className="mb-6">
-              <p className="text-sm font-medium mb-3">阅读模式</p>
+              <p className="text-sm font-medium mb-3 text-(--color-text)">阅读模式</p>
               <div className="flex gap-2">
                 {(['scroll', 'page', 'double'] as ReadingMode[]).map(mode => (
                   <button key={mode} onClick={() => setReadingMode(mode)}
-                    className={`px-4 py-2 rounded-lg text-sm ${readingMode === mode ? 'bg-green-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}`}>
+                    className={`px-4 py-2 rounded-lg text-sm ${readingMode === mode ? 'bg-(--color-primary) text-(--color-bg) font-medium' : 'bg-(--color-bg) text-(--color-text-secondary) border border-(--color-border)'}`}>
                     {mode === 'scroll' ? '滚动模式' : mode === 'page' ? '单页翻页' : '双页模式'}
                   </button>
                 ))}
@@ -431,11 +407,11 @@ export default function Reader() {
             {/* Auto-flip speed */}
             {readingMode !== 'scroll' && (
               <div className="mb-6">
-                <p className="text-sm font-medium mb-3">自动翻页速度 (秒/页)</p>
+                <p className="text-sm font-medium mb-3 text-(--color-text)">自动翻页速度 (秒/页)</p>
                 <div className="flex gap-2">
                   {AUTO_FLIP_SPEEDS.map(s => (
                     <button key={s} onClick={() => setAutoFlip(f => ({ ...f, speed: s }))}
-                      className={`px-3 py-1 rounded-lg text-sm ${autoFlip.speed === s ? 'bg-green-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}`}>
+                      className={`px-3 py-1 rounded-lg text-sm ${autoFlip.speed === s ? 'bg-(--color-primary) text-(--color-bg) font-medium' : 'bg-(--color-bg) text-(--color-text-secondary) border border-(--color-border)'}`}>
                       {s}s
                     </button>
                   ))}
@@ -443,40 +419,28 @@ export default function Reader() {
               </div>
             )}
 
-            {/* Theme */}
-            <div className="mb-6">
-              <p className="text-sm font-medium mb-3">阅读主题</p>
-              <div className="flex gap-3">
-                {(Object.keys(THEME_CLASSES) as Theme[]).map(t => (
-                  <button key={t} onClick={() => setTheme(t)}
-                    className={`w-10 h-10 rounded-full border-2 transition-colors ${THEME_CLASSES[t]} ${theme === t ? 'border-green-500 ring-2 ring-green-200' : 'border-gray-200'}`}
-                    title={THEME_LABELS[t]} />
-                ))}
-              </div>
-            </div>
-
             {/* Font size */}
             <div className="mb-6">
-              <p className="text-sm font-medium mb-3">字号</p>
+              <p className="text-sm font-medium mb-3 text-(--color-text)">字号</p>
               <div className="flex items-center gap-1">
-                <span className="text-xs text-gray-400">A</span>
+                <span className="text-xs text-(--color-text-secondary)">A</span>
                 {FONT_SIZES.map(s => (
                   <button key={s} onClick={() => setFontSize(s)}
-                    className={`px-2 py-1 rounded text-sm ${fontSize === s ? 'bg-green-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}`}>
+                    className={`px-2 py-1 rounded text-sm ${fontSize === s ? 'bg-(--color-primary) text-(--color-bg) font-medium' : 'bg-(--color-bg) text-(--color-text-secondary) border border-(--color-border)'}`}>
                     {s}
                   </button>
                 ))}
-                <span className="text-lg font-bold">A</span>
+                <span className="text-lg font-bold text-(--color-text)">A</span>
               </div>
             </div>
 
             {/* Line height */}
             <div className="mb-6">
-              <p className="text-sm font-medium mb-3">行间距</p>
+              <p className="text-sm font-medium mb-3 text-(--color-text)">行间距</p>
               <div className="flex gap-2">
                 {LINE_HEIGHTS.map(lh => (
                   <button key={lh} onClick={() => setLineHeight(lh)}
-                    className={`px-3 py-1 rounded text-sm ${lineHeight === lh ? 'bg-green-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}`}>
+                    className={`px-3 py-1 rounded text-sm ${lineHeight === lh ? 'bg-(--color-primary) text-(--color-bg) font-medium' : 'bg-(--color-bg) text-(--color-text-secondary) border border-(--color-border)'}`}>
                     {lh}x
                   </button>
                 ))}
@@ -485,11 +449,11 @@ export default function Reader() {
 
             {/* Margin */}
             <div className="mb-6">
-              <p className="text-sm font-medium mb-3">页边距</p>
+              <p className="text-sm font-medium mb-3 text-(--color-text)">页边距</p>
               <div className="flex gap-2">
                 {MARGINS.map(m => (
                   <button key={m.value} onClick={() => setMarginWidth(m.value)}
-                    className={`px-3 py-1 rounded text-sm ${marginWidth === m.value ? 'bg-green-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}`}>
+                    className={`px-3 py-1 rounded text-sm ${marginWidth === m.value ? 'bg-(--color-primary) text-(--color-bg) font-medium' : 'bg-(--color-bg) text-(--color-text-secondary) border border-(--color-border)'}`}>
                     {m.label}
                   </button>
                 ))}
@@ -498,26 +462,24 @@ export default function Reader() {
 
             {/* Blue light filter */}
             <div className="mb-6">
-              <p className="text-sm font-medium mb-3">蓝光过滤: {blueLight}%</p>
+              <p className="text-sm font-medium mb-3 text-(--color-text)">蓝光过滤: {blueLight}%</p>
               <input type="range" min="0" max="100" value={blueLight} onChange={e => setBlueLight(+e.target.value)}
-                className="w-full accent-green-500" />
+                className="w-full" style={{ accentColor: 'var(--color-primary)' }} />
             </div>
 
             {/* Break reminder */}
             <div className="mb-6">
-              <p className="text-sm font-medium mb-3">休息提醒</p>
+              <p className="text-sm font-medium mb-3 text-(--color-text)">休息提醒</p>
               <div className="flex items-center gap-3">
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <label className="flex items-center gap-2 text-sm cursor-pointer text-(--color-text)">
                   <input type="checkbox" checked={breakReminder.enabled} onChange={e => setBreakReminder(b => ({ ...b, enabled: e.target.checked }))}
-                    className="accent-green-500" />
+                    style={{ accentColor: 'var(--color-primary)' }} />
                   开启
                 </label>
                 {breakReminder.enabled && (
                   <select value={breakReminder.interval} onChange={e => setBreakReminder(b => ({ ...b, interval: +e.target.value }))}
-                    className="text-sm border rounded px-2 py-1 dark:bg-gray-700 dark:border-gray-600">
-                    {BREAK_INTERVALS.map(i => (
-                      <option key={i} value={i}>每 {i} 分钟</option>
-                    ))}
+                    className="text-sm border rounded px-2 py-1 bg-(--color-bg) border-(--color-border) text-(--color-text)">
+                    {BREAK_INTERVALS.map(i => <option key={i} value={i}>每 {i} 分钟</option>)}
                   </select>
                 )}
               </div>
@@ -526,7 +488,7 @@ export default function Reader() {
             {/* Focus mode */}
             <div>
               <button onClick={() => { setFocusMode(f => !f); setShowSettings(false); }}
-                className={`w-full py-2 rounded-lg text-sm ${focusMode ? 'bg-green-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}`}>
+                className={`w-full py-2 rounded-lg text-sm ${focusMode ? 'bg-(--color-primary) text-(--color-bg) font-medium' : 'bg-(--color-bg) text-(--color-text-secondary) border border-(--color-border)'}`}>
                 {focusMode ? '退出专注模式' : '进入专注模式 (F)'}
               </button>
             </div>
@@ -536,47 +498,47 @@ export default function Reader() {
 
       {/* Break reminder overlay */}
       {breakActive && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center" onClick={() => setBreakActive(false)}>
-          <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 max-w-sm text-center shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center" onClick={() => setBreakActive(false)}>
+          <div className="rounded-2xl p-8 max-w-sm text-center shadow-2xl" style={{ background: 'var(--color-card-raised)', border: '1px solid var(--color-border)' }} onClick={e => e.stopPropagation()}>
             <p className="text-4xl mb-4">🕐</p>
-            <p className="text-lg font-medium mb-2">该休息一下了</p>
-            <p className="text-sm text-gray-500 mb-4">你已经连续阅读了 {breakReminder.interval} 分钟。<br/>看看远处，让眼睛休息 20 秒。</p>
+            <p className="text-lg font-medium mb-2 text-(--color-text)">该休息一下了</p>
+            <p className="text-sm text-(--color-text-secondary) mb-4">你已经连续阅读了 {breakReminder.interval} 分钟。<br/>看看远处，让眼睛休息 20 秒。</p>
             <button onClick={() => setBreakActive(false)}
-              className="px-6 py-2 bg-green-500 text-white rounded-lg text-sm">知道了</button>
+              className="px-6 py-2 bg-(--color-primary) text-(--color-bg) rounded-lg text-sm font-medium">知道了</button>
           </div>
         </div>
       )}
 
       {/* Keyboard shortcuts overlay */}
       {showShortcuts && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center" onClick={() => setShowShortcuts(false)}>
-          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h3 className="font-medium mb-4">键盘快捷键</h3>
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center" onClick={() => setShowShortcuts(false)}>
+          <div className="rounded-2xl p-6 max-w-sm shadow-2xl" style={{ background: 'var(--color-card-raised)', border: '1px solid var(--color-border)' }} onClick={e => e.stopPropagation()}>
+            <h3 className="font-medium mb-4 text-(--color-text)">键盘快捷键</h3>
             <div className="space-y-2">
               {SHORTCUTS.map(s => (
                 <div key={s.keys} className="flex items-center justify-between text-sm">
-                  <span className="text-gray-500">{s.desc}</span>
-                  <kbd className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-xs font-mono">{s.keys}</kbd>
+                  <span className="text-(--color-text-secondary)">{s.desc}</span>
+                  <kbd className="px-2 py-0.5 rounded text-xs font-mono bg-(--color-bg) text-(--color-text-secondary) border border-(--color-border)">{s.keys}</kbd>
                 </div>
               ))}
             </div>
             <button onClick={() => setShowShortcuts(false)}
-              className="mt-4 w-full py-2 bg-gray-100 dark:bg-gray-700 rounded-lg text-sm">关闭</button>
+              className="mt-4 w-full py-2 rounded-lg text-sm bg-(--color-bg) text-(--color-text) border border-(--color-border)">关闭</button>
           </div>
         </div>
       )}
 
       {/* Go to page dialog */}
       {showGoToPage && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center" onClick={() => setShowGoToPage(false)}>
-          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h3 className="font-medium mb-3">跳转到页面 (1 - {totalPages || '?'})</h3>
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center" onClick={() => setShowGoToPage(false)}>
+          <div className="rounded-2xl p-6 shadow-2xl" style={{ background: 'var(--color-card-raised)', border: '1px solid var(--color-border)' }} onClick={e => e.stopPropagation()}>
+            <h3 className="font-medium mb-3 text-(--color-text)">跳转到页面 (1 - {totalPages || '?'})</h3>
             <div className="flex gap-2">
               <input type="number" min={1} max={totalPages} value={goToPageInput}
                 onChange={e => setGoToPageInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && goToPage()}
                 className="settings-input w-32" autoFocus placeholder="页码" />
-              <button onClick={goToPage} className="px-4 py-2 bg-green-500 text-white rounded-lg text-sm">跳转</button>
+              <button onClick={goToPage} className="px-4 py-2 bg-(--color-primary) text-(--color-bg) rounded-lg text-sm font-medium">跳转</button>
             </div>
           </div>
         </div>

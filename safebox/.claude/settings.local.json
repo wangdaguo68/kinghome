@@ -25,7 +25,14 @@
       "Bash(start *)",
       "Bash(tasklist /FI \"IMAGENAME eq 保险箱.exe\")",
       "Bash(GIT_TRACE=1 GIT_CURL_VERBOSE=1 git push origin main)",
-      "Bash(GIT_CURL_VERBOSE=1 git push origin main)"
+      "Bash(GIT_CURL_VERBOSE=1 git push origin main)",
+      "mcp__plugin_context7_context7__resolve-library-id",
+      "mcp__plugin_context7_context7__query-docs",
+      "WebSearch",
+      "Bash(dotnet --version)",
+      "Bash(cat obj/Release/net*/win-x64/publish/AppName)",
+      "Bash(ls /d/software/safebox/dist/*.exe)",
+      "Bash(chmod +x *)"
     ]
   }
 }

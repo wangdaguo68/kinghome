@@ -1,7 +1,7 @@
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
      xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
   <Package Name="保险箱" Manufacturer="SafeBox"
-           Version="1.0.0" UpgradeCode="B9E7F0A1-2C4D-4E8F-A1B2-C3D4E5F6A7B8"
+           Version="1.1.0" UpgradeCode="B9E7F0A1-2C4D-4E8F-A1B2-C3D4E5F6A7B8"
            Language="2052" Codepage="936">
     <MediaTemplate EmbedCab="yes" />
 
@@ -58,12 +58,68 @@
                      Name="installed" Type="integer" Value="1" KeyPath="yes" />
     </Component>
 
+    <!-- Desktop shortcut (conditioned on checkbox) -->
+    <Component Id="DesktopShortcut" Directory="DesktopFolder" Guid="*"
+               Condition="INSTALLDESKTOPSHORTCUT">
+      <Shortcut Id="DesktopLink" Name="保险箱"
+                Target="[INSTALLFOLDER]保险箱.exe"
+                WorkingDirectory="INSTALLFOLDER" />
+      <RegistryValue Root="HKCU" Key="Software\SafeBox\保险箱"
+                     Name="desktopShortcut" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+
+    <!-- Auto-start with Windows -->
+    <Component Id="AutoStart" Directory="AppStartMenuFolder" Guid="*"
+               Condition="AUTOSTART">
+      <RegistryValue Root="HKCU" Key="Software\Microsoft\Windows\CurrentVersion\Run"
+                     Name="保险箱" Type="string"
+                     Value="[INSTALLFOLDER]保险箱.exe" KeyPath="yes" />
+    </Component>
+
     <Feature Id="Main">
       <ComponentGroupRef Id="AppComponents" />
       <ComponentRef Id="StartMenuShortcut" />
+      <ComponentRef Id="DesktopShortcut" />
+      <ComponentRef Id="AutoStart" />
     </Feature>
 
+    <!-- Install options: desktop shortcut and auto-start (default: checked) -->
+    <Property Id="INSTALLDESKTOPSHORTCUT" Value="1" />
+    <Property Id="AUTOSTART" Value="1" />
     <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
-    <ui:WixUI Id="WixUI_InstallDir" />
+
+    <UI>
+      <ui:WixUI Id="WixUI_InstallDir" />
+      <Publish Dialog="InstallDirDlg" Control="Next" Event="NewDialog" Value="OptionsDlg" Order="3" />
+
+      <Dialog Id="OptionsDlg" Width="370" Height="270" Title="安装选项" NoMinimize="yes">
+        <Control Id="Title" Type="Text" X="15" Y="6" Width="200" Height="15" Transparent="yes" NoPrefix="yes"
+                 Text="其他安装选项" />
+        <Control Id="Description" Type="Text" X="25" Y="23" Width="320" Height="30" Transparent="yes" NoPrefix="yes"
+                 Text="选择要启用的附加功能" />
+
+        <Control Id="DesktopCheck" Type="CheckBox" X="25" Y="60" Width="300" Height="17"
+                 Property="INSTALLDESKTOPSHORTCUT" CheckBoxValue="1"
+                 Text="创建桌面快捷方式" />
+
+        <Control Id="AutoStartCheck" Type="CheckBox" X="25" Y="85" Width="300" Height="17"
+                 Property="AUTOSTART" CheckBoxValue="1"
+                 Text="开机自动启动保险箱" />
+
+        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17"
+                 Text="上一步(&amp;B)">
+          <Publish Event="NewDialog" Value="InstallDirDlg" />
+        </Control>
+        <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17"
+                 Default="yes" Text="下一步(&amp;N)">
+          <Publish Event="NewDialog" Value="VerifyReadyDlg" />
+        </Control>
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17"
+                 Cancel="yes" Text="取消">
+          <Publish Event="SpawnDialog" Value="CancelDlg" />
+        </Control>
+      </Dialog>
+    </UI>
+
   </Package>
 </Wix>

@@ -1,8 +1,9 @@
+#!/usr/bin/env python3
+"""Generate HyperFrames HTML from segments JSON."""
+
+import argparse
 import json
 from pathlib import Path
-
-from pipeline.context import PipelineContext
-from pipeline.base import Step
 
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="zh-CN">
@@ -61,37 +62,33 @@ playNext();
 </html>"""
 
 
-class Step(Step):
-    def __init__(self, config: dict):
-        self.config = config
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("--segments", required=True, help="Path to segments JSON file")
+    p.add_argument("--topic", required=True, help="Video topic/title")
+    p.add_argument("--aspect", default="9:16", help="Aspect ratio (e.g. 9:16)")
+    p.add_argument("--out", required=True, help="Output HTML file path")
+    args = p.parse_args()
 
-    def run(self, ctx: PipelineContext) -> None:
-        segments = ctx.artifacts.get("segments", [])
-        if not segments:
-            raise RuntimeError("No segments in context. Run media_gen first.")
+    segments = json.loads(Path(args.segments).read_text(encoding="utf-8"))
+    aspect_css = args.aspect.replace(":", " / ")
 
-        aspect = self.config.get("aspect", "9:16")
-        aspect_css = aspect.replace(":", " / ")
+    json_segs = [
+        {"narration": s["narration"], "image_path": s.get("image_path", ""), "audio_path": s.get("audio_path", "")}
+        for s in segments
+    ]
 
-        workdir = Path("output") / ctx.task_id / "workdir"
-        workdir.mkdir(parents=True, exist_ok=True)
+    html = HTML_TEMPLATE.format(
+        title=args.topic,
+        aspect_css=aspect_css,
+        segments_json=json.dumps(json_segs, ensure_ascii=False),
+    )
 
-        # use relative paths for local file references inside HTML
-        json_segments = []
-        for seg in segments:
-            json_segments.append({
-                "narration": seg["narration"],
-                "image_path": seg.get("image_path", ""),
-                "audio_path": seg.get("audio_path", ""),
-            })
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(html, encoding="utf-8")
+    print(str(out.resolve()))
 
-        html = HTML_TEMPLATE.format(
-            title=ctx.topic,
-            aspect_css=aspect_css,
-            segments_json=json.dumps(json_segments, ensure_ascii=False),
-        )
 
-        html_path = workdir / "video.html"
-        html_path.write_text(html, encoding="utf-8")
-        ctx.artifacts["html_path"] = str(html_path.resolve())
-        ctx.log("compose: hyperframes HTML generated")
+if __name__ == "__main__":
+    main()

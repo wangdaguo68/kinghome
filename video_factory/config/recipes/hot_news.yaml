@@ -4,33 +4,14 @@ defaults:
   duration: 60
   aspect: "9:16"
   style: fast_paced
-steps:
-  - id: fetch
-    module: steps.fetch_news
-    config:
-      max_items: 5
-      select_top: 3
-  - id: script
-    module: steps.storyboard
-    config:
-      image_style: editorial_illustration
-      narration_lang: zh-CN
-      tone: punchy
-  - id: media
-    module: steps.media_gen
-    config:
-      tts_voice: zh-CN-XiaoxiaoNeural
-      tts_speed: "+10%"
-  - id: validate
-    module: steps.duration_check
-    config:
-      max_duration_sec: "{{duration}}"
-      strategy: trim
-  - id: compose
-    module: steps.compose_video
-    config:
-      aspect: "{{aspect}}"
-  - id: render
-    module: steps.render_output
-    config:
-      format: mp4
+  tone: punchy
+  tts_voice: zh-CN-XiaoxiaoNeural
+  tts_speed: "+10%"
+fetch:
+  max_items: 5
+  select_top: 3
+  freshness: pw
+storyboard:
+  segments_per_item: 1
+  image_style: editorial_illustration
+  lang: zh-CN

@@ -1,0 +1,36 @@
+name: 知识科普
+description: 围绕主题深度搜索，生成科普类长视频
+defaults:
+  duration: 180
+  aspect: "16:9"
+  style: educational
+steps:
+  - id: fetch
+    module: steps.fetch_news
+    config:
+      max_items: 8
+      select_top: 4
+  - id: script
+    module: steps.storyboard
+    config:
+      image_style: infographic
+      narration_lang: zh-CN
+      tone: educational
+  - id: media
+    module: steps.media_gen
+    config:
+      tts_voice: zh-CN-YunxiNeural
+      tts_speed: "+0%"
+  - id: validate
+    module: steps.duration_check
+    config:
+      max_duration_sec: "{{duration}}"
+      strategy: trim
+  - id: compose
+    module: steps.compose_video
+    config:
+      aspect: "{{aspect}}"
+  - id: render
+    module: steps.render_output
+    config:
+      format: mp4

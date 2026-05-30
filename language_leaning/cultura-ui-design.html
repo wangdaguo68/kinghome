@@ -1,0 +1,2008 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cultura — UI Design</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,800;1,400&family=Noto+Serif+SC:wght@400;600;700&family=Noto+Sans+SC:wght@300;400;500;600&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  /* ═══════════════════════════════════════════
+     CULTURA — Design System & CSS Variables
+     ═══════════════════════════════════════════ */
+  :root {
+    /* Deep wood + warm gold palette */
+    --wood-darkest: #1a1208;
+    --wood-dark: #2a1f14;
+    --wood-mid: #3d2b1a;
+    --wood-light: #5c3d24;
+    --wood-lightest: #7a5233;
+
+    --parchment: #f5eed6;
+    --parchment-light: #faf5e8;
+    --parchment-dark: #e8dcc0;
+
+    --gold: #c9a84c;
+    --gold-light: #e2c97e;
+    --gold-bright: #f0d88a;
+    --gold-dark: #a07e30;
+
+    --ink: #2c1810;
+    --ink-light: #5a3e2b;
+    --ink-faint: #8b735e;
+
+    --accent-red: #a0522d;
+    --accent-green: #6b8e5a;
+    --accent-blue: #5a7a9a;
+
+    --shadow-soft: 0 2px 20px rgba(26, 18, 8, 0.15);
+    --shadow-card: 0 4px 24px rgba(26, 18, 8, 0.12);
+    --shadow-elevated: 0 8px 40px rgba(26, 18, 8, 0.2);
+    --shadow-gold: 0 2px 16px rgba(201, 168, 76, 0.3);
+
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 20px;
+    --radius-xl: 28px;
+
+    --font-display: 'Playfair Display', 'Noto Serif SC', serif;
+    --font-serif: 'Noto Serif SC', 'Crimson Text', serif;
+    --font-body: 'Noto Sans SC', sans-serif;
+    --font-text: 'Crimson Text', 'Noto Serif SC', serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: var(--font-body);
+    background: #0d0a06;
+    color: var(--ink);
+    overflow-x: hidden;
+  }
+
+  /* ═══════════════════════════════════════════
+     DESKTOP PRESENTATION WRAPPER
+     ═══════════════════════════════════════════ */
+  .presentation {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 20px;
+    min-height: 100vh;
+    background: linear-gradient(135deg, #0d0a06 0%, #1a1208 40%, #2a1f14 100%);
+  }
+
+  .presentation-title {
+    font-family: var(--font-display);
+    color: var(--gold);
+    font-size: 36px;
+    letter-spacing: 6px;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+  }
+
+  .presentation-subtitle {
+    color: var(--ink-faint);
+    font-size: 14px;
+    letter-spacing: 3px;
+    margin-bottom: 32px;
+  }
+
+  /* Screen selector tabs */
+  .screen-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 32px;
+    justify-content: center;
+    max-width: 800px;
+  }
+
+  .screen-tab {
+    padding: 8px 18px;
+    border: 1px solid var(--wood-light);
+    border-radius: 24px;
+    background: transparent;
+    color: var(--ink-faint);
+    font-family: var(--font-body);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    letter-spacing: 0.5px;
+  }
+
+  .screen-tab:hover {
+    border-color: var(--gold);
+    color: var(--gold-light);
+  }
+
+  .screen-tab.active {
+    background: var(--gold);
+    border-color: var(--gold);
+    color: var(--wood-darkest);
+    font-weight: 600;
+    box-shadow: var(--shadow-gold);
+  }
+
+  /* Phone frame */
+  .phone-frame {
+    width: 375px;
+    height: 812px;
+    border-radius: 40px;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 0 0 4px var(--wood-mid), 0 0 0 6px var(--gold-dark), var(--shadow-elevated);
+    background: var(--parchment);
+  }
+
+  /* Notch */
+  .phone-frame::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 150px;
+    height: 28px;
+    background: var(--wood-darkest);
+    border-radius: 0 0 18px 18px;
+    z-index: 100;
+  }
+
+  /* Status bar */
+  .status-bar {
+    height: 44px;
+    background: var(--wood-dark);
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    padding: 0 24px 6px;
+    color: var(--parchment);
+    font-size: 12px;
+    font-weight: 500;
+    position: relative;
+    z-index: 50;
+  }
+
+  .status-bar .time { font-weight: 600; }
+  .status-bar .icons { display: flex; gap: 6px; align-items: center; }
+  .status-bar .icons span { font-size: 11px; }
+
+  /* Screen container */
+  .screen {
+    display: none;
+    height: calc(100% - 44px);
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .screen.active { display: flex; }
+
+  /* Bottom nav */
+  .bottom-nav {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 68px;
+    background: linear-gradient(180deg, var(--wood-dark) 0%, var(--wood-darkest) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    padding-bottom: 8px;
+    z-index: 50;
+    border-top: 1px solid var(--gold-dark);
+  }
+
+  .nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    color: var(--ink-faint);
+    font-size: 10px;
+    cursor: pointer;
+    transition: color 0.2s;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .nav-item.active { color: var(--gold); }
+  .nav-item svg { width: 22px; height: 22px; }
+  .nav-item.active svg { filter: drop-shadow(0 0 4px rgba(201, 168, 76, 0.5)); }
+
+  /* Scrollable content area */
+  .content-area {
+    flex: 1;
+    overflow-y: auto;
+    padding-bottom: 76px;
+    scrollbar-width: none;
+  }
+
+  .content-area::-webkit-scrollbar { display: none; }
+
+  /* ═══════════════════════════════════════════
+     TEXTURES & PATTERNS
+     ═══════════════════════════════════════════ */
+  .texture-parchment {
+    background:
+      repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 28px,
+        rgba(139, 115, 94, 0.04) 28px,
+        rgba(139, 115, 94, 0.04) 29px
+      ),
+      linear-gradient(180deg, var(--parchment-light) 0%, var(--parchment) 100%);
+  }
+
+  .texture-wood {
+    background: linear-gradient(180deg, var(--wood-dark) 0%, var(--wood-darkest) 100%);
+  }
+
+  /* ═══════════════════════════════════════════
+     SCREEN 1: SPLASH / LOGIN
+     ═══════════════════════════════════════════ */
+  .splash-screen {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(160deg, var(--wood-darkest) 0%, var(--wood-dark) 50%, var(--wood-mid) 100%);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .splash-screen::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(ellipse at 50% 40%, rgba(201, 168, 76, 0.08) 0%, transparent 60%);
+  }
+
+  .splash-emblem {
+    width: 100px;
+    height: 100px;
+    border: 2px solid var(--gold);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 28px;
+    position: relative;
+    z-index: 1;
+    box-shadow: 0 0 40px rgba(201, 168, 76, 0.2);
+  }
+
+  .splash-emblem::before {
+    content: '';
+    position: absolute;
+    width: 114px;
+    height: 114px;
+    border: 1px solid rgba(201, 168, 76, 0.3);
+    border-radius: 50%;
+  }
+
+  .splash-emblem svg {
+    width: 48px;
+    height: 48px;
+    color: var(--gold);
+  }
+
+  .splash-title {
+    font-family: var(--font-display);
+    font-size: 42px;
+    font-weight: 700;
+    color: var(--gold);
+    letter-spacing: 10px;
+    text-transform: uppercase;
+    position: relative;
+    z-index: 1;
+    margin-bottom: 8px;
+  }
+
+  .splash-tagline {
+    font-family: var(--font-serif);
+    font-size: 14px;
+    color: var(--ink-faint);
+    letter-spacing: 4px;
+    margin-bottom: 48px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .splash-divider {
+    width: 60px;
+    height: 1px;
+    background: var(--gold-dark);
+    margin-bottom: 48px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .splash-btn {
+    padding: 14px 48px;
+    border: 1px solid var(--gold);
+    background: transparent;
+    color: var(--gold);
+    font-family: var(--font-body);
+    font-size: 14px;
+    letter-spacing: 3px;
+    cursor: pointer;
+    border-radius: 2px;
+    position: relative;
+    z-index: 1;
+    transition: all 0.3s;
+    margin-bottom: 14px;
+  }
+
+  .splash-btn:hover {
+    background: var(--gold);
+    color: var(--wood-darkest);
+  }
+
+  .splash-btn-secondary {
+    padding: 12px 36px;
+    border: none;
+    background: transparent;
+    color: var(--ink-faint);
+    font-family: var(--font-body);
+    font-size: 13px;
+    letter-spacing: 2px;
+    cursor: pointer;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ═══════════════════════════════════════════
+     SCREEN 2: STORY HALL (HOME)
+     ═══════════════════════════════════════════ */
+  .home-header {
+    padding: 16px 20px 12px;
+    background: linear-gradient(180deg, var(--wood-dark) 0%, var(--wood-dark) 60%, transparent 100%);
+    position: sticky;
+    top: 0;
+    z-index: 20;
+  }
+
+  .home-header-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+
+  .home-greeting {
+    color: var(--parchment);
+    font-size: 12px;
+    opacity: 0.7;
+  }
+
+  .home-title {
+    font-family: var(--font-display);
+    font-size: 24px;
+    color: var(--gold);
+    font-weight: 700;
+  }
+
+  .home-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--wood-light);
+    border: 2px solid var(--gold-dark);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--gold);
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  /* Filter chips */
+  .filter-row {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+
+  .filter-row::-webkit-scrollbar { display: none; }
+
+  .filter-chip {
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    white-space: nowrap;
+    cursor: pointer;
+    border: 1px solid var(--wood-light);
+    color: var(--parchment-dark);
+    background: rgba(255,255,255,0.05);
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+
+  .filter-chip.active {
+    background: var(--gold);
+    color: var(--wood-darkest);
+    border-color: var(--gold);
+    font-weight: 600;
+  }
+
+  /* Story cards */
+  .stories-list {
+    padding: 8px 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .section-label {
+    font-family: var(--font-serif);
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--ink);
+    margin: 8px 4px 4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .section-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, var(--gold-dark), transparent);
+  }
+
+  .story-card {
+    background: var(--parchment-light);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    box-shadow: var(--shadow-card);
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    border: 1px solid var(--parchment-dark);
+  }
+
+  .story-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-elevated);
+  }
+
+  .story-card-banner {
+    height: 120px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .story-card-banner img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .story-card-banner .overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 60%;
+    background: linear-gradient(transparent, rgba(26, 18, 8, 0.8));
+  }
+
+  .story-badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    backdrop-filter: blur(8px);
+  }
+
+  .badge-beginner { background: rgba(107, 142, 90, 0.9); color: #fff; }
+  .badge-intermediate { background: rgba(201, 168, 76, 0.9); color: var(--wood-darkest); }
+  .badge-advanced { background: rgba(160, 82, 45, 0.9); color: #fff; }
+
+  .story-era {
+    position: absolute;
+    bottom: 10px;
+    left: 12px;
+    color: var(--parchment);
+    font-size: 11px;
+    opacity: 0.8;
+    letter-spacing: 1px;
+  }
+
+  .story-card-body {
+    padding: 12px 14px;
+  }
+
+  .story-card-title {
+    font-family: var(--font-serif);
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--ink);
+    margin-bottom: 4px;
+    line-height: 1.3;
+  }
+
+  .story-card-desc {
+    font-size: 12px;
+    color: var(--ink-faint);
+    line-height: 1.5;
+    margin-bottom: 10px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .story-card-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 11px;
+    color: var(--ink-faint);
+  }
+
+  .story-card-meta span {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+  }
+
+  .progress-bar {
+    width: 100%;
+    height: 3px;
+    background: var(--parchment-dark);
+    border-radius: 2px;
+    margin-top: 8px;
+    overflow: hidden;
+  }
+
+  .progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--gold-dark), var(--gold));
+    border-radius: 2px;
+    transition: width 0.5s ease;
+  }
+
+  /* ═══════════════════════════════════════════
+     SCREEN 3: IMMERSIVE READER
+     ═══════════════════════════════════════════ */
+  .reader-header {
+    padding: 10px 16px;
+    background: var(--wood-dark);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: var(--parchment);
+  }
+
+  .reader-back {
+    font-size: 20px;
+    cursor: pointer;
+    padding: 4px 8px;
+    color: var(--gold);
+  }
+
+  .reader-title-bar {
+    flex: 1;
+    text-align: center;
+    font-family: var(--font-serif);
+    font-size: 14px;
+    color: var(--parchment);
+    margin: 0 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .reader-actions {
+    display: flex;
+    gap: 12px;
+    color: var(--gold);
+    font-size: 18px;
+    cursor: pointer;
+  }
+
+  .reader-content {
+    padding: 24px 20px;
+    line-height: 2;
+    font-family: var(--font-text);
+    font-size: 17px;
+    color: var(--ink);
+  }
+
+  .reader-content .chapter-title {
+    font-family: var(--font-display);
+    font-size: 22px;
+    font-weight: 700;
+    text-align: center;
+    margin-bottom: 6px;
+    color: var(--ink);
+  }
+
+  .reader-content .chapter-subtitle {
+    text-align: center;
+    font-size: 13px;
+    color: var(--ink-faint);
+    margin-bottom: 24px;
+    font-style: italic;
+  }
+
+  .reader-divider {
+    width: 40px;
+    height: 2px;
+    background: var(--gold);
+    margin: 0 auto 24px;
+  }
+
+  .reader-word {
+    cursor: pointer;
+    border-radius: 3px;
+    padding: 1px 0;
+    transition: background 0.15s;
+    position: relative;
+  }
+
+  .reader-word:hover {
+    background: rgba(201, 168, 76, 0.2);
+  }
+
+  .reader-word.highlighted {
+    background: rgba(201, 168, 76, 0.15);
+    border-bottom: 1px solid var(--gold);
+  }
+
+  .reader-translation {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid var(--parchment-dark);
+  }
+
+  .reader-translation .label {
+    font-size: 11px;
+    color: var(--gold-dark);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    font-family: var(--font-body);
+    font-weight: 600;
+  }
+
+  .reader-translation p {
+    font-family: var(--font-text);
+    font-size: 15px;
+    color: var(--ink-light);
+    line-height: 1.9;
+  }
+
+  /* Word popup */
+  .word-popup {
+    position: absolute;
+    bottom: 80px;
+    left: 16px;
+    right: 16px;
+    background: var(--wood-darkest);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    color: var(--parchment);
+    box-shadow: var(--shadow-elevated);
+    z-index: 60;
+    border: 1px solid var(--gold-dark);
+    animation: slideUp 0.25s ease;
+  }
+
+  @keyframes slideUp {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+
+  .word-popup-word {
+    font-family: var(--font-display);
+    font-size: 28px;
+    color: var(--gold);
+    margin-bottom: 4px;
+  }
+
+  .word-popup-phonetic {
+    font-size: 13px;
+    color: var(--ink-faint);
+    margin-bottom: 12px;
+    font-style: italic;
+  }
+
+  .word-popup-meaning {
+    font-size: 15px;
+    margin-bottom: 12px;
+    line-height: 1.6;
+  }
+
+  .word-popup-example {
+    font-size: 13px;
+    color: var(--parchment-dark);
+    opacity: 0.7;
+    font-style: italic;
+    border-left: 2px solid var(--gold-dark);
+    padding-left: 10px;
+    margin-bottom: 14px;
+  }
+
+  .word-popup-actions {
+    display: flex;
+    gap: 10px;
+  }
+
+  .word-popup-btn {
+    flex: 1;
+    padding: 8px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--wood-light);
+    background: transparent;
+    color: var(--parchment-dark);
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+  }
+
+  .word-popup-btn.primary {
+    background: var(--gold);
+    color: var(--wood-darkest);
+    border-color: var(--gold);
+    font-weight: 600;
+  }
+
+  /* ═══════════════════════════════════════════
+     SCREEN 4: EXERCISES
+     ═══════════════════════════════════════════ */
+  .exercise-header {
+    padding: 16px 20px;
+    background: var(--wood-dark);
+    color: var(--parchment);
+  }
+
+  .exercise-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+
+  .exercise-back {
+    color: var(--gold);
+    font-size: 20px;
+    cursor: pointer;
+  }
+
+  .exercise-progress-text {
+    font-size: 13px;
+    color: var(--gold-light);
+  }
+
+  .exercise-progress-bar {
+    width: 100%;
+    height: 6px;
+    background: var(--wood-mid);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .exercise-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--gold-dark), var(--gold-bright));
+    border-radius: 3px;
+    transition: width 0.4s ease;
+  }
+
+  .exercise-content {
+    padding: 24px 20px;
+  }
+
+  .exercise-type-label {
+    font-size: 11px;
+    color: var(--gold-dark);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+
+  .exercise-question {
+    font-family: var(--font-serif);
+    font-size: 20px;
+    color: var(--ink);
+    line-height: 1.6;
+    margin-bottom: 24px;
+  }
+
+  .exercise-context {
+    background: var(--parchment-dark);
+    padding: 14px 16px;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-text);
+    font-size: 15px;
+    color: var(--ink-light);
+    line-height: 1.8;
+    margin-bottom: 24px;
+    border-left: 3px solid var(--gold);
+  }
+
+  .exercise-blank {
+    display: inline-block;
+    min-width: 80px;
+    border-bottom: 2px solid var(--gold);
+    text-align: center;
+    margin: 0 4px;
+    cursor: pointer;
+  }
+
+  .exercise-options {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+
+  .exercise-option {
+    padding: 14px 16px;
+    border: 1px solid var(--parchment-dark);
+    border-radius: var(--radius-sm);
+    background: var(--parchment-light);
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 15px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .exercise-option:hover {
+    border-color: var(--gold);
+    background: #fff;
+  }
+
+  .exercise-option.selected {
+    border-color: var(--gold);
+    background: rgba(201, 168, 76, 0.1);
+  }
+
+  .exercise-option.correct {
+    border-color: var(--accent-green);
+    background: rgba(107, 142, 90, 0.1);
+  }
+
+  .exercise-option-letter {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--parchment-dark);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink-light);
+    flex-shrink: 0;
+  }
+
+  .exercise-option.selected .exercise-option-letter {
+    background: var(--gold);
+    color: var(--wood-darkest);
+  }
+
+  .exercise-submit {
+    width: 100%;
+    padding: 14px;
+    background: var(--wood-dark);
+    color: var(--gold);
+    border: none;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-body);
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .exercise-submit:hover {
+    background: var(--gold);
+    color: var(--wood-darkest);
+  }
+
+  /* ═══════════════════════════════════════════
+     SCREEN 5: CULTURE MAP
+     ═══════════════════════════════════════════ */
+  .map-header {
+    padding: 16px 20px 12px;
+    background: var(--wood-dark);
+    color: var(--parchment);
+  }
+
+  .map-title {
+    font-family: var(--font-display);
+    font-size: 22px;
+    color: var(--gold);
+    margin-bottom: 4px;
+  }
+
+  .map-subtitle {
+    font-size: 12px;
+    color: var(--ink-faint);
+  }
+
+  .timeline {
+    padding: 20px;
+    position: relative;
+  }
+
+  .timeline::before {
+    content: '';
+    position: absolute;
+    left: 28px;
+    top: 20px;
+    bottom: 100px;
+    width: 2px;
+    background: linear-gradient(180deg, var(--gold), var(--gold-dark), transparent);
+  }
+
+  .timeline-era {
+    margin-bottom: 24px;
+    position: relative;
+  }
+
+  .timeline-era-label {
+    font-family: var(--font-serif);
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--gold-dark);
+    margin-bottom: 10px;
+    padding-left: 36px;
+    letter-spacing: 1px;
+  }
+
+  .timeline-nodes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding-left: 36px;
+  }
+
+  .timeline-node {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    position: relative;
+  }
+
+  .timeline-node.completed {
+    background: linear-gradient(135deg, var(--gold), var(--gold-dark));
+    box-shadow: 0 2px 12px rgba(201, 168, 76, 0.3);
+    color: var(--wood-darkest);
+  }
+
+  .timeline-node.current {
+    background: var(--parchment-light);
+    border: 2px solid var(--gold);
+    box-shadow: 0 0 0 4px rgba(201, 168, 76, 0.2);
+  }
+
+  .timeline-node.locked {
+    background: var(--parchment-dark);
+    color: var(--ink-faint);
+    opacity: 0.5;
+  }
+
+  .timeline-node:hover {
+    transform: scale(1.1);
+  }
+
+  .timeline-node-tooltip {
+    position: absolute;
+    bottom: -24px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 9px;
+    color: var(--ink-faint);
+    white-space: nowrap;
+    font-family: var(--font-body);
+  }
+
+  /* Map section */
+  .map-region {
+    margin: 8px 20px 20px;
+    padding: 16px;
+    background: var(--parchment-dark);
+    border-radius: var(--radius-md);
+  }
+
+  .map-region-title {
+    font-family: var(--font-serif);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink);
+    margin-bottom: 10px;
+  }
+
+  .map-region-stats {
+    display: flex;
+    gap: 20px;
+    font-size: 12px;
+    color: var(--ink-faint);
+  }
+
+  .map-region-stats strong {
+    color: var(--gold-dark);
+    font-size: 18px;
+    display: block;
+    margin-bottom: 2px;
+  }
+
+  /* ═══════════════════════════════════════════
+     SCREEN 6: AI ROLEPLAY CHAT
+     ═══════════════════════════════════════════ */
+  .chat-header {
+    padding: 12px 16px;
+    background: var(--wood-dark);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--parchment);
+  }
+
+  .chat-back { color: var(--gold); font-size: 20px; cursor: pointer; }
+
+  .chat-character-info {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .chat-character-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--wood-light);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    border: 2px solid var(--gold-dark);
+  }
+
+  .chat-character-name {
+    font-family: var(--font-serif);
+    font-size: 15px;
+    color: var(--gold);
+    font-weight: 600;
+  }
+
+  .chat-character-role {
+    font-size: 11px;
+    color: var(--ink-faint);
+  }
+
+  .chat-messages {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .chat-msg {
+    max-width: 82%;
+    padding: 12px 16px;
+    border-radius: var(--radius-md);
+    font-size: 14px;
+    line-height: 1.6;
+    animation: fadeIn 0.3s ease;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .chat-msg.character {
+    align-self: flex-start;
+    background: var(--wood-dark);
+    color: var(--parchment);
+    border-bottom-left-radius: 4px;
+  }
+
+  .chat-msg.character .msg-name {
+    font-size: 11px;
+    color: var(--gold);
+    margin-bottom: 4px;
+    font-weight: 600;
+  }
+
+  .chat-msg.user {
+    align-self: flex-end;
+    background: var(--gold);
+    color: var(--wood-darkest);
+    border-bottom-right-radius: 4px;
+  }
+
+  .chat-msg.system {
+    align-self: center;
+    background: transparent;
+    color: var(--ink-faint);
+    font-size: 12px;
+    font-style: italic;
+    padding: 8px;
+    border-bottom: 1px solid var(--parchment-dark);
+    border-top: 1px solid var(--parchment-dark);
+    max-width: 100%;
+  }
+
+  .chat-correction {
+    font-size: 12px;
+    color: var(--accent-green);
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid rgba(107, 142, 90, 0.3);
+  }
+
+  .chat-input-bar {
+    padding: 10px 16px;
+    padding-bottom: 16px;
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    background: var(--parchment-light);
+    border-top: 1px solid var(--parchment-dark);
+  }
+
+  .chat-input {
+    flex: 1;
+    padding: 10px 14px;
+    border: 1px solid var(--parchment-dark);
+    border-radius: 20px;
+    font-family: var(--font-body);
+    font-size: 14px;
+    background: #fff;
+    color: var(--ink);
+    outline: none;
+    resize: none;
+    min-height: 40px;
+    max-height: 100px;
+  }
+
+  .chat-input:focus {
+    border-color: var(--gold);
+  }
+
+  .chat-send {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--gold);
+    border: none;
+    color: var(--wood-darkest);
+    font-size: 18px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  /* ═══════════════════════════════════════════
+     SCREEN 7: PROFILE
+     ═══════════════════════════════════════════ */
+  .profile-header {
+    background: linear-gradient(180deg, var(--wood-dark) 0%, var(--wood-mid) 80%, var(--parchment) 100%);
+    padding: 20px;
+    text-align: center;
+    padding-bottom: 32px;
+  }
+
+  .profile-avatar {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: var(--wood-light);
+    margin: 0 auto 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    border: 3px solid var(--gold);
+    box-shadow: var(--shadow-gold);
+  }
+
+  .profile-name {
+    font-family: var(--font-display);
+    font-size: 22px;
+    color: var(--parchment);
+    margin-bottom: 2px;
+  }
+
+  .profile-plan {
+    display: inline-block;
+    padding: 2px 12px;
+    border-radius: 10px;
+    background: var(--gold);
+    color: var(--wood-darkest);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    margin-top: 4px;
+  }
+
+  .profile-stats {
+    display: flex;
+    justify-content: center;
+    gap: 28px;
+    margin-top: 18px;
+  }
+
+  .profile-stat {
+    text-align: center;
+  }
+
+  .profile-stat-value {
+    font-family: var(--font-display);
+    font-size: 24px;
+    color: var(--gold);
+    font-weight: 700;
+  }
+
+  .profile-stat-label {
+    font-size: 11px;
+    color: var(--ink-faint);
+    margin-top: 2px;
+  }
+
+  .profile-content {
+    padding: 16px;
+  }
+
+  .profile-section-title {
+    font-size: 12px;
+    color: var(--ink-faint);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin: 12px 4px 8px;
+    font-weight: 600;
+  }
+
+  .profile-menu {
+    background: var(--parchment-light);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    border: 1px solid var(--parchment-dark);
+    margin-bottom: 12px;
+  }
+
+  .profile-menu-item {
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--parchment-dark);
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  .profile-menu-item:last-child { border-bottom: none; }
+
+  .profile-menu-item:hover { background: #fff; }
+
+  .profile-menu-item-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .profile-menu-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    background: var(--parchment-dark);
+  }
+
+  .profile-menu-label {
+    font-size: 14px;
+    color: var(--ink);
+    font-weight: 500;
+  }
+
+  .profile-menu-arrow {
+    color: var(--ink-faint);
+    font-size: 14px;
+  }
+
+  /* Model selector */
+  .model-selector {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 12px;
+    background: var(--parchment-light);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--parchment-dark);
+    margin-bottom: 12px;
+  }
+
+  .model-chip {
+    padding: 6px 12px;
+    border-radius: 16px;
+    font-size: 12px;
+    border: 1px solid var(--parchment-dark);
+    cursor: pointer;
+    transition: all 0.2s;
+    color: var(--ink-light);
+  }
+
+  .model-chip.active {
+    background: var(--wood-dark);
+    color: var(--gold);
+    border-color: var(--wood-dark);
+  }
+
+  /* Subscription card */
+  .sub-card {
+    background: linear-gradient(135deg, var(--wood-dark), var(--wood-mid));
+    border-radius: var(--radius-md);
+    padding: 20px;
+    color: var(--parchment);
+    margin-bottom: 16px;
+    border: 1px solid var(--gold-dark);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .sub-card::before {
+    content: '';
+    position: absolute;
+    top: -30px;
+    right: -30px;
+    width: 100px;
+    height: 100px;
+    background: radial-gradient(circle, rgba(201, 168, 76, 0.15), transparent);
+  }
+
+  .sub-card-label {
+    font-size: 11px;
+    color: var(--gold);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  .sub-card-plan {
+    font-family: var(--font-display);
+    font-size: 20px;
+    color: var(--parchment);
+    margin-bottom: 8px;
+  }
+
+  .sub-card-detail {
+    font-size: 12px;
+    color: var(--ink-faint);
+    margin-bottom: 14px;
+  }
+
+  .sub-card-btn {
+    display: inline-block;
+    padding: 8px 24px;
+    background: var(--gold);
+    color: var(--wood-darkest);
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+  }
+
+  /* ═══════════════════════════════════════════
+     UTILITIES
+     ═══════════════════════════════════════════ */
+  .no-nav .bottom-nav { display: none; }
+  .no-nav .content-area { padding-bottom: 20px; }
+</style>
+</head>
+<body>
+<div class="presentation">
+  <div class="presentation-title">Cultura</div>
+  <div class="presentation-subtitle">Story-Driven Language & Culture Learning</div>
+
+  <!-- Screen selector -->
+  <div class="screen-tabs">
+    <button class="screen-tab active" onclick="showScreen('splash')">启动页</button>
+    <button class="screen-tab" onclick="showScreen('home')">故事大厅</button>
+    <button class="screen-tab" onclick="showScreen('reader')">沉浸式阅读</button>
+    <button class="screen-tab" onclick="showScreen('exercise')">故事练习</button>
+    <button class="screen-tab" onclick="showScreen('map')">文化地图</button>
+    <button class="screen-tab" onclick="showScreen('chat')">AI 对话</button>
+    <button class="screen-tab" onclick="showScreen('profile')">个人中心</button>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       PHONE FRAME
+       ══════════════════════════════════════════════════════════════════ -->
+  <div class="phone-frame">
+    <div class="status-bar">
+      <span class="time">9:41</span>
+      <div class="icons">
+        <span>●●●●○</span>
+        <span>WiFi</span>
+        <span>🔋</span>
+      </div>
+    </div>
+
+    <!-- ═══════════════ SPLASH SCREEN ═══════════════ -->
+    <div id="screen-splash" class="screen active" style="height:100%;">
+      <div class="splash-screen">
+        <div class="splash-emblem">
+          <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 8h8c6.627 0 12 5.373 12 12s-5.373 12-12 12h-4l-4 4v-6h-4C8 30 4 26 4 20S8 10 12 10h8c2.209 0 4 1.791 4 4s-1.791 4-4 4h-8c-2.209 0-4-1.791-4-4s1.791-4 4-4z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M24 14l4-4h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M32 10v8c0 2.209-1.791 4-4 4h-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="splash-title">Cultura</div>
+        <div class="splash-tagline">在故事中学习语言</div>
+        <div class="splash-divider"></div>
+        <button class="splash-btn">开 始 探 索</button>
+        <button class="splash-btn-secondary">已有账号？登录</button>
+      </div>
+    </div>
+
+    <!-- ═══════════════ HOME: STORY HALL ═══════════════ -->
+    <div id="screen-home" class="screen">
+      <div class="home-header">
+        <div class="home-header-top">
+          <div>
+            <div class="home-greeting">下午好 👋</div>
+            <div class="home-title">故事大厅</div>
+          </div>
+          <div class="home-avatar">林</div>
+        </div>
+        <div class="filter-row">
+          <div class="filter-chip active">推荐</div>
+          <div class="filter-chip">古代</div>
+          <div class="filter-chip">中世纪</div>
+          <div class="filter-chip">近代</div>
+          <div class="filter-chip">现代</div>
+          <div class="filter-chip">A1-A2</div>
+          <div class="filter-chip">B1-B2</div>
+        </div>
+      </div>
+
+      <div class="content-area texture-parchment">
+        <div class="stories-list">
+          <div class="section-label">继续学习</div>
+
+          <!-- Continue card -->
+          <div class="story-card">
+            <div class="story-card-banner" style="background: linear-gradient(135deg, #4a3728, #8b6b4a);">
+              <div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:48px;">🏯</div>
+              <div class="overlay"></div>
+              <span class="story-badge badge-intermediate">B1</span>
+              <span class="story-era">中国 · 明朝 · 1368-1644</span>
+            </div>
+            <div class="story-card-body">
+              <div class="story-card-title">郑和下西洋</div>
+              <div class="story-card-desc">1405年，明成祖派遣郑和率领庞大的船队远航西洋，开启了人类历史上最伟大的航海壮举之一...</div>
+              <div class="story-card-meta">
+                <span>📖 第3/5章</span>
+                <span>🎯 42词</span>
+                <span>⏱ 12分钟</span>
+              </div>
+              <div class="progress-bar">
+                <div class="progress-bar-fill" style="width: 60%;"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="section-label">为你推荐</div>
+
+          <!-- Recommended card 1 -->
+          <div class="story-card">
+            <div class="story-card-banner" style="background: linear-gradient(135deg, #2c3e50, #4a6741);">
+              <div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:48px;">🗽</div>
+              <div class="overlay"></div>
+              <span class="story-badge badge-beginner">A2</span>
+              <span class="story-era">美国 · 近代 · 1776-1900</span>
+            </div>
+            <div class="story-card-body">
+              <div class="story-card-title">The Declaration of Independence</div>
+              <div class="story-card-desc">In the summer of 1776, a group of courageous delegates gathered in Philadelphia to draft a document that would change the course of history...</div>
+              <div class="story-card-meta">
+                <span>📖 5 章节</span>
+                <span>🎯 38词</span>
+                <span>⏱ 10分钟</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Recommended card 2 -->
+          <div class="story-card">
+            <div class="story-card-banner" style="background: linear-gradient(135deg, #5c3d24, #a0522d);">
+              <div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:48px;">🏛️</div>
+              <div class="overlay"></div>
+              <span class="story-badge badge-advanced">C1</span>
+              <span class="story-era">中国 · 先秦 · 公元前770-221</span>
+            </div>
+            <div class="story-card-body">
+              <div class="story-card-title">百家争鸣：孔子的时代</div>
+              <div class="story-card-desc">春秋末期，礼崩乐坏，一位来自鲁国的思想家周游列国，传播仁与礼的思想，影响了此后两千年的东方文明...</div>
+              <div class="story-card-meta">
+                <span>📖 8 章节</span>
+                <span>🎯 86词</span>
+                <span>⏱ 25分钟</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom nav -->
+      <div class="bottom-nav">
+        <div class="nav-item active">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+          <span>故事</span>
+        </div>
+        <div class="nav-item">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.5 3l-.16.03L15 5.1 9 3 3.36 4.9c-.21.07-.36.25-.36.48V20.5c0 .28.22.5.5.5l.16-.03L9 18.9l6 2.1 5.64-1.9c.21-.07.36-.25.36-.48V3.5c0-.28-.22-.5-.5-.5zM15 19l-6-2.11V5l6 2.11V19z"/></svg>
+          <span>地图</span>
+        </div>
+        <div class="nav-item">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg>
+          <span>对话</span>
+        </div>
+        <div class="nav-item">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+          <span>我的</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ READER SCREEN ═══════════════ -->
+    <div id="screen-reader" class="screen">
+      <div class="reader-header">
+        <span class="reader-back">‹</span>
+        <span class="reader-title-bar">郑和下西洋 · 第三章</span>
+        <div class="reader-actions">
+          <span>🔊</span>
+          <span>⚙️</span>
+        </div>
+      </div>
+
+      <div class="content-area texture-parchment" style="position:relative;">
+        <div class="reader-content">
+          <div class="chapter-title">第三章：马六甲的风</div>
+          <div class="chapter-subtitle">The Winds of Malacca</div>
+          <div class="reader-divider"></div>
+
+          <p>
+            <span class="reader-word highlighted">船队</span>
+            <span class="reader-word">在</span>
+            <span class="reader-word">马六甲</span>
+            <span class="reader-word">海峡</span>
+            <span class="reader-word">停泊</span>
+            <span class="reader-word">了</span>
+            <span class="reader-word">三天</span>
+            <span class="reader-word">。</span>
+          </p>
+          <p style="margin-top:12px;">
+            <span class="reader-word">郑和</span>
+            <span class="reader-word">站在</span>
+            <span class="reader-word">旗舰</span>
+            <span class="reader-word">的</span>
+            <span class="reader-word">甲板</span>
+            <span class="reader-word">上</span>
+            <span class="reader-word">，</span>
+            <span class="reader-word">望着</span>
+            <span class="reader-word">远方</span>
+            <span class="reader-word">的</span>
+            <span class="reader-word">海面</span>
+            <span class="reader-word">。</span>
+          </p>
+
+          <div class="reader-translation">
+            <div class="label">English Translation</div>
+            <p>The fleet anchored in the Strait of Malacca for three days. Zheng He stood on the deck of the flagship, gazing at the distant sea.</p>
+          </div>
+
+          <div style="height:100px;"></div>
+        </div>
+
+        <!-- Word lookup popup -->
+        <div class="word-popup">
+          <div class="word-popup-word">船队</div>
+          <div class="word-popup-phonetic">chuán duì · /ʈʂʰwan⁳⁵ twɛɪ⁵¹/</div>
+          <div class="word-popup-meaning">
+            <strong>n.</strong> fleet; armada; group of ships
+          </div>
+          <div class="word-popup-example">
+            庞大的船队驶出了港口。<br>
+            <span style="opacity:0.6;">The massive fleet sailed out of the harbor.</span>
+          </div>
+          <div class="word-popup-actions">
+            <button class="word-popup-btn">🔊 发音</button>
+            <button class="word-popup-btn">📖 词源</button>
+            <button class="word-popup-btn primary">⭐ 收藏</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ EXERCISE SCREEN ═══════════════ -->
+    <div id="screen-exercise" class="screen">
+      <div class="exercise-header">
+        <div class="exercise-top">
+          <span class="exercise-back">‹</span>
+          <span class="exercise-progress-text">4 / 10</span>
+        </div>
+        <div class="exercise-progress-bar">
+          <div class="exercise-progress-fill" style="width: 40%;"></div>
+        </div>
+      </div>
+
+      <div class="content-area texture-parchment">
+        <div class="exercise-content">
+          <div class="exercise-type-label">词汇填空 · Vocabulary Fill-in</div>
+          <div class="exercise-question">选择正确的词语填入空白处</div>
+
+          <div class="exercise-context">
+            船队在马六甲海峡<span class="exercise-blank">______</span>了三天，等待合适的季风。
+          </div>
+
+          <div class="exercise-options">
+            <div class="exercise-option">
+              <div class="exercise-option-letter">A</div>
+              <div>出发 (chūfā) — to depart</div>
+            </div>
+            <div class="exercise-option selected correct">
+              <div class="exercise-option-letter">B</div>
+              <div>停泊 (tíngbó) — to anchor</div>
+            </div>
+            <div class="exercise-option">
+              <div class="exercise-option-letter">C</div>
+              <div>航行 (hángxíng) — to navigate</div>
+            </div>
+            <div class="exercise-option">
+              <div class="exercise-option-letter">D</div>
+              <div>登陆 (dēglù) — to land</div>
+            </div>
+          </div>
+
+          <button class="exercise-submit">确认答案 ✓</button>
+
+          <!-- Next exercise preview -->
+          <div style="margin-top:28px; padding-top:20px; border-top: 1px solid var(--parchment-dark);">
+            <div class="exercise-type-label">听力练习 · Listening</div>
+            <div class="exercise-question" style="font-size:16px;">听故事片段，选择正确的翻译</div>
+            <div style="display:flex;align-items:center;justify-content:center;padding:24px;background:var(--parchment-dark);border-radius:var(--radius-md);margin-bottom:16px;cursor:pointer;">
+              <span style="font-size:40px;margin-right:12px;">🔊</span>
+              <span style="font-size:13px;color:var(--ink-faint);">点击播放 · 0:08</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ CULTURE MAP SCREEN ═══════════════ -->
+    <div id="screen-map" class="screen">
+      <div class="map-header">
+        <div class="map-title">文化地图</div>
+        <div class="map-subtitle">Culture Map — 探索你的学习旅程</div>
+      </div>
+
+      <div class="content-area texture-parchment">
+        <div class="timeline">
+          <!-- Era 1 -->
+          <div class="timeline-era">
+            <div class="timeline-era-label">先秦时期 · Before 221 BC</div>
+            <div class="timeline-nodes">
+              <div class="timeline-node completed">🏺<span class="timeline-node-tooltip">甲骨文</span></div>
+              <div class="timeline-node completed">📜<span class="timeline-node-tooltip">孔子</span></div>
+              <div class="timeline-node completed">⚔️<span class="timeline-node-tooltip">战国</span></div>
+            </div>
+          </div>
+
+          <!-- Era 2 -->
+          <div class="timeline-era">
+            <div class="timeline-era-label">秦汉时期 · 221 BC – 220 AD</div>
+            <div class="timeline-nodes">
+              <div class="timeline-node completed">🧱<span class="timeline-node-tooltip">长城</span></div>
+              <div class="timeline-node completed">🐫<span class="timeline-node-tooltip">丝绸之路</span></div>
+              <div class="timeline-node current">📿<span class="timeline-node-tooltip">佛教传入</span></div>
+            </div>
+          </div>
+
+          <!-- Era 3 -->
+          <div class="timeline-era">
+            <div class="timeline-era-label">唐宋时期 · 618 – 1279</div>
+            <div class="timeline-nodes">
+              <div class="timeline-node locked">🌸<span class="timeline-node-tooltip">唐诗</span></div>
+              <div class="timeline-node locked">🎨<span class="timeline-node-tooltip">宋词</span></div>
+              <div class="timeline-node locked">🖌️<span class="timeline-node-tooltip">书画</span></div>
+            </div>
+          </div>
+
+          <!-- Era 4 -->
+          <div class="timeline-era">
+            <div class="timeline-era-label">元明清 · 1271 – 1912</div>
+            <div class="timeline-nodes">
+              <div class="timeline-node locked">🚢<span class="timeline-node-tooltip">郑和下西洋</span></div>
+              <div class="timeline-node locked">🏯<span class="timeline-node-tooltip">紫禁城</span></div>
+              <div class="timeline-node locked">📚<span class="timeline-node-tooltip">四大名著</span></div>
+            </div>
+          </div>
+
+          <!-- Era 5 -->
+          <div class="timeline-era">
+            <div class="timeline-era-label">近现代 · 1912 – Present</div>
+            <div class="timeline-nodes">
+              <div class="timeline-node locked">✊<span class="timeline-node-tooltip">五四运动</span></div>
+              <div class="timeline-node locked">🏗️<span class="timeline-node-tooltip">改革开放</span></div>
+              <div class="timeline-node locked">🚀<span class="timeline-node-tooltip">新时代</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Region stats -->
+        <div class="map-region">
+          <div class="map-region-title">🌏 学习概览</div>
+          <div class="map-region-stats">
+            <div><strong>7</strong>已学故事</div>
+            <div><strong>3</strong>文化时期</div>
+            <div><strong>286</strong>掌握词汇</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom nav -->
+      <div class="bottom-nav">
+        <div class="nav-item">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+          <span>故事</span>
+        </div>
+        <div class="nav-item active">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.5 3l-.16.03L15 5.1 9 3 3.36 4.9c-.21.07-.36.25-.36.48V20.5c0 .28.22.5.5.5l.16-.03L9 18.9l6 2.1 5.64-1.9c.21-.07.36-.25.36-.48V3.5c0-.28-.22-.5-.5-.5zM15 19l-6-2.11V5l6 2.11V19z"/></svg>
+          <span>地图</span>
+        </div>
+        <div class="nav-item">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg>
+          <span>对话</span>
+        </div>
+        <div class="nav-item">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+          <span>我的</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ CHAT SCREEN ═══════════════ -->
+    <div id="screen-chat" class="screen">
+      <div class="chat-header">
+        <span class="chat-back">‹</span>
+        <div class="chat-character-info">
+          <div class="chat-character-avatar">🧙</div>
+          <div>
+            <div class="chat-character-name">郑和 Zheng He</div>
+            <div class="chat-character-role">明朝航海家 · 1371-1433</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="content-area texture-parchment" style="padding-bottom:130px;">
+        <div class="chat-messages">
+          <div class="chat-msg system">
+            📖 场景：你来到了郑和的旗舰上，他正站在甲板上眺望远方...
+          </div>
+
+          <div class="chat-msg character">
+            <div class="msg-name">郑和</div>
+            欢迎来到我的船队。我是三宝太监郑和。你从何处来？可曾见过如此庞大的船队？我们即将前往西洋，路途遥远，需要勇气和智慧。
+          </div>
+
+          <div class="chat-msg user">
+            郑和大人，您的船队有多大？要去哪里？
+            <div class="chat-correction">💡 建议：「您的船队有多大？」→「您的船队规模如何？」更正式</div>
+          </div>
+
+          <div class="chat-msg character">
+            <div class="msg-name">郑和</div>
+            好问题！我的船队共有船只二百余艘，船员二万七千余人。最大的宝船长达四十四丈，宽十八丈。我们此次奉旨出使西洋，前往占城、爪哇、苏门答腊等地，宣扬国威，贸易通商。
+          </div>
+
+          <div class="chat-msg user">
+            那一定是非常壮观的景象！
+          </div>
+
+          <div class="chat-msg character">
+            <div class="msg-name">郑和</div>
+            确实如此。每当日出之时，百船齐发，帆影蔽日，海上的壮观景象令人叹为观止。你若有兴趣，我可以带你参观这艘旗舰...
+          </div>
+        </div>
+      </div>
+
+      <div class="chat-input-bar" style="position:absolute;bottom:68px;left:0;right:0;">
+        <input class="chat-input" type="text" placeholder="用中文输入消息..." value="">
+        <button class="chat-send">↑</button>
+      </div>
+
+      <!-- Bottom nav -->
+      <div class="bottom-nav">
+        <div class="nav-item">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+          <span>故事</span>
+        </div>
+        <div class="nav-item">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.5 3l-.16.03L15 5.1 9 3 3.36 4.9c-.21.07-.36.25-.36.48V20.5c0 .28.22.5.5.5l.16-.03L9 18.9l6 2.1 5.64-1.9c.21-.07.36-.25.36-.48V3.5c0-.28-.22-.5-.5-.5zM15 19l-6-2.11V5l6 2.11V19z"/></svg>
+          <span>地图</span>
+        </div>
+        <div class="nav-item active">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg>
+          <span>对话</span>
+        </div>
+        <div class="nav-item">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+          <span>我的</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ PROFILE SCREEN ═══════════════ -->
+    <div id="screen-profile" class="screen">
+      <div class="profile-header">
+        <div class="profile-avatar">林</div>
+        <div class="profile-name">林学者的书房</div>
+        <div class="profile-plan">PRO · 包年</div>
+        <div class="profile-stats">
+          <div class="profile-stat">
+            <div class="profile-stat-value">23</div>
+            <div class="profile-stat-label">已读故事</div>
+          </div>
+          <div class="profile-stat">
+            <div class="profile-stat-value">286</div>
+            <div class="profile-stat-label">掌握词汇</div>
+          </div>
+          <div class="profile-stat">
+            <div class="profile-stat-value">15</div>
+            <div class="profile-stat-label">连续天数</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="content-area texture-parchment">
+        <div class="profile-content">
+
+          <div class="profile-section-title">订阅管理</div>
+          <div class="sub-card">
+            <div class="sub-card-label">当前计划</div>
+            <div class="sub-card-plan">Pro 包年 · ¥998/年</div>
+            <div class="sub-card-detail">有效期至 2027-05-30 · AI 对话 500条/天</div>
+            <button class="sub-card-btn">管理订阅</button>
+          </div>
+
+          <div class="profile-section-title">AI 模型</div>
+          <div class="model-selector">
+            <div class="model-chip active">Claude</div>
+            <div class="model-chip">DeepSeek</div>
+            <div class="model-chip">Qwen</div>
+            <div class="model-chip">Kimi</div>
+            <div class="model-chip">MiniMax</div>
+          </div>
+
+          <div class="profile-section-title">学习</div>
+          <div class="profile-menu">
+            <div class="profile-menu-item">
+              <div class="profile-menu-item-left">
+                <div class="profile-menu-icon">📝</div>
+                <span class="profile-menu-label">生词本 (286词)</span>
+              </div>
+              <span class="profile-menu-arrow">›</span>
+            </div>
+            <div class="profile-menu-item">
+              <div class="profile-menu-item-left">
+                <div class="profile-menu-icon">🏆</div>
+                <span class="profile-menu-label">成就徽章 (8/24)</span>
+              </div>
+              <span class="profile-menu-arrow">›</span>
+            </div>
+            <div class="profile-menu-item">
+              <div class="profile-menu-item-left">
+                <div class="profile-menu-icon">📊</div>
+                <span class="profile-menu-label">学习统计</span>
+              </div>
+              <span class="profile-menu-arrow">›</span>
+            </div>
+          </div>
+
+          <div class="profile-section-title">设置</div>
+          <div class="profile-menu">
+            <div class="profile-menu-item">
+              <div class="profile-menu-item-left">
+                <div class="profile-menu-icon">🌐</div>
+                <span class="profile-menu-label">学习语言</span>
+              </div>
+              <span class="profile-menu-arrow">中文 → 英语 ›</span>
+            </div>
+            <div class="profile-menu-item">
+              <div class="profile-menu-item-left">
+                <div class="profile-menu-icon">🔔</div>
+                <span class="profile-menu-label">通知提醒</span>
+              </div>
+              <span class="profile-menu-arrow">已开启 ›</span>
+            </div>
+            <div class="profile-menu-item">
+              <div class="profile-menu-item-left">
+                <div class="profile-menu-icon">🎨</div>
+                <span class="profile-menu-label">字体大小</span>
+              </div>
+              <span class="profile-menu-arrow">标准 ›</span>
+            </div>
+          </div>
+
+          <div style="height:16px;"></div>
+        </div>
+      </div>
+
+      <!-- Bottom nav -->
+      <div class="bottom-nav">
+        <div class="nav-item">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+          <span>故事</span>
+        </div>
+        <div class="nav-item">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.5 3l-.16.03L15 5.1 9 3 3.36 4.9c-.21.07-.36.25-.36.48V20.5c0 .28.22.5.5.5l.16-.03L9 18.9l6 2.1 5.64-1.9c.21-.07.36-.25.36-.48V3.5c0-.28-.22-.5-.5-.5zM15 19l-6-2.11V5l6 2.11V19z"/></svg>
+          <span>地图</span>
+        </div>
+        <div class="nav-item">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg>
+          <span>对话</span>
+        </div>
+        <div class="nav-item active">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+          <span>我的</span>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /phone-frame -->
+</div><!-- /presentation -->
+
+<script>
+function showScreen(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.screen-tab').forEach(t => t.classList.remove('active'));
+
+  const screen = document.getElementById('screen-' + name);
+  if (screen) screen.classList.add('active');
+
+  const tabs = document.querySelectorAll('.screen-tab');
+  const tabMap = { splash: 0, home: 1, reader: 2, exercise: 3, map: 4, chat: 5, profile: 6 };
+  if (tabMap[name] !== undefined) tabs[tabMap[name]].classList.add('active');
+}
+</script>
+</body>
+</html>

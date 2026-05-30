@@ -1,0 +1,1333 @@
+﻿import React, { useCallback, useEffect, useState } from "react";
+import { createRoot } from "react-dom/client";
+import { Activity, BarChart3, BellRing, BookOpenText, CalendarCheck, Database, FlaskConical, Radar, ShieldCheck, Zap } from "lucide-react";
+import "./styles.css";
+
+const API_BASE = "http://127.0.0.1:19093";
+const FRONTEND_PORT_HINT = "19092";
+
+type PageId = "cycle" | "tomorrow" | "intraday" | "live" | "strategy" | "backtest" | "risk" | "data" | "ledger";
+
+type CycleState = {
+  trade_date: string;
+  red_count: number;
+  limit_up_count: number;
+  limit_down_count: number;
+  ma3: number;
+  ma5: number;
+  ma3_trend: string;
+  ma5_trend: string;
+  tag: string;
+};
+
+type Trade = {
+  signal_date: string;
+  entry_date: string;
+  exit_date: string;
+  symbol: string;
+  name: string;
+  pattern: string;
+  cycle_tag: string;
+  entry_price: number;
+  exit_price: number;
+  position_pct: number;
+  pnl_pct: number;
+  exit_reason: string;
+  signal_reason: string;
+  after_3d_return_pct: number | null;
+  gross_pnl_pct?: number | null;
+  fee_pct?: number;
+  fee_amount?: number;
+};
+
+type BacktestResponse = {
+  source: string;
+  metrics: Record<string, number>;
+  trades: Trade[];
+  rejected_count: number;
+};
+
+type FeeModel = {
+  source: string;
+  sample_count: number;
+  min_commission: number;
+  commission_rate: number;
+  commission_rate_upper_bound: number;
+  stamp_tax_rate: number;
+  transfer_fee_rate: number;
+};
+
+type StrategyExperiment = {
+  id: string;
+  name: string;
+  description: string;
+  settings: {
+    amount_min_billion: number;
+    rank_limit: number;
+    first_limit_mode: string;
+    one_to_two_open_min_pct: number;
+    cycle_filter: boolean;
+    position_pct?: number | null;
+    max_signals_per_strategy?: number;
+    research_only?: boolean;
+  };
+  metrics: Record<string, number>;
+  trade_count: number;
+  sample_trades: Trade[];
+  trades: Trade[];
+  quality: QualityBreakdown;
+  reflection: TradeReflection;
+  rejected_count: number;
+};
+
+type StrategyExperimentsResponse = {
+  source: string;
+  range_days: number;
+  experiments: StrategyExperiment[];
+};
+
+type QualityRow = {
+  key: string;
+  metrics: Record<string, number>;
+};
+
+type QualityBreakdown = {
+  by_pattern: QualityRow[];
+  by_month: QualityRow[];
+  by_board: QualityRow[];
+};
+
+type TradeReflection = {
+  verdict: string;
+  confidence: string;
+  strengths: string[];
+  weaknesses: string[];
+  suggestions: string[];
+};
+
+type TomorrowSignal = {
+  signal_date: string;
+  planned_entry_date: string | null;
+  symbol: string;
+  name: string;
+  pattern: string;
+  cycle_tag: string;
+  planned_position_pct: number;
+  stop_loss_pct: number;
+  score: number;
+  reason: string;
+  execution_rule: string;
+  close_price: number;
+  close_pct: number;
+  high_pct: number;
+  amount_billion: number;
+  sector_rank: number;
+  limit_up: boolean;
+  first_limit: boolean;
+  consecutive_limits: number;
+};
+
+type TomorrowPlan = {
+  id: string;
+  name: string;
+  description: string;
+  settings: StrategyExperiment["settings"];
+  version_id: string;
+  version_eligible: boolean;
+  version_verdict: string;
+  version_reasons: string[];
+  signals: TomorrowSignal[];
+  rejected_count: number;
+};
+
+type TomorrowPlanResponse = {
+  source: string;
+  decision_date: string;
+  planned_entry_date: string | null;
+  cycle_tag: string;
+  strategy_version_generated_at?: string;
+  plans: TomorrowPlan[];
+};
+
+type AlertStatus = {
+  feishu: {
+    enabled: boolean;
+    configured: boolean;
+    chat_id: string;
+    mode: string;
+  };
+  qmt: {
+    enabled: boolean;
+    mode: string;
+    broker: string;
+    message: string;
+  };
+};
+
+type TrackedSignal = {
+  id: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  preset_name: string;
+  version_id: string;
+  signal_date: string;
+  planned_entry_date: string | null;
+  symbol: string;
+  name: string;
+  pattern: string;
+  reference_price: number;
+  last_price: number;
+  last_pnl_pct: number;
+  max_pnl_pct: number;
+  min_pnl_pct: number;
+  planned_position_pct: number;
+  stop_loss_pct: number;
+  take_profit_pct: number;
+  execution_rule: string;
+  exit_reason: string;
+};
+
+type TrackedSignalsResponse = {
+  active_count: number;
+  closed_count: number;
+  tracks: TrackedSignal[];
+};
+
+type IntradaySignal = {
+  id: string;
+  scanned_at: string;
+  symbol: string;
+  name: string;
+  pattern: string;
+  trigger: string;
+  cycle_tag: string | null;
+  price: number;
+  pct: number;
+  amount_billion: number;
+  sector_rank: number;
+  planned_position_pct: number;
+  stop_loss_pct: number;
+  score: number;
+  execution_rule: string;
+  source: string;
+};
+
+type IntradayScanResponse = {
+  status: {
+    provider: string;
+    ready: boolean;
+    realtime: boolean;
+    message: string;
+    poll_seconds: number;
+  };
+  scanned_at: string;
+  cycle_tag: string | null;
+  signal_count: number;
+  signals: IntradaySignal[];
+};
+
+type OptimizationCandidate = {
+  id: string;
+  name: string;
+  description: string;
+  settings: StrategyExperiment["settings"];
+  metrics: Record<string, number>;
+  score: number;
+  reflection: TradeReflection;
+};
+
+type OptimizationGroup = {
+  base_id: string;
+  base_name: string;
+  candidates: OptimizationCandidate[];
+};
+
+type StrategyOptimizationResponse = {
+  source: string;
+  range_days: number;
+  groups: OptimizationGroup[];
+};
+
+type StrategyVersion = {
+  version_id: string;
+  name: string;
+  description: string;
+  settings: StrategyExperiment["settings"];
+  train: Record<string, number>;
+  validation: Record<string, number>;
+  recent: Record<string, number>;
+  score: number;
+  eligible: boolean;
+  verdict: string;
+  reasons: string[];
+};
+
+type StrategyVersionGroup = {
+  base_id: string;
+  base_name: string;
+  recommended_version: StrategyVersion | null;
+  versions: StrategyVersion[];
+};
+
+type StrategyVersionsResponse = {
+  generated_at: string;
+  source: string;
+  range_days: number;
+  segments: Record<string, { start: string | null; end: string | null; days: number }>;
+  groups: StrategyVersionGroup[];
+};
+
+type PatternRow = {
+  name: string;
+  state: "OPEN" | "WATCH" | "LOCK";
+  size: string;
+  expectancy: string;
+  fit: string;
+};
+
+const navItems: Array<{ id: PageId; label: string; icon: React.ReactNode }> = [
+  { id: "cycle", label: "周期雷达", icon: <Activity size={17} /> },
+  { id: "tomorrow", label: "明日策略", icon: <CalendarCheck size={17} /> },
+  { id: "intraday", label: "盘中雷达", icon: <Radar size={17} /> },
+  { id: "live", label: "实盘提醒", icon: <BellRing size={17} /> },
+  { id: "strategy", label: "策略实验", icon: <FlaskConical size={17} /> },
+  { id: "backtest", label: "回测报告", icon: <BarChart3 size={17} /> },
+  { id: "risk", label: "风控执行", icon: <ShieldCheck size={17} /> },
+  { id: "data", label: "行情数据", icon: <Database size={17} /> },
+  { id: "ledger", label: "研究账本", icon: <BookOpenText size={17} /> },
+];
+
+const patterns: PatternRow[] = [
+  { name: "极值套利", state: "OPEN", size: "8%", expectancy: "+2.4R", fit: "0.88" },
+  { name: "首板打板", state: "OPEN", size: "6%", expectancy: "+1.1R", fit: "0.73" },
+  { name: "一进二", state: "WATCH", size: "5%", expectancy: "+0.4R", fit: "0.51" },
+  { name: "分歧低吸", state: "LOCK", size: "0%", expectancy: "二期", fit: "锁定" },
+];
+
+function stateClass(state: PatternRow["state"]) {
+  return state === "OPEN" ? "positive" : state === "WATCH" ? "warning" : "negative";
+}
+
+function stateText(state: PatternRow["state"]) {
+  if (state === "OPEN") return "启用";
+  if (state === "WATCH") return "观察";
+  return "锁定";
+}
+
+function sourceText(source?: string) {
+  if (source === "tushare") return "Tushare 实盘历史数据";
+  if (source === "demo") return "演示数据";
+  return "读取中";
+}
+
+function patternText(pattern: string) {
+  const map: Record<string, string> = {
+    ExtremeArbitrage: "极值套利",
+    FirstLimit: "首板打板",
+    OneToTwo: "一进二",
+  };
+  return map[pattern] ?? pattern;
+}
+
+function intradayPatternText(pattern: string) {
+  const map: Record<string, string> = {
+    IntradayFirstLimit: "盘中回封",
+    IntradayStrongRepair: "强势修复",
+  };
+  return map[pattern] ?? pattern;
+}
+
+function cycleText(tag?: string) {
+  const map: Record<string, string> = {
+    IcePoint: "冰点",
+    TurnUp: "拐点向上",
+    MainRally: "主升浪",
+    Climax: "高潮",
+    TurnDown: "拐点向下",
+    Downtrend: "退潮",
+    LowShake: "低位震荡",
+    HighShake: "高位震荡",
+  };
+  return tag ? map[tag] ?? tag : "-";
+}
+
+function trackStatusText(status: string) {
+  const map: Record<string, string> = {
+    notified: "已提醒",
+    watching: "跟踪中",
+    take_profit: "止盈",
+    stop_loss: "止损",
+    time_exit: "时间退出",
+  };
+  return map[status] ?? status;
+}
+
+function pct(value?: number | null) {
+  if (value === undefined || value === null) return "-";
+  return `${value > 0 ? "+" : ""}${value.toFixed(2)}%`;
+}
+
+function price(value?: number | null) {
+  if (value === undefined || value === null) return "-";
+  return value.toFixed(3);
+}
+
+function pnlClass(value: number) {
+  return value >= 0 ? "cn-profit" : "cn-loss";
+}
+
+function modeText(value: string) {
+  const map: Record<string, string> = {
+    sealed: "收盘封板",
+    touched_strong_close: "盘中触板 + 强收盘",
+    strong_momentum: "强势接近涨停",
+  };
+  return map[value] ?? value;
+}
+
+function shortDate(value: string) {
+  return value.slice(5);
+}
+
+function latest<T>(items: T[]): T | undefined {
+  return items[items.length - 1];
+}
+
+function App() {
+  const [activePage, setActivePage] = useState<PageId>("cycle");
+  const [cycles, setCycles] = useState<CycleState[]>([]);
+  const [backtest, setBacktest] = useState<BacktestResponse | null>(null);
+  const [experiments, setExperiments] = useState<StrategyExperimentsResponse | null>(null);
+  const [tomorrowPlan, setTomorrowPlan] = useState<TomorrowPlanResponse | null>(null);
+  const [intradayScan, setIntradayScan] = useState<IntradayScanResponse | null>(null);
+  const [alertStatus, setAlertStatus] = useState<AlertStatus | null>(null);
+  const [trackedSignals, setTrackedSignals] = useState<TrackedSignalsResponse | null>(null);
+  const [feeModel, setFeeModel] = useState<FeeModel | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [lastRefresh, setLastRefresh] = useState<string>("尚未刷新");
+  const [riskCheck, setRiskCheck] = useState<string>("等待预检");
+
+  const refreshData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [cycleResponse, backtestResponse, tomorrowResponse, feeModelResponse] = await Promise.all([
+        fetch(`${API_BASE}/api/cycles`),
+        fetch(`${API_BASE}/api/backtest`),
+        fetch(`${API_BASE}/api/tomorrow-plan`),
+        fetch(`${API_BASE}/api/fee-model`),
+      ]);
+      if (!cycleResponse.ok || !backtestResponse.ok || !tomorrowResponse.ok || !feeModelResponse.ok) {
+        const message = !cycleResponse.ok
+          ? await cycleResponse.text()
+          : !backtestResponse.ok
+            ? await backtestResponse.text()
+            : !tomorrowResponse.ok
+              ? await tomorrowResponse.text()
+              : await feeModelResponse.text();
+        throw new Error(`后端 API 返回异常：${message}`);
+      }
+      setCycles(await cycleResponse.json());
+      setBacktest(await backtestResponse.json());
+      setTomorrowPlan(await tomorrowResponse.json());
+      setFeeModel(await feeModelResponse.json());
+      void fetch(`${API_BASE}/api/strategy-experiments`)
+        .then((response) => (response.ok ? response.json() : Promise.reject(response)))
+        .then(setExperiments)
+        .catch(() => undefined);
+      setLastRefresh(new Date().toLocaleTimeString("zh-CN", { hour12: false }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "无法连接后端 API");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const refreshLiveData = useCallback(async () => {
+    const [statusResponse, trackedResponse, intradayResponse] = await Promise.all([
+      fetch(`${API_BASE}/api/alerts/status`),
+      fetch(`${API_BASE}/api/signals/tracked`),
+      fetch(`${API_BASE}/api/intraday/scan`),
+    ]);
+    if (!statusResponse.ok || !trackedResponse.ok || !intradayResponse.ok) {
+      throw new Error("提醒状态读取失败");
+    }
+    setAlertStatus(await statusResponse.json());
+    setTrackedSignals(await trackedResponse.json());
+    setIntradayScan(await intradayResponse.json());
+  }, []);
+
+  useEffect(() => {
+    void refreshData();
+  }, [refreshData]);
+
+  useEffect(() => {
+    void refreshLiveData().catch(() => undefined);
+  }, [refreshLiveData]);
+
+  const currentCycle = latest(cycles);
+  const tradeCount = backtest?.metrics.trade_count ?? 0;
+  const winRate = backtest?.metrics.win_rate_pct ?? 0;
+  const currentGateState = currentCycle?.tag === "Downtrend" ? "锁定" : "通过";
+
+  function runRiskCheck() {
+    const blockedPatterns = patterns.filter((row) => row.state === "LOCK").length;
+    const rejected = backtest?.rejected_count ?? 0;
+    setRiskCheck(`预检完成：${patterns.length - blockedPatterns} 个模式可用，${blockedPatterns} 个锁定，${rejected} 个信号被风控拒绝`);
+    setActivePage("risk");
+  }
+
+  return (
+    <main className="shell">
+      <aside className="rail">
+        <div className="brand">
+          <span className="mark">CL</span>
+          <div>
+            <strong>CycleLab</strong>
+            <small>A 股短线量化</small>
+          </div>
+        </div>
+
+        <nav>
+          {navItems.map((item) => (
+            <button
+              className={activePage === item.id ? "active nav-button" : "nav-button"}
+              key={item.id}
+              onClick={() => setActivePage(item.id)}
+              type="button"
+            >
+              {item.icon} {item.label}
+            </button>
+          ))}
+        </nav>
+
+        <section className="rail-card">
+          <small>运行模式</small>
+          <strong>模拟运行</strong>
+          <span>{sourceText(backtest?.source)} · 实盘下单接口未启用</span>
+        </section>
+      </aside>
+
+      <section className="workspace">
+        <header className="topbar">
+          <div>
+            <p className="eyebrow">接口地址：{API_BASE} · 前端端口：{FRONTEND_PORT_HINT} · 最近刷新：{lastRefresh}</p>
+            <h1>{navItems.find((item) => item.id === activePage)?.label}</h1>
+            <div className="demo-banner">数据源：{sourceText(backtest?.source)} · 最近一年 · 沪深主板/创业板 · 排除科创板、北交所、ST · 不会真实下单</div>
+          </div>
+          <div className="top-actions">
+            <button onClick={refreshData} type="button"><Zap size={16} /> {loading ? "刷新中" : "刷新数据"}</button>
+            <button className="primary" onClick={runRiskCheck} type="button"><ShieldCheck size={16} /> 运行风控预检</button>
+          </div>
+        </header>
+
+        {error && <div className="error-banner">{error}。如果你当前打开的是 19096 之类的旧前端地址，请改开 19092。后端固定在 19093。</div>}
+
+        {activePage === "cycle" && (
+          <>
+            <section className="hero-grid">
+              <div className="terminal-panel regime">
+                <div className="panel-head">
+                  <span>周期状态</span>
+                  <b className={currentGateState === "通过" ? "positive" : "negative"}>{cycleText(currentCycle?.tag)}</b>
+                </div>
+                <div className="regime-number">{currentCycle?.red_count ?? "-"} <small>上涨家数</small></div>
+                <div className="chart">
+                  {cycles.map((point) => (
+                    <div className="bar-wrap" key={point.trade_date}>
+                      <div className="bar" style={{ height: `${Math.max(20, point.red_count / 45)}px` }} />
+                      <span>{shortDate(point.trade_date)}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="cycle-strip">
+                  {cycles.slice(-6).map((point) => (
+                    <button key={point.trade_date} onClick={() => setActivePage("data")} type="button">{cycleText(point.tag)}</button>
+                  ))}
+                </div>
+              </div>
+              <RiskPanel currentCycle={currentCycle} currentGateState={currentGateState} />
+              <LedgerPanel tradeCount={tradeCount} winRate={winRate} />
+            </section>
+            <PatternAndTicket patterns={patterns} setActivePage={setActivePage} />
+          </>
+        )}
+
+        {activePage === "tomorrow" && <TomorrowPage plan={tomorrowPlan} />}
+        {activePage === "intraday" && <IntradayPage scan={intradayScan} onRefresh={refreshLiveData} />}
+        {activePage === "live" && <LiveAlertsPage status={alertStatus} tracked={trackedSignals} onRefresh={refreshLiveData} />}
+        {activePage === "strategy" && <StrategyPage patterns={patterns} experiments={experiments} onRefreshData={refreshData} />}
+        {activePage === "backtest" && <BacktestPage backtest={backtest} experiments={experiments} feeModel={feeModel} />}
+        {activePage === "risk" && <RiskPage riskCheck={riskCheck} currentCycle={currentCycle} rejectedCount={backtest?.rejected_count ?? 0} />}
+        {activePage === "data" && <DataPage cycles={cycles} source={backtest?.source} />}
+        {activePage === "ledger" && <LedgerPage backtest={backtest} />}
+      </section>
+    </main>
+  );
+}
+
+function RiskPanel({ currentCycle, currentGateState }: { currentCycle?: CycleState; currentGateState: string }) {
+  return (
+    <div className="terminal-panel gates">
+      <div className="panel-head">
+        <span>风控闸门</span>
+        <b className={currentGateState === "通过" ? "positive" : "negative"}>{currentGateState}</b>
+      </div>
+      <div className="gate-row"><span>当前周期</span><b>{cycleText(currentCycle?.tag)}</b></div>
+      <div className="gate-row"><span>MA3 / MA5</span><b>{currentCycle ? `${currentCycle.ma3} / ${currentCycle.ma5}` : "-"}</b></div>
+      <div className="gate-row"><span>容量成交额门槛</span><b className="positive">启用</b></div>
+      <div className="gate-row"><span>连续亏损 2 笔禁买</span><b className="positive">监控</b></div>
+      <div className="gate-row"><span>模式外交易</span><b className="negative">禁止</b></div>
+    </div>
+  );
+}
+
+function LedgerPanel({ tradeCount, winRate }: { tradeCount: number; winRate: number }) {
+  return (
+    <div className="ledger-panel">
+      <div className="panel-head paper-head">
+        <span>研究账本</span>
+        <b>模型证据</b>
+      </div>
+      <div className="discipline">
+        <span>纪律指数</span>
+        <strong>{tradeCount ? `${winRate.toFixed(1)}%` : "-"}</strong>
+        <p>当前数值来自后端回测接口。接入更多字段后，这里会自动生成日、周、月复盘。</p>
+      </div>
+    </div>
+  );
+}
+
+function PatternAndTicket({ patterns, setActivePage }: { patterns: PatternRow[]; setActivePage: (page: PageId) => void }) {
+  return (
+    <section className="content-grid">
+      <div className="terminal-panel wide">
+        <div className="panel-head">
+          <span>交易模式矩阵</span>
+          <b>{patterns.filter((row) => row.state !== "LOCK").length} 个可用 / {patterns.filter((row) => row.state === "LOCK").length} 个锁定</b>
+        </div>
+        <div className="matrix-head">
+          <span>模式</span><span>状态</span><span>仓位</span><span>期望</span><span>周期匹配</span>
+        </div>
+        {patterns.map((row) => (
+          <button className="matrix-row row-button" key={row.name} onClick={() => setActivePage("strategy")} type="button">
+            <span>{row.name}</span>
+            <b className={stateClass(row.state)}>{stateText(row.state)}</b>
+            <span>{row.size}</span>
+            <span>{row.expectancy}</span>
+            <span>{row.fit}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="ops-panel">
+        <div className="panel-head">
+          <span>模拟订单预检</span>
+          <b className="warning">人工确认</b>
+        </div>
+        <div className="ticket">
+          <label>候选标的</label>
+          <strong>来自回测信号</strong>
+          <label>触发模式</label>
+          <strong>首板打板</strong>
+          <label>计划仓位</label>
+          <strong>6%</strong>
+          <label>硬止损</label>
+          <strong>-5.00%</strong>
+        </div>
+        <button className="full" onClick={() => setActivePage("risk")} type="button">查看模拟订单预检</button>
+      </div>
+    </section>
+  );
+}
+
+function TomorrowPage({ plan }: { plan: TomorrowPlanResponse | null }) {
+  const [activePreset, setActivePreset] = useState("conservative");
+  const selected = plan?.plans.find((item) => item.id === activePreset) ?? plan?.plans[0] ?? null;
+
+  return (
+    <section className="tomorrow-page">
+      <div className="terminal-panel tomorrow-brief">
+        <div className="panel-head">
+          <span>明日手动策略</span>
+          <b>{plan ? `信号日 ${plan.decision_date} · 计划买入日 ${plan.planned_entry_date ?? "待确认"}` : "读取中"}</b>
+        </div>
+        <div className="tomorrow-summary">
+          <div>
+            <small>当前周期</small>
+            <strong>{cycleText(plan?.cycle_tag)}</strong>
+          </div>
+          <div>
+            <small>执行方式</small>
+            <strong>手动确认</strong>
+          </div>
+          <div>
+            <small>交易限制</small>
+            <strong>非自动下单</strong>
+          </div>
+          <div>
+            <small>策略版本</small>
+            <strong>{plan?.strategy_version_generated_at ? "已接入" : "待生成"}</strong>
+          </div>
+        </div>
+        <p className="manual-note">这里只给出下一交易日候选和开盘条件，不会连接券商，也不会发出任何真实订单。开盘不满足条件时应直接放弃。</p>
+      </div>
+
+      <div className="preset-tabs dark-tabs">
+        {(plan?.plans ?? []).map((item) => (
+          <button className={selected?.id === item.id ? "active" : ""} key={item.id} onClick={() => setActivePreset(item.id)} type="button">
+            {item.name} · {item.version_eligible ? `${item.signals.length} 只` : "观察"}
+          </button>
+        ))}
+      </div>
+
+      <div className="terminal-panel">
+        <div className="panel-head">
+          <span>{selected?.name ?? "明日"}候选标的</span>
+          <b>{selected?.version_id ?? "-"} · {selected?.version_verdict ?? "读取中"}</b>
+        </div>
+        {selected ? (
+          <div className={selected.version_eligible ? "version-gate pass" : "version-gate watch"}>
+            <strong>{selected.version_eligible ? "版本门槛通过" : "版本门槛未通过"}</strong>
+            <span>{selected.version_reasons.join("；") || "等待策略版本库生成"}</span>
+            <small>拒绝信号 {selected.rejected_count}</small>
+          </div>
+        ) : null}
+        <div className="tomorrow-table">
+          <span>标的</span><span>模式</span><span>收盘涨幅</span><span>成交额</span><span>排名</span><span>仓位</span><span>止损</span><span>执行条件</span>
+          {(selected?.signals ?? []).map((signal) => (
+            <React.Fragment key={`${selected?.id}-${signal.symbol}-${signal.pattern}`}>
+              <strong>{signal.name}<small>{signal.symbol}</small></strong>
+              <span>{patternText(signal.pattern)}</span>
+              <b className={pnlClass(signal.close_pct)}>{pct(signal.close_pct)}</b>
+              <span>{signal.amount_billion.toFixed(2)} 亿</span>
+              <span>{signal.sector_rank}</span>
+              <span>{signal.planned_position_pct}%</span>
+              <span>{pct(signal.stop_loss_pct)}</span>
+              <span>{signal.execution_rule}</span>
+            </React.Fragment>
+          ))}
+        </div>
+        {selected && !selected.signals.length ? <div className="sample-empty">当前维度没有明日候选，建议空仓观察。</div> : null}
+      </div>
+    </section>
+  );
+}
+
+function IntradayPage({ scan, onRefresh }: { scan: IntradayScanResponse | null; onRefresh: () => Promise<void> }) {
+  const [actionText, setActionText] = useState("等待扫描");
+  const [busy, setBusy] = useState(false);
+
+  async function scanNow(sendAlert: boolean) {
+    setBusy(true);
+    setActionText(sendAlert ? "正在扫描并同步飞书" : "正在扫描");
+    try {
+      const response = await fetch(`${API_BASE}${sendAlert ? "/api/intraday/sync-alerts" : "/api/intraday/scan"}`);
+      if (!response.ok) throw new Error(await response.text());
+      const data = await response.json();
+      await onRefresh();
+      if (sendAlert) {
+        setActionText(`同步完成：新增 ${data.sync?.new_count ?? 0} 条，发送 ${data.sync?.sent_count ?? 0} 条`);
+      } else {
+        setActionText(`扫描完成：${data.signal_count ?? 0} 个买点`);
+      }
+    } catch (err) {
+      setActionText(err instanceof Error ? err.message : "盘中扫描失败");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="intraday-page">
+      <div className="terminal-panel intraday-brief">
+        <div className="panel-head">
+          <span>盘中实时买点</span>
+          <b className={scan?.status.ready ? "positive" : "warning"}>{scan?.status.message ?? "读取中"}</b>
+        </div>
+        <div className="live-summary">
+          <div>
+            <small>行情源</small>
+            <strong>{scan?.status.provider ?? "-"}</strong>
+            <span>{scan?.status.realtime ? "实时行情" : "未接入实时行情"}</span>
+          </div>
+          <div>
+            <small>扫描周期</small>
+            <strong>{scan?.status.poll_seconds ?? "-"} 秒</strong>
+            <span>后台开启后按此频率轮询</span>
+          </div>
+          <div>
+            <small>当前买点</small>
+            <strong>{scan?.signal_count ?? 0} 个</strong>
+            <span>{scan?.scanned_at ?? "尚未扫描"}</span>
+          </div>
+        </div>
+        <div className="live-actions">
+          <button disabled={busy} onClick={() => scanNow(false)} type="button"><Radar size={16} /> 扫描一次</button>
+          <button disabled={busy || !scan?.status.ready} onClick={() => scanNow(true)} type="button"><BellRing size={16} /> 扫描并飞书提醒</button>
+        </div>
+        <p className="manual-note">{actionText}。盘中雷达只做提醒，不会自动下单；实时行情未接入时不会生成实盘买点。</p>
+      </div>
+
+      <div className="terminal-panel">
+        <div className="panel-head">
+          <span>盘中触发列表</span>
+          <b>{cycleText(scan?.cycle_tag ?? undefined)}</b>
+        </div>
+        <div className="intraday-table">
+          <span>标的</span><span>触发</span><span>涨幅</span><span>价格</span><span>成交额</span><span>排名</span><span>仓位</span><span>执行策略</span>
+          {(scan?.signals ?? []).map((signal) => (
+            <React.Fragment key={signal.id}>
+              <strong>{signal.name}<small>{signal.symbol}</small></strong>
+              <span>{intradayPatternText(signal.pattern)}<small>{signal.trigger}</small></span>
+              <b className={pnlClass(signal.pct)}>{pct(signal.pct)}</b>
+              <span>{price(signal.price)}</span>
+              <span>{signal.amount_billion.toFixed(2)} 亿</span>
+              <span>{signal.sector_rank}</span>
+              <span>{signal.planned_position_pct}% / {pct(signal.stop_loss_pct)}</span>
+              <span>{signal.execution_rule}</span>
+            </React.Fragment>
+          ))}
+        </div>
+        {scan && !scan.signals.length ? <div className="sample-empty">当前没有盘中买点。若行情源未接入，这是正常状态。</div> : null}
+      </div>
+    </section>
+  );
+}
+
+function LiveAlertsPage({
+  status,
+  tracked,
+  onRefresh,
+}: {
+  status: AlertStatus | null;
+  tracked: TrackedSignalsResponse | null;
+  onRefresh: () => Promise<void>;
+}) {
+  const [actionText, setActionText] = useState("等待操作");
+  const [busy, setBusy] = useState(false);
+
+  async function runAction(url: string, doneText: string) {
+    setBusy(true);
+    setActionText("执行中");
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(await response.text());
+      const data = await response.json();
+      await onRefresh();
+      setActionText(`${doneText}：${data.sent_count ?? data.sync?.sent_count ?? 0} 条消息`);
+    } catch (err) {
+      setActionText(err instanceof Error ? err.message : "操作失败");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="live-page">
+      <div className="terminal-panel live-brief">
+        <div className="panel-head">
+          <span>飞书提醒与 QMT 准备</span>
+          <b>{status?.feishu.configured ? "通道已配置" : "等待配置"}</b>
+        </div>
+        <div className="live-summary">
+          <div>
+            <small>飞书群</small>
+            <strong className={status?.feishu.enabled && status.feishu.configured ? "positive" : "warning"}>
+              {status?.feishu.enabled && status.feishu.configured ? "已启用" : "未启用"}
+            </strong>
+            <span>{status?.feishu.chat_id || "未读取"}</span>
+          </div>
+          <div>
+            <small>QMT 状态</small>
+            <strong>{status?.qmt.mode ?? "模拟准备"}</strong>
+            <span>{status?.qmt.broker ?? "兴业证券"} · 不会真实下单</span>
+          </div>
+          <div>
+            <small>跟踪池</small>
+            <strong>{tracked?.active_count ?? 0} 只</strong>
+            <span>已结束 {tracked?.closed_count ?? 0} 只</span>
+          </div>
+        </div>
+        <div className="live-actions">
+          <button disabled={busy} onClick={() => runAction(`${API_BASE}/api/alerts/sync-tomorrow`, "同步完成")} type="button">
+            <BellRing size={16} /> 同步并提醒明日信号
+          </button>
+          <button disabled={busy} onClick={() => runAction(`${API_BASE}/api/alerts/test-feishu`, "测试完成")} type="button">
+            测试飞书
+          </button>
+          <button disabled={busy} onClick={() => onRefresh().then(() => setActionText("已刷新跟踪状态"))} type="button">
+            刷新跟踪
+          </button>
+        </div>
+        <p className="manual-note">{actionText}</p>
+      </div>
+
+      <div className="terminal-panel">
+        <div className="panel-head">
+          <span>信号跟踪</span>
+          <b>止盈 {tracked?.tracks.filter((item) => item.status === "take_profit").length ?? 0} · 止损 {tracked?.tracks.filter((item) => item.status === "stop_loss").length ?? 0}</b>
+        </div>
+        <div className="tracked-table">
+          <span>标的</span><span>状态</span><span>策略</span><span>参考价</span><span>最新价</span><span>收益</span><span>风控线</span><span>执行策略</span>
+          {(tracked?.tracks ?? []).map((track) => (
+            <React.Fragment key={track.id}>
+              <strong>{track.name}<small>{track.symbol}</small></strong>
+              <span>{trackStatusText(track.status)}</span>
+              <span>{track.preset_name}<small>{track.version_id}</small></span>
+              <span>{price(track.reference_price)}</span>
+              <span>{price(track.last_price)}</span>
+              <b className={pnlClass(track.last_pnl_pct)}>{pct(track.last_pnl_pct)}</b>
+              <span>止损 {pct(track.stop_loss_pct)} / 止盈 {pct(track.take_profit_pct)}</span>
+              <span>{track.exit_reason || track.execution_rule}</span>
+            </React.Fragment>
+          ))}
+        </div>
+        {tracked && !tracked.tracks.length ? <div className="sample-empty">暂无跟踪信号。出现明日候选后，点击同步或开启后台监控即可写入。</div> : null}
+      </div>
+    </section>
+  );
+}
+
+function StrategyPage({
+  patterns,
+  experiments,
+  onRefreshData,
+}: {
+  patterns: PatternRow[];
+  experiments: StrategyExperimentsResponse | null;
+  onRefreshData: () => Promise<void>;
+}) {
+  const [optimization, setOptimization] = useState<StrategyOptimizationResponse | null>(null);
+  const [versions, setVersions] = useState<StrategyVersionsResponse | null>(null);
+  const [optimizing, setOptimizing] = useState(false);
+  const [buildingVersions, setBuildingVersions] = useState(false);
+  const [optError, setOptError] = useState<string | null>(null);
+  const best = experiments?.experiments.reduce<StrategyExperiment | null>((leader, item) => {
+    if (!leader) return item;
+    return (item.metrics.total_return_pct ?? -999) > (leader.metrics.total_return_pct ?? -999) ? item : leader;
+  }, null);
+
+  async function runOptimization() {
+    setOptimizing(true);
+    setOptError(null);
+    try {
+      const response = await fetch(`${API_BASE}/api/strategy-optimization`);
+      if (!response.ok) throw new Error(await response.text());
+      setOptimization(await response.json());
+    } catch (err) {
+      setOptError(err instanceof Error ? err.message : "自优化请求失败");
+    } finally {
+      setOptimizing(false);
+    }
+  }
+
+  async function buildVersions() {
+    setBuildingVersions(true);
+    setOptError(null);
+    try {
+      const response = await fetch(`${API_BASE}/api/strategy-versions`);
+      if (!response.ok) throw new Error(await response.text());
+      setVersions(await response.json());
+      await onRefreshData();
+    } catch (err) {
+      setOptError(err instanceof Error ? err.message : "版本库生成失败");
+    } finally {
+      setBuildingVersions(false);
+    }
+  }
+
+  return (
+    <section className="strategy-lab">
+      <div className="terminal-panel lab-head">
+        <div className="panel-head"><span>策略实验室</span><b>{experiments ? `最近一年 ${experiments.range_days} 个交易日` : "读取中"}</b></div>
+        <div className="lab-summary">
+          <div>
+            <small>当前建议观察</small>
+            <strong>{best?.name ?? "-"}</strong>
+            <span>以总收益为临时排序依据，下一步应加入分市场、月份、回撤恢复天数和滑点压力测试。</span>
+          </div>
+          <div>
+            <small>股票池限制</small>
+            <strong>主板 + 创业板</strong>
+            <span>排除科创板、北交所、ST；首板定义按 A 股涨跌停规则近似。</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="experiment-grid">
+        {(experiments?.experiments ?? []).map((item) => (
+          <article className="experiment-card" key={item.id}>
+            <div className="experiment-title">
+              <div>
+                <small>{item.id}</small>
+                <h2>{item.name}</h2>
+              </div>
+              <b className={item.trade_count >= 20 ? "positive" : item.trade_count >= 5 ? "warning" : "negative"}>{item.trade_count} 笔</b>
+            </div>
+            <p>{item.description}</p>
+            {item.settings.research_only ? <div className="risk-badge">研究模式 · 单票满仓 · 不建议实盘</div> : null}
+            <div className="experiment-metrics">
+              <span><b>{pct(item.metrics.total_return_pct)}</b>总收益</span>
+              <span><b>{pct(item.metrics.win_rate_pct)}</b>胜率</span>
+              <span><b>{pct(item.metrics.max_drawdown_pct)}</b>最大回撤</span>
+              <span><b>{item.metrics.profit_loss_ratio?.toFixed(2) ?? "-"}</b>盈亏比</span>
+            </div>
+            <div className="setting-strip">
+              <span>首板：{modeText(item.settings.first_limit_mode)}</span>
+              <span>成交额 ≥ {item.settings.amount_min_billion} 亿</span>
+              <span>强度排名 ≤ {item.settings.rank_limit}</span>
+              <span>次日开盘 ≥ {item.settings.one_to_two_open_min_pct}%</span>
+              {item.settings.position_pct ? <span>单票仓位：{item.settings.position_pct}%</span> : null}
+              <span>周期过滤：{item.settings.cycle_filter ? "启用" : "放宽"}</span>
+              <span>拒绝信号：{item.rejected_count}</span>
+            </div>
+            <div className="sample-trades">
+              <div className="sample-head"><span>样本交易</span><span>模式</span><span>收益</span></div>
+              {item.sample_trades.length ? item.sample_trades.map((trade) => (
+                <div className="sample-row" key={`${item.id}-${trade.symbol}-${trade.entry_date}-${trade.pattern}`}>
+                  <span>{trade.entry_date} · {trade.name}</span>
+                  <span>{patternText(trade.pattern)}</span>
+                  <b className={pnlClass(trade.pnl_pct)}>{pct(trade.pnl_pct)}</b>
+                </div>
+              )) : <div className="sample-empty">暂无成交样本</div>}
+            </div>
+          </article>
+        ))}
+      </div>
+
+      <section className="terminal-panel mode-panel">
+        <div className="panel-head"><span>原始模式状态</span><b>用于对照，不直接代表实验参数</b></div>
+        <div className="strategy-grid compact">
+          {patterns.map((pattern) => (
+            <div className="strategy-card" key={pattern.name}>
+              <h2>{pattern.name}</h2>
+              <p>状态：<b className={stateClass(pattern.state)}>{stateText(pattern.state)}</b></p>
+              <p>计划仓位：{pattern.size}</p>
+              <p>期望值：{pattern.expectancy}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="terminal-panel reflection-panel">
+        <div className="panel-head"><span>交易反思</span><b>基于已完成回测交易自动生成</b></div>
+        <div className="reflection-grid">
+          {(experiments?.experiments ?? []).map((item) => (
+            <article className="reflection-card" key={`reflection-${item.id}`}>
+              <div className="reflection-title">
+                <div>
+                  <small>{item.name}</small>
+                  <h2>{item.reflection.verdict}</h2>
+                </div>
+                <b>{item.reflection.confidence}</b>
+              </div>
+              <ReflectionList title="优势" rows={item.reflection.strengths} />
+              <ReflectionList title="问题" rows={item.reflection.weaknesses} />
+              <ReflectionList title="下一轮优化" rows={item.reflection.suggestions} />
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="terminal-panel optimization-panel">
+        <div className="panel-head">
+          <span>策略自优化</span>
+          <button onClick={runOptimization} type="button">{optimizing ? "优化中" : "运行调参回测"}</button>
+        </div>
+        {optError && <div className="error-banner">{optError}</div>}
+        <div className="optimization-grid">
+          {(optimization?.groups ?? []).map((group) => (
+            <article className="optimization-card" key={group.base_id}>
+              <h2>{group.base_name}</h2>
+              {group.candidates.map((candidate) => (
+                <div className="optimization-row" key={candidate.id}>
+                  <div>
+                    <strong>{candidate.id.replace(`${group.base_id}-`, "")}</strong>
+                    <span>成交额 {candidate.settings.amount_min_billion} 亿 · 排名 {candidate.settings.rank_limit} · 开盘 {candidate.settings.one_to_two_open_min_pct}%</span>
+                  </div>
+                  <b>{candidate.score.toFixed(2)}</b>
+                  <span>{pct(candidate.metrics.total_return_pct)} / 回撤 {pct(candidate.metrics.max_drawdown_pct)}</span>
+                  <em>{candidate.reflection.verdict}</em>
+                </div>
+              ))}
+            </article>
+          ))}
+        </div>
+        {!optimization && <p className="manual-note">点击后会围绕每个策略做“基准、收紧、放宽”三组净费用回测，再按收益和回撤综合排序。</p>}
+      </section>
+
+      <section className="terminal-panel version-panel">
+        <div className="panel-head">
+          <span>策略版本库</span>
+          <button onClick={buildVersions} type="button">{buildingVersions ? "生成中" : "生成版本库"}</button>
+        </div>
+        {versions && (
+          <div className="version-segments">
+            <span>训练：{versions.segments.train.start} 至 {versions.segments.train.end}</span>
+            <span>验证：{versions.segments.validation.start} 至 {versions.segments.validation.end}</span>
+            <span>观察：{versions.segments.recent.start} 至 {versions.segments.recent.end}</span>
+          </div>
+        )}
+        <div className="version-grid">
+          {(versions?.groups ?? []).map((group) => (
+            <article className="version-card" key={group.base_id}>
+              <h2>{group.base_name}</h2>
+              {group.recommended_version && (
+                <div className={group.recommended_version.eligible ? "version-verdict pass" : "version-verdict watch"}>
+                  <strong>{group.recommended_version.verdict}</strong>
+                  <span>{group.recommended_version.version_id.replace(`${group.base_id}-`, "")}</span>
+                </div>
+              )}
+              {group.versions.map((version) => (
+                <div className="version-row" key={version.version_id}>
+                  <div>
+                    <strong>{version.version_id.replace(`${group.base_id}-`, "")}</strong>
+                    <span>验证 {pct(version.validation.total_return_pct)} / 回撤 {pct(version.validation.max_drawdown_pct)} / {version.validation.trade_count} 笔</span>
+                    <em>{version.reasons[0]}</em>
+                  </div>
+                  <b>{version.score.toFixed(2)}</b>
+                </div>
+              ))}
+            </article>
+          ))}
+        </div>
+        {!versions && <p className="manual-note">版本库会把最近一年切成训练段、验证段、最近观察段。验证段不赚钱或回撤超标的版本不会进入明日策略候选。</p>}
+      </section>
+    </section>
+  );
+}
+
+function ReflectionList({ title, rows }: { title: string; rows: string[] }) {
+  return (
+    <div className="reflection-list">
+      <h3>{title}</h3>
+      {rows.map((row) => (
+        <p key={`${title}-${row}`}>{row}</p>
+      ))}
+    </div>
+  );
+}
+
+function BacktestPage({ backtest, experiments, feeModel }: { backtest: BacktestResponse | null; experiments: StrategyExperimentsResponse | null; feeModel: FeeModel | null }) {
+  const [activePreset, setActivePreset] = useState("conservative");
+  const selected = experiments?.experiments.find((item) => item.id === activePreset) ?? experiments?.experiments[0] ?? null;
+  const rows = selected?.trades ?? [];
+
+  return (
+    <section className="report-grid single">
+      <div className="paper-card">
+        <div className="report-headline">
+          <div>
+            <h2>回测摘要</h2>
+            <p>正式严格回测：{backtest?.metrics.trade_count ?? 0} 笔；下方按保守、平衡、进攻实验维度拆解。</p>
+          </div>
+          <div className="preset-tabs">
+            {(experiments?.experiments ?? []).map((item) => (
+              <button className={selected?.id === item.id ? "active" : ""} key={item.id} onClick={() => setActivePreset(item.id)} type="button">
+                {item.name}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="metrics">
+          <span><b>{selected?.trade_count ?? 0}</b> 交易数</span>
+          <span><b>{pct(selected?.metrics.total_return_pct)}</b> 总收益</span>
+          <span><b>{pct(selected?.metrics.win_rate_pct)}</b> 胜率</span>
+          <span><b>{pct(selected?.metrics.max_drawdown_pct)}</b> 最大回撤</span>
+          <span><b>{selected?.metrics.profit_loss_ratio?.toFixed(2) ?? "-"}</b> 盈亏比</span>
+          <span><b>{selected?.rejected_count ?? 0}</b> 拒绝信号</span>
+        </div>
+        {feeModel && (
+          <div className="fee-strip">
+            <span>费用样本：{feeModel.sample_count} 笔 A 股交割</span>
+            <span>最低佣金：{feeModel.min_commission.toFixed(2)} 元</span>
+            <span>印花税：{(feeModel.stamp_tax_rate * 10000).toFixed(2)} / 万</span>
+            <span>沪市过户费：{(feeModel.transfer_fee_rate * 10000).toFixed(2)} / 万</span>
+            <span>佣金率上界：{(feeModel.commission_rate_upper_bound * 10000).toFixed(2)} / 万</span>
+          </div>
+        )}
+      </div>
+
+      {selected && (
+        <div className="paper-card quality-card">
+          <h2>策略质量拆解</h2>
+          <div className="quality-grid">
+            <QualityTable title="按模式" rows={selected.quality.by_pattern} label={(value) => patternText(value)} />
+            <QualityTable title="按月份" rows={selected.quality.by_month} />
+            <QualityTable title="按板块" rows={selected.quality.by_board} />
+          </div>
+        </div>
+      )}
+
+      <div className="paper-card">
+        <div className="report-headline">
+          <div>
+            <h2>{selected?.name ?? "实验维度"}交易明细</h2>
+            <p>按开仓日期倒序展示，红色为盈利，绿色为亏损。</p>
+          </div>
+        </div>
+        <div className="trade-row table-head">
+          <span>信号日期</span>
+          <span>开仓日期</span>
+          <span>清仓日期</span>
+          <span>股票名称</span>
+          <span>A股代码</span>
+          <span>模式</span>
+          <span>周期</span>
+          <span>开仓价</span>
+          <span>清仓价</span>
+          <span>信号依据</span>
+          <span>仓位</span>
+          <span>毛收益</span>
+          <span>费用</span>
+          <span>收益率</span>
+          <span>清仓原因</span>
+          <span>卖后 3 日</span>
+        </div>
+        {[...rows].reverse().map((trade) => (
+          <div className="trade-row" key={`${trade.symbol}-${trade.signal_date}-${trade.entry_date}-${trade.pattern}`}>
+            <span>{trade.signal_date}</span>
+            <span>{trade.entry_date}</span>
+            <span>{trade.exit_date}</span>
+            <span>{trade.name}</span>
+            <span>{trade.symbol}</span>
+            <span>{patternText(trade.pattern)}</span>
+            <span>{cycleText(trade.cycle_tag)}</span>
+            <span>{price(trade.entry_price)}</span>
+            <span>{price(trade.exit_price)}</span>
+            <span>{trade.signal_reason}</span>
+            <span>{trade.position_pct}%</span>
+            <span>{pct(trade.gross_pnl_pct)}</span>
+            <span>{trade.fee_amount ? `${trade.fee_amount.toFixed(2)}元 / ${pct(trade.fee_pct)}` : "-"}</span>
+            <b className={pnlClass(trade.pnl_pct)}>{pct(trade.pnl_pct)}</b>
+            <span>{trade.exit_reason}</span>
+            <span>{pct(trade.after_3d_return_pct)}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function QualityTable({ title, rows, label }: { title: string; rows: QualityRow[]; label?: (value: string) => string }) {
+  return (
+    <div className="quality-table">
+      <h3>{title}</h3>
+      <div className="quality-row table-head">
+        <span>维度</span><span>交易数</span><span>总收益</span><span>胜率</span><span>最大回撤</span>
+      </div>
+      {rows.map((row) => (
+        <div className="quality-row" key={`${title}-${row.key}`}>
+          <span>{label ? label(row.key) : row.key}</span>
+          <span>{row.metrics.trade_count ?? 0}</span>
+          <b className={pnlClass(row.metrics.total_return_pct ?? 0)}>{pct(row.metrics.total_return_pct)}</b>
+          <span>{pct(row.metrics.win_rate_pct)}</span>
+          <span>{pct(row.metrics.max_drawdown_pct)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function RiskPage({ riskCheck, currentCycle, rejectedCount }: { riskCheck: string; currentCycle?: CycleState; rejectedCount: number }) {
+  return (
+    <section className="content-grid">
+      <div className="terminal-panel">
+        <div className="panel-head"><span>风控预检结果</span><b className="positive">仅模拟</b></div>
+        <p className="large-status">{riskCheck}</p>
+        <div className="gate-row"><span>周期</span><b>{cycleText(currentCycle?.tag)}</b></div>
+        <div className="gate-row"><span>被拒绝信号</span><b className={rejectedCount ? "warning" : "positive"}>{rejectedCount}</b></div>
+        <div className="gate-row"><span>交易网关</span><b className="negative">未连接</b></div>
+      </div>
+      <div className="ops-panel">
+        <div className="panel-head"><span>实盘保护</span><b className="negative">已锁定</b></div>
+        <p>当前版本不会发出任何真实订单。后续接入券商前，所有订单必须经过周期、容量、仓位、止损、连续亏损和模式外交易闸门。</p>
+      </div>
+    </section>
+  );
+}
+
+function DataPage({ cycles, source }: { cycles: CycleState[]; source?: string }) {
+  const rows = [...cycles].reverse();
+  return (
+    <section className="terminal-panel">
+      <div className="panel-head"><span>行情数据缓存</span><b>{sourceText(source)} · 最近一个月 {cycles.length} 个交易日</b></div>
+      <MarketLineChart cycles={cycles} />
+      <div className="data-table">
+        <span>日期</span><span>上涨家数</span><span>涨停数</span><span>跌停数</span><span>MA3</span><span>MA5</span><span>周期标签</span>
+        {rows.map((cycle) => (
+          <React.Fragment key={cycle.trade_date}>
+            <span>{cycle.trade_date}</span>
+            <span>{cycle.red_count}</span>
+            <span>{cycle.limit_up_count}</span>
+            <span>{cycle.limit_down_count}</span>
+            <span>{cycle.ma3}</span>
+            <span>{cycle.ma5}</span>
+            <b>{cycleText(cycle.tag)}</b>
+          </React.Fragment>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function MarketLineChart({ cycles }: { cycles: CycleState[] }) {
+  if (!cycles.length) return null;
+  const width = 920;
+  const height = 220;
+  const padding = 28;
+  const maxValue = Math.max(1, ...cycles.flatMap((cycle) => [cycle.red_count, cycle.limit_up_count * 25, cycle.limit_down_count * 25]));
+  const x = (index: number) => padding + (index * (width - padding * 2)) / Math.max(1, cycles.length - 1);
+  const y = (value: number) => height - padding - (value / maxValue) * (height - padding * 2);
+  const line = (values: number[]) => values.map((value, index) => `${x(index)},${y(value)}`).join(" ");
+  const latest = cycles[cycles.length - 1];
+
+  return (
+    <div className="market-line-card">
+      <div className="market-chart-head">
+        <span>市场宽度走势</span>
+        <b>{latest.trade_date} · 上涨 {latest.red_count} · 涨停 {latest.limit_up_count} · 跌停 {latest.limit_down_count}</b>
+      </div>
+      <svg className="market-line-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="最近一个月市场宽度折线图">
+        <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} className="chart-axis" />
+        <polyline points={line(cycles.map((cycle) => cycle.red_count))} className="line-red-count" />
+        <polyline points={line(cycles.map((cycle) => cycle.limit_up_count * 25))} className="line-limit-up" />
+        <polyline points={line(cycles.map((cycle) => cycle.limit_down_count * 25))} className="line-limit-down" />
+        {cycles.map((cycle, index) => (
+          <g key={cycle.trade_date}>
+            <circle cx={x(index)} cy={y(cycle.red_count)} r="3" className="dot-red-count" />
+            {index % 4 === 0 || index === cycles.length - 1 ? <text x={x(index)} y={height - 8} textAnchor="middle">{shortDate(cycle.trade_date)}</text> : null}
+          </g>
+        ))}
+      </svg>
+      <div className="market-legend"><span className="legend-red">上涨家数</span><span className="legend-up">涨停数 x25</span><span className="legend-down">跌停数 x25</span></div>
+    </div>
+  );
+}
+function LedgerPage({ backtest }: { backtest: BacktestResponse | null }) {
+  return (
+    <section className="ledger-panel ledger-page">
+      <div className="panel-head paper-head"><span>研究账本</span><b>月度校准雏形</b></div>
+      <h2>本轮模型结论</h2>
+      <p>当前回测使用 {sourceText(backtest?.source)}。股票池只包含沪深主板和创业板，排除科创板、北交所、ST。免费日线数据只能做规则链路和近似回测验证，盘口级打板回测需要后续付费行情。</p>
+      <div className="metrics">
+        <span><b>{backtest?.metrics.trade_count ?? 0}</b> 交易数</span>
+        <span><b>{pct(backtest?.metrics.average_return_pct)}</b> 平均收益</span>
+        <span><b>{backtest?.rejected_count ?? 0}</b> 风控拒绝</span>
+        <span><b>3</b> 首期模式</span>
+      </div>
+    </section>
+  );
+}
+
+createRoot(document.getElementById("root")!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+);
+
+
+

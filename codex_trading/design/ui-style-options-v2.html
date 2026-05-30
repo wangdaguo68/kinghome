@@ -1,0 +1,554 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>A 股短线量化系统高保真 UI 方向</title>
+  <style>
+    :root {
+      --ink: #101417;
+      --muted: #65717d;
+      --line: #d7dde2;
+      --panel: #ffffff;
+      --steel: #1f2a32;
+      --green: #1f8a5b;
+      --red: #bd3e37;
+      --gold: #b1863c;
+      --blue: #2f68a8;
+      --paper: #f4f0e6;
+      --night: #0c1014;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 12% 4%, rgba(177,134,60,.13), transparent 28%),
+        linear-gradient(180deg, #f7f8f7 0%, #e9edf0 100%);
+      font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+    }
+    header {
+      min-height: 220px;
+      padding: 34px 44px 28px;
+      background:
+        linear-gradient(90deg, rgba(12,16,20,.92), rgba(31,42,50,.78)),
+        repeating-linear-gradient(90deg, rgba(255,255,255,.04) 0, rgba(255,255,255,.04) 1px, transparent 1px, transparent 34px);
+      color: #eef2f0;
+      position: relative;
+      overflow: hidden;
+    }
+    header:after {
+      content: "";
+      position: absolute;
+      right: 44px;
+      top: 30px;
+      width: 360px;
+      height: 150px;
+      border: 1px solid rgba(255,255,255,.16);
+      background:
+        linear-gradient(120deg, transparent 0 42%, rgba(177,134,60,.45) 42% 43%, transparent 43%),
+        linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+      clip-path: polygon(0 12%, 100% 0, 90% 100%, 8% 82%);
+    }
+    .kicker {
+      color: #d6b46e;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0;
+      margin-bottom: 12px;
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(30px, 4vw, 54px);
+      line-height: 1.04;
+      letter-spacing: 0;
+      max-width: 920px;
+    }
+    .intro {
+      margin: 16px 0 0;
+      color: #bdc7ce;
+      max-width: 820px;
+      line-height: 1.75;
+      font-size: 15px;
+    }
+    main { padding: 28px 44px 48px; }
+    .section-title {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 16px;
+      margin: 0 0 14px;
+    }
+    .section-title h2 { margin: 0; font-size: 22px; }
+    .section-title p { margin: 0; color: var(--muted); font-size: 14px; }
+    .options {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(320px, 1fr));
+      gap: 22px;
+    }
+    .choice {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 14px 32px rgba(20,27,33,.08);
+    }
+    .choice-head {
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+    .choice-head strong { font-size: 18px; }
+    .badge {
+      border: 1px solid currentColor;
+      border-radius: 999px;
+      padding: 4px 9px;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .mock {
+      height: 520px;
+      padding: 12px;
+      background: #eef2f4;
+    }
+    .desc {
+      padding: 16px 18px 18px;
+      color: #4f5b66;
+      line-height: 1.65;
+      font-size: 14px;
+      min-height: 128px;
+    }
+    .desc b { color: var(--ink); }
+
+    /* Option A */
+    .terminal {
+      height: 100%;
+      background: #0b0f13;
+      color: #dbe4eb;
+      border-radius: 6px;
+      border: 1px solid #242e37;
+      padding: 12px;
+      font-family: "Cascadia Mono", Consolas, monospace;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.03);
+    }
+    .term-nav, .term-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .term-tabs span {
+      display: inline-block;
+      padding: 5px 8px;
+      background: #121920;
+      border: 1px solid #27333e;
+      border-radius: 4px;
+      margin-right: 4px;
+      font-size: 11px;
+      color: #93a4b3;
+    }
+    .term-tabs span.active { color: #f4c76d; border-color: #725b2d; }
+    .term-metrics {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr 1fr;
+      gap: 8px;
+    }
+    .term-box {
+      border: 1px solid #26313b;
+      background: #10161c;
+      border-radius: 4px;
+      padding: 9px;
+    }
+    .term-label { color: #768594; font-size: 11px; }
+    .term-value { margin-top: 5px; font-size: 22px; color: #5fe09a; }
+    .mini-chart {
+      height: 72px;
+      margin-top: 8px;
+      background:
+        linear-gradient(135deg, transparent 0 35%, rgba(95,224,154,.28) 35% 36%, transparent 36%),
+        linear-gradient(165deg, transparent 0 56%, rgba(143,180,255,.24) 56% 57%, transparent 57%),
+        repeating-linear-gradient(90deg, #17202a 0, #17202a 1px, transparent 1px, transparent 28px),
+        repeating-linear-gradient(0deg, #17202a 0, #17202a 1px, transparent 1px, transparent 24px);
+      border: 1px solid #25313b;
+      border-radius: 4px;
+    }
+    .matrix {
+      display: grid;
+      grid-template-columns: 1.3fr .75fr .75fr .75fr;
+      gap: 6px;
+      font-size: 11px;
+    }
+    .matrix div {
+      padding: 7px;
+      background: #111820;
+      border: 1px solid #25313b;
+      border-radius: 3px;
+    }
+    .ok { color: #5fe09a; }
+    .warn { color: #f4c76d; }
+    .bad { color: #f07973; }
+
+    /* Option B */
+    .ledger {
+      height: 100%;
+      background:
+        linear-gradient(90deg, rgba(32,59,59,.06), transparent 38%),
+        #f3ead9;
+      color: #20231f;
+      border-radius: 6px;
+      border: 1px solid #c9b98e;
+      padding: 14px;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 12px;
+      position: relative;
+      overflow: hidden;
+    }
+    .ledger:before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(70,60,42,.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(70,60,42,.08) 1px, transparent 1px);
+      background-size: 28px 28px;
+      pointer-events: none;
+    }
+    .ledger > * { position: relative; }
+    .ledger-top {
+      display: flex;
+      justify-content: space-between;
+      border-bottom: 1px solid #c9b98e;
+      padding-bottom: 9px;
+    }
+    .stamp {
+      color: #6d5d36;
+      font-size: 11px;
+      border: 1px solid #b49755;
+      padding: 4px 7px;
+    }
+    .ledger-panels {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .paper-panel {
+      background: rgba(255,250,239,.78);
+      border: 1px solid #c9b98e;
+      border-radius: 4px;
+      padding: 10px;
+    }
+    .paper-panel small { color: #746848; }
+    .paper-panel strong { display: block; font-size: 23px; margin-top: 5px; }
+    .regime-strip {
+      height: 70px;
+      margin-top: 8px;
+      background:
+        linear-gradient(90deg, #203b3b 0 14%, #d2b46c 14% 18%, #203b3b 18% 31%, #b44b3d 31% 34%, #203b3b 34% 60%, #d2b46c 60% 62%, #203b3b 62% 100%);
+      opacity: .92;
+      border-radius: 3px;
+    }
+    .ledger-table {
+      border: 1px solid #c9b98e;
+      background: rgba(255,250,239,.82);
+      border-radius: 4px;
+      overflow: hidden;
+      font-size: 12px;
+    }
+    .ledger-table div {
+      display: grid;
+      grid-template-columns: 1.3fr .7fr .7fr .8fr;
+      gap: 8px;
+      padding: 8px 10px;
+      border-bottom: 1px solid rgba(201,185,142,.62);
+    }
+    .ledger-table div:last-child { border-bottom: 0; }
+
+    /* Option C */
+    .ops {
+      height: 100%;
+      background: #f8f9fa;
+      border-radius: 6px;
+      border: 1px solid #d6dde3;
+      padding: 12px;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+    }
+    .ops-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+    .pill {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      background: #e8edf1;
+    }
+    .pill.green { background: #dff2e7; color: #19613f; }
+    .pill.gold { background: #fff0d5; color: #765117; }
+    .ops-grid {
+      display: grid;
+      grid-template-columns: 150px 1fr;
+      gap: 10px;
+    }
+    .ops-panel {
+      background: #fff;
+      border: 1px solid #d6dde3;
+      border-radius: 5px;
+      padding: 10px;
+      box-shadow: 0 8px 18px rgba(31,42,50,.05);
+    }
+    .gate-list {
+      display: grid;
+      gap: 7px;
+      font-size: 12px;
+    }
+    .gate-list span {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      border-bottom: 1px solid #edf0f2;
+      padding-bottom: 6px;
+    }
+    .candidate {
+      display: grid;
+      grid-template-columns: 1fr 52px 52px 54px;
+      gap: 6px;
+      font-size: 11px;
+      padding: 7px 0;
+      border-bottom: 1px solid #edf0f2;
+    }
+    .order-ticket {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      font-size: 12px;
+    }
+    .order-ticket div {
+      background: #fff;
+      border: 1px solid #d6dde3;
+      border-radius: 5px;
+      padding: 9px;
+    }
+
+    .final {
+      margin-top: 24px;
+      display: grid;
+      grid-template-columns: 1.1fr .9fr;
+      gap: 22px;
+    }
+    .recommend, .map {
+      background: #ffffff;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 14px 32px rgba(20,27,33,.07);
+    }
+    .recommend h2, .map h2 { margin: 0 0 12px; font-size: 20px; }
+    .recommend p, .map p { color: #52606d; line-height: 1.75; margin: 0 0 12px; }
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+      margin-top: 14px;
+    }
+    .flow div {
+      min-height: 76px;
+      border: 1px solid #cfd7de;
+      border-radius: 6px;
+      padding: 10px;
+      background: #f8fafb;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .flow b { display: block; color: #1f2a32; margin-bottom: 4px; }
+    @media (max-width: 1180px) {
+      .options, .final { grid-template-columns: 1fr; }
+      .mock { height: auto; min-height: 520px; }
+    }
+    @media (max-width: 680px) {
+      header, main { padding-left: 18px; padding-right: 18px; }
+      header:after { display: none; }
+      .term-metrics, .ledger-panels, .ops-grid, .order-ticket, .flow { grid-template-columns: 1fr; }
+      .matrix, .candidate, .ledger-table div { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="kicker">A-share short-cycle quant platform · design round 2</div>
+    <h1>把交易模式变成可审计、可回测、可执行的研究终端</h1>
+    <p class="intro">这版不做简单卡片，而是按真实产品来设计：盘前/盘中工作台、模型研究账本、风控下单台三种方向。整体参考“量化研究机构”的克制、证据链和纪律感，但不照搬任何现有公司视觉。</p>
+  </header>
+
+  <main>
+    <div class="section-title">
+      <h2>三种高保真方向</h2>
+      <p>回复 A、B、C，或指定组合：例如“主界面 A，复盘 B，下单 C”。</p>
+    </div>
+
+    <section class="options">
+      <article class="choice">
+        <div class="choice-head">
+          <strong>A. 黑箱研究终端</strong>
+          <span class="badge" style="color:#1f8a5b;">高密度</span>
+        </div>
+        <div class="mock">
+          <div class="terminal">
+            <div class="term-nav">
+              <b>CycleLab / Live Regime</b>
+              <span class="warn">09:42:18 CN</span>
+            </div>
+            <div class="term-tabs">
+              <span class="active">Emotion</span><span>Patterns</span><span>Backtest</span><span>Risk</span><span>Replay</span>
+            </div>
+            <div>
+              <div class="term-metrics">
+                <div class="term-box">
+                  <div class="term-label">CycleTag</div>
+                  <div class="term-value">TurnUp</div>
+                  <div class="mini-chart"></div>
+                </div>
+                <div class="term-box">
+                  <div class="term-label">RedCount / MA3 / MA5</div>
+                  <div style="font-size:19px;margin-top:7px;">1280 / 1532 / 1860</div>
+                  <div style="margin-top:9px;" class="ok">MA5 low hook candidate</div>
+                  <div style="margin-top:8px;color:#7f8d99;">5D removed value: 1126</div>
+                </div>
+                <div class="term-box">
+                  <div class="term-label">Global Risk Gate</div>
+                  <div style="font-size:19px;margin-top:7px;" class="ok">PASS</div>
+                  <div style="margin-top:9px;">Max gross exposure 30%</div>
+                  <div style="margin-top:8px;" class="bad">DipBuy locked after 13:30</div>
+                </div>
+              </div>
+              <div style="margin-top:10px;" class="matrix">
+                <div class="term-label">Pattern</div><div class="term-label">State</div><div class="term-label">Size</div><div class="term-label">Reason</div>
+                <div>ExtremeArbitrage</div><div class="ok">OPEN</div><div>8%</div><div>Ice repair</div>
+                <div>FirstLimit</div><div class="ok">OPEN</div><div>5%</div><div>Capacity board</div>
+                <div>1To2</div><div class="warn">WATCH</div><div>3%</div><div>Auction volume</div>
+                <div>DipBuy</div><div class="bad">LOCK</div><div>0%</div><div>Index fade</div>
+              </div>
+            </div>
+            <div class="term-row">
+              <span class="term-label">Audit trail: no order can bypass cycle, size, stop-loss, and discipline gates.</span>
+              <span class="ok">SIM MODE</span>
+            </div>
+          </div>
+        </div>
+        <div class="desc"><b>适合：</b>盯盘、回测调参、盘中信号监控。视觉记忆点是“情绪周期雷达 + 策略闸门矩阵”。缺点是学习成本高，适合你自己或专业用户长期使用。</div>
+      </article>
+
+      <article class="choice">
+        <div class="choice-head">
+          <strong>B. 西蒙斯式研究账本</strong>
+          <span class="badge" style="color:#8a6321;">模型纪律</span>
+        </div>
+        <div class="mock">
+          <div class="ledger">
+            <div class="ledger-top">
+              <b>Quant Research Ledger</b>
+              <span class="stamp">MODEL EVIDENCE</span>
+            </div>
+            <div class="ledger-panels">
+              <div class="paper-panel">
+                <small>Emotion Regime Trace</small>
+                <strong>TurnUp · day 2</strong>
+                <div class="regime-strip"></div>
+              </div>
+              <div class="paper-panel">
+                <small>Discipline Index</small>
+                <strong style="color:#1f6b4f;">92.4%</strong>
+                <p style="margin:8px 0 0;font-size:12px;line-height:1.5;color:#6d644c;">模式外操作占比下降，止损执行率达标。</p>
+              </div>
+            </div>
+            <div class="ledger-table">
+              <div style="color:#746848;"><span>Pattern</span><span>Win</span><span>Expect</span><span>Cycle Fit</span></div>
+              <div><span>ExtremeArb</span><span>61%</span><span>+2.4R</span><span style="color:#1f6b4f;">0.88</span></div>
+              <div><span>FirstLimit</span><span>54%</span><span>+1.1R</span><span style="color:#1f6b4f;">0.73</span></div>
+              <div><span>1To2</span><span>47%</span><span>+0.4R</span><span style="color:#9b6c18;">0.51</span></div>
+              <div><span>Out-of-model</span><span>21%</span><span>-1.8R</span><span style="color:#b04438;">blocked</span></div>
+            </div>
+            <div class="paper-panel">
+              <small>Monthly decision</small>
+              <p style="margin:7px 0 0;font-size:12px;line-height:1.55;">强化 ExtremeArb；降低 1To2 仓位；回测新增“冰点次日反包首板”的卖出后 3 日收益。</p>
+            </div>
+          </div>
+        </div>
+        <div class="desc"><b>适合：</b>复盘、研究、策略迭代。它不像交易软件，更像模型实验室：每次交易都要留下证据、结果和纪律评分。缺点是不够刺激，盘中执行效率弱于 A/C。</div>
+      </article>
+
+      <article class="choice">
+        <div class="choice-head">
+          <strong>C. 风控执行驾驶舱</strong>
+          <span class="badge" style="color:#2f68a8;">实盘准备</span>
+        </div>
+        <div class="mock">
+          <div class="ops">
+            <div class="ops-top">
+              <b>交易控制台</b>
+              <span><i class="pill green">模拟盘</i> <i class="pill gold">人工确认</i></span>
+            </div>
+            <div class="ops-grid">
+              <div class="ops-panel">
+                <b>今日闸门</b>
+                <div class="gate-list" style="margin-top:10px;">
+                  <span>周期 <b>拐点向上</b></span>
+                  <span>总仓 <b>30%</b></span>
+                  <span>连亏 <b>0</b></span>
+                  <span>止损 <b class="ok">已设置</b></span>
+                  <span>模式外 <b class="bad">禁止</b></span>
+                </div>
+              </div>
+              <div class="ops-panel">
+                <b>候选标的</b>
+                <div class="candidate" style="color:#65717d;margin-top:8px;"><span>标的</span><span>模式</span><span>仓位</span><span>状态</span></div>
+                <div class="candidate"><span>XX科技</span><span>首板</span><span>8%</span><span class="ok">通过</span></div>
+                <div class="candidate"><span>XX电新</span><span>极值</span><span>5%</span><span class="ok">通过</span></div>
+                <div class="candidate"><span>XX传媒</span><span>一进二</span><span>3%</span><span class="warn">等待</span></div>
+                <div class="candidate"><span>XX智能</span><span>低吸</span><span>0%</span><span class="bad">禁买</span></div>
+              </div>
+            </div>
+            <div class="order-ticket">
+              <div><b>订单预检</b><br><span class="ok">6/7 通过</span></div>
+              <div><b>硬止损</b><br><span>-5.00%</span></div>
+              <div><b>人工确认</b><br><span class="warn">待确认</span></div>
+            </div>
+            <div class="ops-panel" style="font-size:12px;color:#65717d;">所有自动下单必须经过：CycleTag 启用、容量门槛、仓位上限、止损位、连续亏损、割肉当天禁买、下午回落禁买。</div>
+          </div>
+        </div>
+        <div class="desc"><b>适合：</b>未来模拟交易和自动下单。它把“买不买”变成清晰的风控闸门，不让系统越权。缺点是研究氛围较弱，需要搭配 B 的复盘和 A 的监控。</div>
+      </article>
+    </section>
+
+    <section class="final">
+      <div class="recommend">
+        <h2>推荐组合</h2>
+        <p>我建议最终产品不是三选一，而是采用“<b>A 做主工作台，B 做研究复盘，C 做下单风控</b>”的组合。这样更符合你的系统：前端不是装饰，而是交易纪律的外壳。</p>
+        <p>整体气质可以定为：<b>冷静的量化研究室 + A 股短线执行台</b>。这比单纯仿交易软件更高级，也比纯学术研究界面更能落地实盘。</p>
+      </div>
+      <div class="map">
+        <h2>产品信息架构</h2>
+        <p>首期 Web 端建议保留 5 个一级页面，先服务回测和复盘，后续再扩展实盘。</p>
+        <div class="flow">
+          <div><b>行情数据</b>AkShare/Tushare 拉取、清洗、缓存</div>
+          <div><b>周期雷达</b>RedCount、MA3、MA5、CycleTag</div>
+          <div><b>策略实验</b>模式参数、启用周期、仓位规则</div>
+          <div><b>回测报告</b>胜率、回撤、卖出后 3 日回溯</div>
+          <div><b>风控执行</b>模拟盘、人工确认、自动下单闸门</div>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

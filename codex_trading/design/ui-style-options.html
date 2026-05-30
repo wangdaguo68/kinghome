@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>A 股短线量化系统 UI 风格确认</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+      background: #eef1f4;
+      color: #161a1d;
+    }
+    header {
+      padding: 26px 34px 18px;
+      background: #ffffff;
+      border-bottom: 1px solid #d8dde3;
+    }
+    h1 { margin: 0; font-size: 26px; letter-spacing: 0; }
+    .subtitle { margin: 10px 0 0; color: #59636e; line-height: 1.7; max-width: 980px; }
+    main { padding: 24px 34px 40px; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(260px, 1fr));
+      gap: 18px;
+    }
+    .card {
+      background: #ffffff;
+      border: 1px solid #d5dbe2;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 8px 20px rgba(18, 25, 33, .07);
+    }
+    .preview { padding: 14px; min-height: 300px; }
+    .body { padding: 16px 18px 18px; border-top: 1px solid #e4e8ed; }
+    .body h2 { margin: 0 0 8px; font-size: 18px; }
+    .body p { margin: 0; color: #52606d; line-height: 1.7; }
+    .recommend {
+      margin-top: 22px;
+      background: #ffffff;
+      border: 1px solid #d5dbe2;
+      border-radius: 8px;
+      padding: 18px;
+      line-height: 1.8;
+    }
+    .tag {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      background: #e8eef6;
+      color: #26384c;
+      font-size: 12px;
+      margin-right: 6px;
+    }
+    @media (max-width: 1000px) {
+      .grid { grid-template-columns: 1fr; }
+      header, main { padding-left: 18px; padding-right: 18px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>A 股短线量化系统：UI 风格确认</h1>
+    <p class="subtitle">请重点看信息密度、交易员工作台感、长期使用舒适度。你可以直接回复 A、B、C，或者告诉我想混合哪些元素。</p>
+  </header>
+
+  <main>
+    <section class="grid">
+      <article class="card">
+        <div class="preview">
+          <div style="background:#0f1115;color:#d9e1e8;border-radius:6px;padding:14px;font-family:Consolas,monospace;min-height:270px;">
+            <div style="display:flex;justify-content:space-between;border-bottom:1px solid #29313a;padding-bottom:8px;margin-bottom:10px;">
+              <strong>CycleLab</strong><span style="color:#8fb4ff">2026-05-27 09:42</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1.1fr 1fr;gap:8px;">
+              <div style="border:1px solid #2a3440;padding:10px;border-radius:4px;">
+                <div style="color:#7d8793;font-size:12px;">CycleTag</div>
+                <div style="font-size:22px;color:#55d98b;">TurnUp</div>
+                <div style="height:42px;background:linear-gradient(90deg,#263142,#1a1f27);margin-top:10px;"></div>
+              </div>
+              <div style="border:1px solid #2a3440;padding:10px;border-radius:4px;">
+                <div style="color:#7d8793;font-size:12px;">RedCount / MA5</div>
+                <div style="font-size:18px;">1280 / 1860</div>
+                <div style="color:#f2c66d;margin-top:8px;">IcePoint repair</div>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:10px;">
+              <div style="background:#18202a;padding:9px;border-radius:4px;">FirstLimit<br><span style="color:#55d98b">ON</span></div>
+              <div style="background:#18202a;padding:9px;border-radius:4px;">1To2<br><span style="color:#55d98b">ON</span></div>
+              <div style="background:#18202a;padding:9px;border-radius:4px;">DipBuy<br><span style="color:#d86b6b">LOCK</span></div>
+              <div style="background:#18202a;padding:9px;border-radius:4px;">Position<br><span style="color:#8fb4ff">30%</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="body">
+          <h2>A. 研究终端风</h2>
+          <p>接近专业交易终端和研究工作台，暗色、高密度、指标优先。适合长时间盯盘、回测和策略调参。</p>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="preview">
+          <div style="background:#f4f1e8;color:#20231f;border-radius:6px;padding:14px;min-height:270px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #c9c2ad;padding-bottom:8px;margin-bottom:10px;">
+              <strong>Quant Research Ledger</strong><span style="font-size:12px;">Model v0.1</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+              <div style="border:1px solid #c9c2ad;padding:12px;border-radius:4px;background:#fffaf0;">
+                <div style="font-size:12px;color:#6f6a5b;">Emotion Regime</div>
+                <div style="font-size:24px;">TurnUp</div>
+                <div style="height:50px;margin-top:10px;background:repeating-linear-gradient(90deg,#203b3b 0,#203b3b 12px,#d2b46c 12px,#d2b46c 14px);opacity:.8;"></div>
+              </div>
+              <div style="border:1px solid #c9c2ad;padding:12px;border-radius:4px;background:#fffaf0;">
+                <div style="font-size:12px;color:#6f6a5b;">Model Discipline</div>
+                <div style="font-size:20px;color:#1f6b4f;">92%</div>
+                <div style="font-size:12px;margin-top:8px;">Out-of-model trades trending down</div>
+              </div>
+            </div>
+            <div style="margin-top:12px;border:1px solid #c9c2ad;background:#fffaf0;padding:10px;border-radius:4px;">
+              <div style="display:grid;grid-template-columns:1.4fr .7fr .7fr .7fr;gap:8px;font-size:12px;color:#6f6a5b;">
+                <span>Pattern</span><span>Win</span><span>Expect</span><span>Gate</span>
+              </div>
+              <div style="display:grid;grid-template-columns:1.4fr .7fr .7fr .7fr;gap:8px;margin-top:8px;">
+                <span>ExtremeArb</span><span>61%</span><span>+2.4</span><span>Open</span>
+              </div>
+              <div style="display:grid;grid-template-columns:1.4fr .7fr .7fr .7fr;gap:8px;margin-top:6px;">
+                <span>FirstLimit</span><span>54%</span><span>+1.1</span><span>Open</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="body">
+          <h2>B. 西蒙斯研究室风</h2>
+          <p>借鉴量化研究机构的研究账本气质：克制、学术、重证据和模型纪律。更适合复盘、参数校准和长期研究。</p>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="preview">
+          <div style="background:#f7f8fa;color:#151719;border-radius:6px;padding:14px;min-height:270px;">
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
+              <div style="font-weight:700;">交易控制台</div>
+              <div style="background:#dff5e5;color:#17613a;padding:4px 8px;border-radius:4px;font-size:12px;">模拟盘</div>
+              <div style="background:#fff0d4;color:#7a4d08;padding:4px 8px;border-radius:4px;font-size:12px;">人工确认</div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr;gap:10px;">
+              <div style="border:1px solid #d8dde3;border-radius:4px;padding:10px;background:white;">
+                <div style="font-size:12px;color:#6b7280;">今日闸门</div>
+                <div style="margin-top:8px;">周期：拐点向上</div>
+                <div style="margin-top:6px;">总仓上限：30%</div>
+                <div style="margin-top:6px;">连续亏损：0</div>
+                <div style="margin-top:6px;color:#17613a;">允许开仓</div>
+              </div>
+              <div style="border:1px solid #d8dde3;border-radius:4px;background:white;padding:10px;">
+                <div style="display:grid;grid-template-columns:1fr 70px 70px 70px;gap:8px;color:#6b7280;font-size:12px;">
+                  <span>候选标的</span><span>模式</span><span>仓位</span><span>状态</span>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 70px 70px 70px;gap:8px;margin-top:10px;">
+                  <span>XX科技</span><span>首板</span><span>8%</span><span style="color:#17613a;">通过</span>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 70px 70px 70px;gap:8px;margin-top:8px;">
+                  <span>XX传媒</span><span>一进二</span><span>5%</span><span style="color:#b42318;">禁买</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="body">
+          <h2>C. 操作控制台风</h2>
+          <p>浅色、清晰、偏实盘执行。强调风控闸门、候选标的、订单状态，适合未来模拟盘和自动下单阶段。</p>
+        </div>
+      </article>
+    </section>
+
+    <section class="recommend">
+      <strong>我的建议：</strong>
+      主系统采用 <span class="tag">A 的信息密度</span>，研究和复盘页面吸收 <span class="tag">B 的模型账本质感</span>，实盘下单页采用 <span class="tag">C 的风控闸门</span>。这样能兼顾西蒙斯式研究纪律与短线交易执行效率。
+    </section>
+  </main>
+</body>
+</html>

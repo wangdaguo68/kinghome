@@ -1,0 +1,1 @@
+"""Market emotion cycle engine."""

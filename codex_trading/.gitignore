@@ -1,0 +1,17 @@
+.superpowers/
+frontend/node_modules/
+frontend/dist/
+frontend/tsconfig.tsbuildinfo
+backend/.pytest_cache/
+backend/**/__pycache__/
+backend/cache/
+cache/
+backend/*.log
+backend/*.pid
+backend/scripts/__pycache__/
+frontend/*.log
+frontend/*.pid
+*.pyc
+.env
+backend/.env
+data/king.xls

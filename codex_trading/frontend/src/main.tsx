@@ -1,18 +1,23 @@
 ﻿import React, { useCallback, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Activity, BarChart3, BellRing, BookOpenText, CalendarCheck, Database, FlaskConical, Radar, ShieldCheck, Zap } from "lucide-react";
+import { Activity, BarChart3, BellRing, BookOpenText, CalendarCheck, CalendarDays, Clock3, Database, FlaskConical, Globe2, Radar, ShieldCheck, Zap } from "lucide-react";
 import "./styles.css";
 
-const API_BASE = "http://127.0.0.1:19093";
+const API_HOST = window.location.hostname || "127.0.0.1";
+const API_BASE = `${window.location.protocol}//${API_HOST}:19093`;
 const FRONTEND_PORT_HINT = "19092";
 
-type PageId = "cycle" | "tomorrow" | "intraday" | "live" | "strategy" | "backtest" | "risk" | "data" | "ledger";
+type PageId = "calendar" | "cycle" | "tomorrow" | "intraday" | "live" | "strategy" | "backtest" | "risk" | "data" | "ledger";
 
 type CycleState = {
   trade_date: string;
   red_count: number;
+  down_count: number;
   limit_up_count: number;
   limit_down_count: number;
+  turnover_billion: number;
+  sh_turnover_billion: number;
+  sz_turnover_billion: number;
   ma3: number;
   ma5: number;
   ma3_trend: string;
@@ -286,7 +291,33 @@ type PatternRow = {
   fit: string;
 };
 
+type CalendarImpact = "high" | "medium" | "watch";
+
+type InvestmentEvent = {
+  date: string;
+  title: string;
+  detail: string;
+  category: string;
+  market: string;
+  impact: CalendarImpact;
+  source: string;
+  source_url?: string;
+  tags?: string[];
+};
+
+type InvestmentCalendarResponse = {
+  source: string;
+  source_status: Record<string, { ok: boolean; count: number; message: string }>;
+  start_date: string;
+  end_date: string;
+  updated_at: string;
+  event_count: number;
+  events: InvestmentEvent[];
+  warnings: string[];
+};
+
 const navItems: Array<{ id: PageId; label: string; icon: React.ReactNode }> = [
+  { id: "calendar", label: "投资日历", icon: <CalendarDays size={17} /> },
   { id: "cycle", label: "周期雷达", icon: <Activity size={17} /> },
   { id: "tomorrow", label: "明日策略", icon: <CalendarCheck size={17} /> },
   { id: "intraday", label: "盘中雷达", icon: <Radar size={17} /> },
@@ -303,6 +334,52 @@ const patterns: PatternRow[] = [
   { name: "首板打板", state: "OPEN", size: "6%", expectancy: "+1.1R", fit: "0.73" },
   { name: "一进二", state: "WATCH", size: "5%", expectancy: "+0.4R", fit: "0.51" },
   { name: "分歧低吸", state: "LOCK", size: "0%", expectancy: "二期", fit: "锁定" },
+];
+
+const investmentEvents: InvestmentEvent[] = [
+  { date: "2026-06-01", title: "住友电木上调半导体封装材料价格", detail: "半导体封装用环氧树脂成形材料价格上调约 10%-20%，自 6 月 1 日起发货执行新价格。", category: "半导体", market: "日本 / 材料", impact: "medium", source: "产业公告整理" },
+  { date: "2026-06-01", title: "美团公布 2026 年一季度业绩", detail: "董事会定于 6 月 1 日举行会议并公布 2026 年第一季度未经审核财务业绩。", category: "财报", market: "港股 / 互联网", impact: "high", source: "公司公告" },
+  { date: "2026-06-01", title: "NVIDIA GTC Taipei 2026 开幕", detail: "大会于 6 月 1 日至 4 日举办，黄仁勋 6 月 1 日发表主题演讲，关注 AI 芯片、机器人与算力生态。", category: "AI", market: "美股 / 台股", impact: "high", source: "NVIDIA 官方活动" },
+  { date: "2026-06-01", title: "宇树科技科创板 IPO 上会", detail: "机器人产业链核心事件，关注人形机器人、减速器、传感器与国产控制器映射。", category: "IPO", market: "A股 / 机器人", impact: "high", source: "交易所公告整理" },
+  { date: "2026-06-01", title: "华为 nova 16 系列及全场景新品发布会", detail: "关注端侧 AI、鸿蒙生态、消费电子供应链和影像链条。", category: "消费电子", market: "A股 / 港股", impact: "medium", source: "公司活动" },
+  { date: "2026-06-01", title: "北京市卫星物联网行业发展大会", detail: "大会在北京海淀举办，关注卫星通信、低轨组网、物联网终端与北斗应用。", category: "卫星互联网", market: "A股", impact: "medium", source: "会议公告" },
+  { date: "2026-06-02", title: "台北电脑展 Computex 2026", detail: "6 月 2 日至 5 日举行，关注 AI PC、服务器、GPU、存储、电源与液冷产业链。", category: "AI硬件", market: "台股 / A股", impact: "high", source: "Computex 官方日程" },
+  { date: "2026-06-02", title: "第四届天津国际航运产业博览会", detail: "6 月 2 日至 5 日举办，关注航运、港口、智能物流和船舶制造。", category: "航运", market: "A股", impact: "watch", source: "会议公告" },
+  { date: "2026-06-02", title: "Microsoft Build 2026", detail: "6 月 2 日至 3 日在美国旧金山举行，关注 AI Agent、开发者工具、云服务与 Copilot 生态。", category: "AI软件", market: "美股 / 云计算", impact: "high", source: "Microsoft 官方活动" },
+  { date: "2026-06-02", title: "2490 亿元 7 天期逆回购到期", detail: "关注央行公开市场操作续作规模、资金利率和短端流动性变化。", category: "流动性", market: "中国债市 / A股", impact: "medium", source: "公开市场到期整理" },
+  { date: "2026-06-03", title: "广州国际数智装备与人工智能展", detail: "6 月 3 日至 5 日举办，关注工业 AI、智能装备、数控系统和机器视觉。", category: "高端制造", market: "A股", impact: "medium", source: "会议公告" },
+  { date: "2026-06-03", title: "SNEC 光伏、储能及电池展", detail: "6 月 3 日至 5 日在上海举办，关注光伏新技术、储能、电池设备和电力电子。", category: "新能源", market: "A股", impact: "high", source: "会议公告" },
+  { date: "2026-06-03", title: "圣彼得堡国际经济论坛", detail: "6 月 3 日至 6 日举行，关注能源、粮食、地缘贸易与大宗商品预期。", category: "宏观地缘", market: "全球", impact: "medium", source: "会议日程" },
+  { date: "2026-06-04", title: "美联储公布经济状况褐皮书", detail: "观察美国消费、就业、薪资和物价描述，对降息预期和美元利率敏感。", category: "央行", market: "全球", impact: "high", source: "Federal Reserve 官方日历" },
+  { date: "2026-06-04", title: "商务部新闻发布会", detail: "介绍近期商务领域重点工作，关注外贸、消费、跨境电商与反制措施表述。", category: "政策", market: "A股 / 港股", impact: "medium", source: "商务部发布" },
+  { date: "2026-06-05", title: "美国 5 月非农就业报告", detail: "就业、失业率和薪资增速将影响美债收益率、美元和全球风险资产。", category: "宏观数据", market: "全球", impact: "high", source: "BLS 官方发布日程" },
+  { date: "2026-06-05", title: "华为云创想者大会", detail: "6 月 5 日至 6 日举办，关注国产算力、云服务、行业大模型和昇腾生态。", category: "云计算", market: "A股", impact: "high", source: "公司活动" },
+  { date: "2026-06-05", title: "中关村数字金融与金融安全大会", detail: "关注金融信创、数据安全、AI 金融应用和支付安全。", category: "金融科技", market: "A股", impact: "medium", source: "会议公告" },
+  { date: "2026-06-05", title: "华北低空经济与人工智能科技博览会", detail: "6 月 5 日至 7 日举办，关注低空飞行器、空管系统、无人机和 AI 应用。", category: "低空经济", market: "A股", impact: "medium", source: "会议公告" },
+  { date: "2026-06-06", title: "东风汽车 OpenVAN 无人物流车全球首发", detail: "关注无人配送、线控底盘、智能驾驶和商用车智能化链条。", category: "智能汽车", market: "A股 / 港股", impact: "medium", source: "公司活动" },
+  { date: "2026-06-06", title: "首届人工智能高质量发展大会", detail: "关注 AI 应用落地、算力基础设施、数据要素和政策导向。", category: "AI", market: "A股", impact: "medium", source: "会议公告" },
+  { date: "2026-06-08", title: "LME 下调铅锌直接合约单日涨跌幅限制", detail: "铅和锌直接合约单日涨跌幅限制从 15% 下调至 12%，6 月 8 日起生效。", category: "有色金属", market: "全球大宗", impact: "medium", source: "LME 规则公告" },
+  { date: "2026-06-09", title: "Apple WWDC 2026", detail: "北京时间 6 月 9 日至 13 日举办，关注端侧 AI、iOS/macOS、MR 与苹果供应链。", category: "消费电子", market: "美股 / A股", impact: "high", source: "Apple 官方活动" },
+  { date: "2026-06-09", title: "国际气体产业链展 IG China 2026", detail: "6 月 9 日至 11 日举办，关注电子特气、工业气体、半导体材料和装备。", category: "半导体材料", market: "A股", impact: "medium", source: "会议公告" },
+  { date: "2026-06-10", title: "美国 5 月 CPI", detail: "通胀数据是 6 月 FOMC 前关键变量，影响降息定价、美债收益率和成长风格估值。", category: "宏观数据", market: "全球", impact: "high", source: "BLS 官方发布日程" },
+  { date: "2026-06-10", title: "中国 5 月 CPI / PPI", detail: "关注价格修复、工业品通缩压力和政策加码预期。", category: "宏观数据", market: "A股 / 债市", impact: "high", source: "国家统计局发布日程" },
+  { date: "2026-06-11", title: "美国 5 月 PPI", detail: "观察上游价格向核心 PCE 的传导，对美联储政策预期有二次验证意义。", category: "宏观数据", market: "全球", impact: "medium", source: "BLS 官方发布日程" },
+  { date: "2026-06-12", title: "美国密歇根大学消费者信心初值", detail: "关注通胀预期和消费信心，对美元、黄金和风险偏好有短线影响。", category: "宏观数据", market: "全球", impact: "medium", source: "官方数据日程整理" },
+  { date: "2026-06-15", title: "中国 5 月经济运行数据", detail: "工业增加值、社零、固定资产投资和地产链数据集中发布，验证内需修复强度。", category: "宏观数据", market: "A股 / 港股", impact: "high", source: "国家统计局发布日程" },
+  { date: "2026-06-16", title: "美国 5 月零售销售", detail: "检验美国消费韧性，影响美元、美债和跨境电商、出口链预期。", category: "宏观数据", market: "全球", impact: "medium", source: "美国官方数据日程" },
+  { date: "2026-06-16", title: "FOMC 议息会议开始", detail: "6 月 16 日至 17 日召开，关注点阵图、经济预测和鲍威尔措辞。", category: "央行", market: "全球", impact: "high", source: "Federal Reserve 官方日历" },
+  { date: "2026-06-17", title: "美联储公布利率决议", detail: "关注联邦基金目标利率、点阵图、通胀和就业预测，冲击全球权益和商品。", category: "央行", market: "全球", impact: "high", source: "Federal Reserve 官方日历" },
+  { date: "2026-06-18", title: "英国央行利率决议", detail: "关注英镑、欧洲风险偏好和全球央行政策节奏联动。", category: "央行", market: "欧洲", impact: "medium", source: "央行日程整理" },
+  { date: "2026-06-20", title: "LPR 月度报价观察窗口", detail: "6 月 20 日为周六，关注顺延后的 1 年期和 5 年期以上 LPR 报价及地产政策信号。", category: "利率", market: "A股 / 债市", impact: "high", source: "中国货币网 / LPR 机制" },
+  { date: "2026-06-22", title: "LPR 报价顺延关注日", detail: "若按工作日顺延，关注贷款市场报价利率是否调整，影响银行、地产、消费和久期资产。", category: "利率", market: "A股 / 港股", impact: "high", source: "中国货币网 / LPR 机制" },
+  { date: "2026-06-23", title: "美国 6 月 S&P Global PMI 初值", detail: "制造业和服务业景气度初值，影响美债收益率和全球周期资产。", category: "宏观数据", market: "全球", impact: "medium", source: "数据日程整理" },
+  { date: "2026-06-24", title: "英伟达股东大会观察窗口", detail: "关注 AI 算力供需、Blackwell / Rubin 节奏、数据中心资本开支和供应链指引。", category: "AI", market: "美股 / A股", impact: "medium", source: "公司日程整理" },
+  { date: "2026-06-25", title: "美国一季度 GDP 终值", detail: "检验美国经济韧性，对降息路径和全球风险偏好有确认作用。", category: "宏观数据", market: "全球", impact: "medium", source: "BEA 官方发布日程" },
+  { date: "2026-06-26", title: "美国 5 月 PCE 通胀", detail: "美联储最关注的通胀指标之一，核心 PCE 将影响 7 月政策预期。", category: "宏观数据", market: "全球", impact: "high", source: "BEA 官方发布日程" },
+  { date: "2026-06-27", title: "周末政策与产业催化观察", detail: "关注国常会、部委政策、地方低空经济/机器人/算力项目落地公告。", category: "政策", market: "A股", impact: "watch", source: "周末公告跟踪" },
+  { date: "2026-06-30", title: "中国 6 月官方 PMI", detail: "月末制造业、非制造业和综合 PMI 发布，观察内需、出口订单和价格分项。", category: "宏观数据", market: "A股 / 商品", impact: "high", source: "国家统计局发布日程" },
+  { date: "2026-06-30", title: "半年末资金面与机构调仓", detail: "关注跨季流动性、基金半年报窗口、银行理财赎回和高低切换。", category: "资金面", market: "A股 / 债市", impact: "high", source: "市场日历整理" },
+  { date: "2026-07-01", title: "下半年政策窗口开启", detail: "关注中报预告、政治局会议预期、行业政策和暑期消费链启动。", category: "政策", market: "A股 / 港股", impact: "medium", source: "市场日历整理" },
 ];
 
 function stateClass(state: PatternRow["state"]) {
@@ -368,6 +445,11 @@ function pct(value?: number | null) {
   return `${value > 0 ? "+" : ""}${value.toFixed(2)}%`;
 }
 
+function formatBillion(value?: number | null) {
+  if (value === undefined || value === null) return "-";
+  return `${Math.round(value).toLocaleString("zh-CN")} 亿`;
+}
+
 function price(value?: number | null) {
   if (value === undefined || value === null) return "-";
   return value.toFixed(3);
@@ -394,8 +476,49 @@ function latest<T>(items: T[]): T | undefined {
   return items[items.length - 1];
 }
 
+function todayKey() {
+  const value = new Date();
+  const offset = value.getTimezoneOffset() * 60_000;
+  return new Date(value.getTime() - offset).toISOString().slice(0, 10);
+}
+
+function eventGroups(events: InvestmentEvent[]) {
+  const groups = new Map<string, InvestmentEvent[]>();
+  for (const event of events) {
+    const rows = groups.get(event.date) ?? [];
+    rows.push(event);
+    groups.set(event.date, rows);
+  }
+  return [...groups.entries()].sort(([left], [right]) => left.localeCompare(right));
+}
+
+function weekdayText(value: string) {
+  const names = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
+  return names[new Date(`${value}T12:00:00`).getDay()];
+}
+
+function impactText(value: CalendarImpact) {
+  const map: Record<CalendarImpact, string> = {
+    high: "高影响",
+    medium: "中影响",
+    watch: "观察",
+  };
+  return map[value];
+}
+
+function calendarDates(startDate: string, endDate: string) {
+  const start = new Date(`${startDate}T12:00:00`);
+  const end = new Date(`${endDate}T12:00:00`);
+  const length = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1);
+  return Array.from({ length }, (_, index) => {
+    const value = new Date(start);
+    value.setDate(start.getDate() + index);
+    return value.toISOString().slice(0, 10);
+  });
+}
+
 function App() {
-  const [activePage, setActivePage] = useState<PageId>("cycle");
+  const [activePage, setActivePage] = useState<PageId>("calendar");
   const [cycles, setCycles] = useState<CycleState[]>([]);
   const [backtest, setBacktest] = useState<BacktestResponse | null>(null);
   const [experiments, setExperiments] = useState<StrategyExperimentsResponse | null>(null);
@@ -515,7 +638,7 @@ function App() {
           <div>
             <p className="eyebrow">接口地址：{API_BASE} · 前端端口：{FRONTEND_PORT_HINT} · 最近刷新：{lastRefresh}</p>
             <h1>{navItems.find((item) => item.id === activePage)?.label}</h1>
-            <div className="demo-banner">数据源：{sourceText(backtest?.source)} · 最近一年 · 沪深主板/创业板 · 排除科创板、北交所、ST · 不会真实下单</div>
+            <div className="demo-banner">数据源：{sourceText(backtest?.source)} · 最近一年 · 行情宽度按沪深 A 股统计（不含北交所） · 策略池排除科创板、北交所、ST · 不会真实下单</div>
           </div>
           <div className="top-actions">
             <button onClick={refreshData} type="button"><Zap size={16} /> {loading ? "刷新中" : "刷新数据"}</button>
@@ -525,6 +648,7 @@ function App() {
 
         {error && <div className="error-banner">{error}。如果你当前打开的是 19096 之类的旧前端地址，请改开 19092。后端固定在 19093。</div>}
 
+        {activePage === "calendar" && <InvestmentCalendarPage />}
         {activePage === "cycle" && (
           <>
             <section className="hero-grid">
@@ -586,17 +710,172 @@ function RiskPanel({ currentCycle, currentGateState }: { currentCycle?: CycleSta
 
 function LedgerPanel({ tradeCount, winRate }: { tradeCount: number; winRate: number }) {
   return (
-    <div className="ledger-panel">
-      <div className="panel-head paper-head">
+    <div className="terminal-panel ledger-panel">
+      <div className="panel-head">
         <span>研究账本</span>
         <b>模型证据</b>
       </div>
-      <div className="discipline">
-        <span>纪律指数</span>
+      <div className="ledger-signal">
+        <small>纪律指数</small>
         <strong>{tradeCount ? `${winRate.toFixed(1)}%` : "-"}</strong>
-        <p>当前数值来自后端回测接口。接入更多字段后，这里会自动生成日、周、月复盘。</p>
+        <span>基于后端回测样本实时汇总</span>
+      </div>
+      <div className="ledger-mini-grid">
+        <span><b>{tradeCount}</b>交易数</span>
+        <span><b>{backtestLabel(winRate)}</b>胜率层级</span>
       </div>
     </div>
+  );
+}
+
+function backtestLabel(winRate: number) {
+  if (!winRate) return "-";
+  if (winRate >= 55) return "强";
+  if (winRate >= 45) return "稳";
+  return "弱";
+}
+
+function InvestmentCalendarPage() {
+  const fallbackCalendar: InvestmentCalendarResponse = {
+    source: "前端备用数据",
+    source_status: {},
+    start_date: "2026-06-01",
+    end_date: "2026-07-01",
+    updated_at: "",
+    event_count: investmentEvents.length,
+    events: investmentEvents,
+    warnings: ["后端投资日历接口暂不可用，当前显示备用事件清单。"],
+  };
+  const [calendarData, setCalendarData] = useState<InvestmentCalendarResponse | null>(null);
+  const [calendarLoading, setCalendarLoading] = useState(true);
+  const [calendarError, setCalendarError] = useState<string | null>(null);
+  const data = calendarData ?? fallbackCalendar;
+  const events = data.events;
+  const groups = eventGroups(events);
+  const eventMap = new Map(groups);
+  const [selectedDate, setSelectedDate] = useState(todayKey());
+  const selectedEvents = eventMap.get(selectedDate) ?? [];
+  const highCount = events.filter((event) => event.impact === "high").length;
+  const macroCount = events.filter((event) => ["宏观数据", "央行", "央行/利率", "利率", "流动性"].includes(event.category)).length;
+  const aiCount = events.filter((event) => event.category.includes("科技") || event.category.includes("AI") || event.category.includes("半导体")).length;
+  const nextHigh = events.find((event) => event.impact === "high");
+  const sourceCount = Object.values(data.source_status).filter((status) => status.ok && status.count > 0).length;
+  const updatedAt = data.updated_at ? new Date(data.updated_at).toLocaleString("zh-CN", { hour12: false }) : "未同步";
+
+  useEffect(() => {
+    let mounted = true;
+    setCalendarLoading(true);
+    fetch(`${API_BASE}/api/investment-calendar?days=30`)
+      .then((response) => (response.ok ? response.json() : Promise.reject(response)))
+      .then((payload: InvestmentCalendarResponse) => {
+        if (!mounted) return;
+        setCalendarData(payload);
+        setCalendarError(null);
+        const firstAvailable = payload.events.find((event) => event.date >= payload.start_date)?.date ?? payload.start_date;
+        setSelectedDate((current) => (payload.events.some((event) => event.date === current) ? current : firstAvailable));
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setCalendarError("投资日历接口读取失败，已切换备用清单。");
+        setCalendarData(null);
+        setSelectedDate(fallbackCalendar.start_date);
+      })
+      .finally(() => {
+        if (mounted) setCalendarLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  return (
+    <section className="calendar-page">
+      <div className="terminal-panel calendar-hero">
+        <div className="panel-head">
+          <span>未来一个月事件雷达</span>
+          <b>{data.start_date} 至 {data.end_date}</b>
+        </div>
+        <div className="calendar-hero-body">
+          <div>
+            <small>事件总数</small>
+            <strong>{events.length}</strong>
+            <span>{calendarLoading ? "正在同步财联社、同花顺、东方财富。" : `来源：${data.source} · 更新：${updatedAt}`}</span>
+          </div>
+          <div className="calendar-focus">
+            <Clock3 size={18} />
+            <span>{nextHigh ? `${nextHigh.date} · ${nextHigh.title}` : "暂无高影响事件"}</span>
+          </div>
+        </div>
+        <div className="calendar-stats">
+          <span><b>{highCount}</b>高影响</span>
+          <span><b>{macroCount}</b>宏观/央行</span>
+          <span><b>{aiCount}</b>科技/半导体</span>
+          <span><b>{sourceCount || 1}</b>已接入源</span>
+        </div>
+        {(calendarError || data.warnings.length > 0) && (
+          <div className="calendar-warning">{calendarError ?? data.warnings[0]}</div>
+        )}
+      </div>
+
+      <div className="calendar-board-layout">
+        <section className="terminal-panel calendar-board-panel">
+          <div className="panel-head"><span>方块日历</span><b>点击日期查看完整事件</b></div>
+          <div className="calendar-week-head">
+            <span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span>
+          </div>
+          <div className="calendar-board">
+            {calendarDates(data.start_date, data.end_date).map((date) => {
+              const events = eventMap.get(date) ?? [];
+              const topEvents = events.slice(0, 3);
+              const highEvents = events.filter((event) => event.impact === "high").length;
+              return (
+                <button
+                  className={selectedDate === date ? "calendar-cell active" : "calendar-cell"}
+                  key={date}
+                  onClick={() => setSelectedDate(date)}
+                  type="button"
+                >
+                  <span className="cell-date">{date.slice(5)} <small>{weekdayText(date).replace("星期", "")}</small></span>
+                  <span className="cell-count">{events.length ? `${events.length} 项` : "空窗"}</span>
+                  <span className={highEvents ? "cell-impact hot" : "cell-impact"}>{highEvents ? `${highEvents} 高` : "观察"}</span>
+                  <span className="cell-events">
+                    {topEvents.map((event) => <em key={`${date}-${event.title}`}>{event.title}</em>)}
+                    {events.length > topEvents.length ? <em>+{events.length - topEvents.length} 更多</em> : null}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        <aside className="terminal-panel calendar-detail-panel">
+          <div className="panel-head"><span>{selectedDate} · {weekdayText(selectedDate)}</span><b>{selectedEvents.length} 项事件</b></div>
+          <div className="selected-event-list">
+            {selectedEvents.map((event) => (
+              <div className={`event-card impact-${event.impact}`} key={`${event.date}-${event.title}`}>
+                <div className="event-card-head">
+                  <span>{event.category}</span>
+                  <b>{impactText(event.impact)}</b>
+                </div>
+                <h2>{event.title}</h2>
+                <p>{event.detail}</p>
+                <div className="event-meta">
+                  <span><Globe2 size={13} /> {event.market}</span>
+                  {event.source_url ? <a href={event.source_url} target="_blank" rel="noreferrer">{event.source}</a> : <span>{event.source}</span>}
+                </div>
+              </div>
+            ))}
+            {!selectedEvents.length ? <div className="empty-day">当日暂无重点事件，主要观察前后交易日催化延续。</div> : null}
+          </div>
+
+          <div className="theme-stack compact-themes">
+            <div><strong>财联社</strong><span>投资日历事件、宏观数据和产业催化。</span></div>
+            <div><strong>同花顺</strong><span>月度投资日历、概念与产业关联。</span></div>
+            <div><strong>东方财富</strong><span>财经会议、个股日历、休市和新股提醒。</span></div>
+          </div>
+        </aside>
+      </div>
+    </section>
   );
 }
 
@@ -1257,14 +1536,17 @@ function DataPage({ cycles, source }: { cycles: CycleState[]; source?: string })
       <div className="panel-head"><span>行情数据缓存</span><b>{sourceText(source)} · 最近一个月 {cycles.length} 个交易日</b></div>
       <MarketLineChart cycles={cycles} />
       <div className="data-table">
-        <span>日期</span><span>上涨家数</span><span>涨停数</span><span>跌停数</span><span>MA3</span><span>MA5</span><span>周期标签</span>
+        <span>日期</span><span>上涨</span><span>下跌</span><span>涨停</span><span>跌停</span><span>成交额</span><span>沪市</span><span>深市</span><span>MA5</span><span>周期标签</span>
         {rows.map((cycle) => (
           <React.Fragment key={cycle.trade_date}>
             <span>{cycle.trade_date}</span>
             <span>{cycle.red_count}</span>
+            <span>{cycle.down_count}</span>
             <span>{cycle.limit_up_count}</span>
             <span>{cycle.limit_down_count}</span>
-            <span>{cycle.ma3}</span>
+            <span>{formatBillion(cycle.turnover_billion)}</span>
+            <span>{formatBillion(cycle.sh_turnover_billion)}</span>
+            <span>{formatBillion(cycle.sz_turnover_billion)}</span>
             <span>{cycle.ma5}</span>
             <b>{cycleText(cycle.tag)}</b>
           </React.Fragment>
@@ -1289,7 +1571,7 @@ function MarketLineChart({ cycles }: { cycles: CycleState[] }) {
     <div className="market-line-card">
       <div className="market-chart-head">
         <span>市场宽度走势</span>
-        <b>{latest.trade_date} · 上涨 {latest.red_count} · 涨停 {latest.limit_up_count} · 跌停 {latest.limit_down_count}</b>
+        <b>{latest.trade_date} · 上涨 {latest.red_count} · 下跌 {latest.down_count} · 涨停 {latest.limit_up_count} · 跌停 {latest.limit_down_count} · 成交额 {formatBillion(latest.turnover_billion)}</b>
       </div>
       <svg className="market-line-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="最近一个月市场宽度折线图">
         <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} className="chart-axis" />
@@ -1309,15 +1591,42 @@ function MarketLineChart({ cycles }: { cycles: CycleState[] }) {
 }
 function LedgerPage({ backtest }: { backtest: BacktestResponse | null }) {
   return (
-    <section className="ledger-panel ledger-page">
-      <div className="panel-head paper-head"><span>研究账本</span><b>月度校准雏形</b></div>
-      <h2>本轮模型结论</h2>
-      <p>当前回测使用 {sourceText(backtest?.source)}。股票池只包含沪深主板和创业板，排除科创板、北交所、ST。免费日线数据只能做规则链路和近似回测验证，盘口级打板回测需要后续付费行情。</p>
-      <div className="metrics">
-        <span><b>{backtest?.metrics.trade_count ?? 0}</b> 交易数</span>
-        <span><b>{pct(backtest?.metrics.average_return_pct)}</b> 平均收益</span>
-        <span><b>{backtest?.rejected_count ?? 0}</b> 风控拒绝</span>
-        <span><b>3</b> 首期模式</span>
+    <section className="ledger-page">
+      <div className="terminal-panel ledger-overview">
+        <div className="panel-head"><span>研究账本</span><b>月度校准雏形</b></div>
+        <div className="ledger-overview-body">
+          <div>
+            <small>本轮模型结论</small>
+            <h2>{sourceText(backtest?.source)}</h2>
+            <p>股票池只包含沪深主板和创业板，排除科创板、北交所、ST。当前版本用于规则链路和近似回测验证，盘口级打板回测需要后续接入更细行情。</p>
+          </div>
+          <div className="ledger-status">
+            <span>研究模式</span>
+            <strong>模拟运行</strong>
+          </div>
+        </div>
+      </div>
+
+      <div className="ledger-metrics">
+        <span><b>{backtest?.metrics.trade_count ?? 0}</b>交易数</span>
+        <span><b>{pct(backtest?.metrics.average_return_pct)}</b>平均收益</span>
+        <span><b>{pct(backtest?.metrics.win_rate_pct)}</b>胜率</span>
+        <span><b>{backtest?.rejected_count ?? 0}</b>风控拒绝</span>
+      </div>
+
+      <div className="ledger-grid">
+        <article className="terminal-panel ledger-card">
+          <div className="panel-head"><span>执行纪律</span><b>硬约束</b></div>
+          <p>模式外交易禁止；连续亏损触发禁买；容量成交额门槛启用；所有实盘动作仍需人工确认。</p>
+        </article>
+        <article className="terminal-panel ledger-card">
+          <div className="panel-head"><span>复盘入口</span><b>日 / 周 / 月</b></div>
+          <p>后续可把日复盘、周复盘、月复盘模板接入这里，形成行情、信号、交易和纪律的闭环。</p>
+        </article>
+        <article className="terminal-panel ledger-card">
+          <div className="panel-head"><span>下一步校准</span><b>数据质量</b></div>
+          <p>重点补盘口级成交、竞价金额、封单强度和实际成交滑点，减少日线近似回测偏差。</p>
+        </article>
       </div>
     </section>
   );

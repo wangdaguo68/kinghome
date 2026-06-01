@@ -22,6 +22,7 @@ from app.backtest.versioning import (
 from app.cycle.engine import build_cycle_states
 from app.data.schemas import Pattern, Signal, StockBar
 from app.data.tushare_provider import TushareError, fetch_recent_market_data, next_open_date, token_available
+from app.investment_calendar import fetch_investment_calendar
 from app.live.intraday import intraday_status, load_intraday_quotes, scan_intraday_quotes
 from app.live.qmt_adapter import QmtAdapter
 from app.live.tracker import refresh_tracking, sync_intraday_signals, sync_tomorrow_signals, tracked_signals
@@ -55,7 +56,9 @@ app.add_middleware(
         "http://localhost:19095",
         "http://127.0.0.1:19096",
         "http://localhost:19096",
+        "http://39.106.115.87:19092",
     ],
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1|39\.106\.115\.87):19092",
     allow_credentials=False,
     allow_methods=["GET"],
     allow_headers=["*"],
@@ -253,6 +256,11 @@ def provider() -> dict[str, object]:
 def fee_model() -> dict[str, object]:
     model = load_broker_fee_model()
     return model.__dict__
+
+
+@app.get("/api/investment-calendar")
+def investment_calendar(days: int = 30, force_refresh: bool = False) -> dict[str, object]:
+    return fetch_investment_calendar(days=days, force_refresh=force_refresh)
 
 
 @app.get("/api/cycles")

@@ -30,6 +30,9 @@ class MarketDay:
     limit_down_count: int
     index_return: float
     turnover_billion: float
+    down_count: int = 0
+    sh_turnover_billion: float = 0
+    sz_turnover_billion: float = 0
 
 
 @dataclass(frozen=True)
@@ -66,6 +69,10 @@ class CycleState:
     ma3_trend: str
     ma5_trend: str
     tag: CycleTag
+    down_count: int = 0
+    turnover_billion: float = 0
+    sh_turnover_billion: float = 0
+    sz_turnover_billion: float = 0
 
 
 @dataclass(frozen=True)

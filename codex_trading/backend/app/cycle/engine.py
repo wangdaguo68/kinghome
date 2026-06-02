@@ -60,6 +60,10 @@ def build_cycle_states(days: list[MarketDay]) -> list[CycleState]:
                 ma3_trend=ma3_trend,
                 ma5_trend=ma5_trend,
                 tag=classify_cycle(day.red_count, ma3, ma5, ma3_trend, ma5_trend),
+                down_count=day.down_count,
+                turnover_billion=day.turnover_billion,
+                sh_turnover_billion=day.sh_turnover_billion,
+                sz_turnover_billion=day.sz_turnover_billion,
             )
         )
     return states

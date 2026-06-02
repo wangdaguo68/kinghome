@@ -189,7 +189,7 @@ class BacktestEngine:
         exit_day = cycles[max_exit_index].trade_date
         exit_bar = self._find_bar(stock_bars, exit_day, symbol)
         if exit_bar is None or entry_price <= 0:
-            return exit_day, 0, "缺少退出行情"
+            return exit_day, 0, "退出日缺少个股行情（停牌/数据缺口）"
         return exit_day, round((exit_bar.close_price / entry_price - 1) * 100, 2), "时间止损/两日退出"
 
     @staticmethod

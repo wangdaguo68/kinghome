@@ -48,10 +48,24 @@ type Trade = {
 type BacktestResponse = {
   source: string;
   latest_date?: string | null;
+  last_completed_entry_date?: string | null;
   range_days?: number;
+  completion_note?: string;
+  recent_market_days?: MarketCoverageDay[];
   metrics: Record<string, number>;
   trades: Trade[];
   rejected_count: number;
+};
+
+type MarketCoverageDay = {
+  trade_date: string;
+  red_count: number;
+  down_count: number;
+  limit_up_count: number;
+  limit_down_count: number;
+  turnover_billion: number;
+  sh_turnover_billion: number;
+  sz_turnover_billion: number;
 };
 
 type FeeModel = {
@@ -90,6 +104,10 @@ type StrategyExperiment = {
 type StrategyExperimentsResponse = {
   source: string;
   range_days: number;
+  latest_date?: string | null;
+  last_completed_entry_date?: string | null;
+  completion_note?: string;
+  recent_market_days?: MarketCoverageDay[];
   experiments: StrategyExperiment[];
 };
 
@@ -1396,6 +1414,8 @@ function BacktestPage({ backtest, experiments, feeModel }: { backtest: BacktestR
   const [activePreset, setActivePreset] = useState("conservative");
   const selected = experiments?.experiments.find((item) => item.id === activePreset) ?? experiments?.experiments[0] ?? null;
   const rows = selected?.trades ?? [];
+  const coverageDays = backtest?.recent_market_days ?? experiments?.recent_market_days ?? [];
+  const lastCompletedDate = backtest?.last_completed_entry_date ?? experiments?.last_completed_entry_date ?? "-";
 
   return (
     <section className="report-grid single">
@@ -1403,7 +1423,7 @@ function BacktestPage({ backtest, experiments, feeModel }: { backtest: BacktestR
         <div className="report-headline">
           <div>
             <h2>回测摘要</h2>
-            <p>行情最新交易日：{backtest?.latest_date ?? "读取中"}；样本区间 {backtest?.range_days ?? "-"} 个交易日。正式严格回测：{backtest?.metrics.trade_count ?? 0} 笔。</p>
+            <p>行情最新交易日：{backtest?.latest_date ?? "读取中"}；最后可完整回测开仓日：{lastCompletedDate}；样本区间 {backtest?.range_days ?? "-"} 个交易日。</p>
           </div>
           <div className="preset-tabs">
             {(experiments?.experiments ?? []).map((item) => (
@@ -1420,6 +1440,18 @@ function BacktestPage({ backtest, experiments, feeModel }: { backtest: BacktestR
           <span><b>{pct(selected?.metrics.max_drawdown_pct)}</b> 最大回撤</span>
           <span><b>{selected?.metrics.profit_loss_ratio?.toFixed(2) ?? "-"}</b> 盈亏比</span>
           <span><b>{selected?.rejected_count ?? 0}</b> 拒绝信号</span>
+        </div>
+        <div className="coverage-note">{backtest?.completion_note ?? experiments?.completion_note ?? "交易明细仅统计已具备完整退出行情的样本。"}</div>
+        <div className="market-coverage-grid">
+          {coverageDays.map((day) => (
+            <div className="market-day-tile" key={day.trade_date}>
+              <div className="tile-date">{shortDate(day.trade_date)}</div>
+              <strong>{day.red_count}</strong>
+              <span>上涨 / 下跌 {day.down_count}</span>
+              <small>涨停 {day.limit_up_count} · 跌停 {day.limit_down_count}</small>
+              <small>沪深量能 {day.turnover_billion.toFixed(0)} 亿</small>
+            </div>
+          ))}
         </div>
         {feeModel && (
           <div className="fee-strip">

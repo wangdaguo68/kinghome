@@ -105,6 +105,23 @@ def test_backtest_uses_real_exit_close_price_path() -> None:
     assert result.trades[0].exit_price == 110
 
 
+def test_missing_exit_bar_reports_data_gap_reason() -> None:
+    days = _market_days()
+    bars = [bar for bar in _bars() if bar.trade_date != days[3].trade_date]
+    exit_day, pnl_pct, exit_reason = BacktestEngine([FixedSignalStrategy()])._simulate_exit(
+        index=1,
+        cycles=days,
+        stock_bars=bars,
+        symbol="000001",
+        entry_price=100,
+        stop_loss_pct=-5,
+    )
+
+    assert exit_day == days[3].trade_date
+    assert pnl_pct == 0
+    assert exit_reason == "退出日缺少个股行情（停牌/数据缺口）"
+
+
 def test_backtest_can_report_net_return_after_fees() -> None:
     fee_model = BrokerFeeModel("test", 1, 5, 0, 0.0002, 0.0005, 0)
     result = BacktestEngine([FixedSignalStrategy()], fee_model=fee_model, capital=50000).run(

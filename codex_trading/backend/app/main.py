@@ -228,6 +228,30 @@ def runtime_cache_token() -> str:
     return "|".join([market_cache_token(), str(backtest_capital()), str(load_broker_fee_model().__dict__)])
 
 
+def backtest_coverage_payload(market_days: list) -> dict[str, object]:
+    recent_days = market_days[-5:]
+    last_completed_entry_date = market_days[-4].trade_date if len(market_days) >= 4 else None
+    return {
+        "latest_date": market_days[-1].trade_date if market_days else None,
+        "last_completed_entry_date": last_completed_entry_date,
+        "range_days": len(market_days),
+        "completion_note": "交易明细只展示已经具备 T+1/T+2 退出行情和卖后 3 日观察窗口的交易；最近 3 个交易日只纳入行情覆盖与信号筛选。",
+        "recent_market_days": [
+            {
+                "trade_date": day.trade_date,
+                "red_count": day.red_count,
+                "down_count": day.down_count,
+                "limit_up_count": day.limit_up_count,
+                "limit_down_count": day.limit_down_count,
+                "turnover_billion": day.turnover_billion,
+                "sh_turnover_billion": day.sh_turnover_billion,
+                "sz_turnover_billion": day.sz_turnover_billion,
+            }
+            for day in recent_days
+        ],
+    }
+
+
 def load_cycle_market_data() -> tuple[str, list, list]:
     if not token_available():
         raise HTTPException(status_code=503, detail="TUSHARE_TOKEN not configured")
@@ -280,8 +304,7 @@ def cached_backtest(_cache_token: str) -> dict[str, object]:
     result = make_engine().run(market_days, stock_bars)
     return {
         "source": source,
-        "latest_date": market_days[-1].trade_date if market_days else None,
-        "range_days": len(market_days),
+        **backtest_coverage_payload(market_days),
         "metrics": result.metrics,
         "trades": [trade.__dict__ for trade in result.trades],
         "rejected_count": len(result.rejected_signals),
@@ -327,7 +350,7 @@ def cached_strategy_experiments(_cache_token: str) -> dict[str, object]:
         )
     return {
         "source": source,
-        "range_days": len(market_days),
+        **backtest_coverage_payload(market_days),
         "experiments": experiments,
     }
 

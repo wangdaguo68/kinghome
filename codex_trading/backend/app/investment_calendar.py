@@ -202,6 +202,7 @@ def _fetch_eastmoney_finance_events(start: date, end: date) -> list[CalendarEven
     )
     rows = ((payload.get("result") or {}).get("data") or []) if payload.get("success") is not False else []
     events: list[CalendarEvent] = []
+    economic_rows_by_day: dict[str, list[str]] = {}
     for row in rows:
         start_date = _parse_date(row.get("START_DATE"))
         end_date = _parse_date(row.get("END_DATE")) or start_date
@@ -216,6 +217,9 @@ def _fetch_eastmoney_finance_events(start: date, end: date) -> list[CalendarEven
         sponsor = _clean_text(row.get("SPONSOR_NAME"))
         content = _clean_text(row.get("CONTENT")) or title
         detail = content if not sponsor else f"{content} 主办/发布：{sponsor}"
+        if category == "经济数据":
+            economic_rows_by_day.setdefault(_date_key(event_date), []).append(title)
+            continue
         events.append(
             CalendarEvent(
                 date=_date_key(event_date),
@@ -229,6 +233,7 @@ def _fetch_eastmoney_finance_events(start: date, end: date) -> list[CalendarEven
                 tags=[tag for tag in [category, city, sponsor] if tag],
             )
         )
+    events.extend(_economic_summary_events(economic_rows_by_day))
     return events
 
 
@@ -372,6 +377,83 @@ def _generic_eastmoney_events(rows: list[Any], label: str, start: date, end: dat
     return events
 
 
+def _economic_summary_events(rows_by_day: dict[str, list[str]]) -> list[CalendarEvent]:
+    events: list[CalendarEvent] = []
+    for day, titles in sorted(rows_by_day.items()):
+        labels = _unique([_economic_label(title) for title in titles])
+        labels = [label for label in labels if label]
+        if not labels:
+            continue
+        important = [label for label in labels if _important_economic_label(label)]
+        lead = important[:6] or labels[:6]
+        detail_items = labels[:24]
+        events.append(
+            CalendarEvent(
+                date=day,
+                title=f"宏观数据集中公布：{'、'.join(lead)}",
+                detail=f"东方财富财经日历收录 {len(titles)} 项宏观数据，已合并为摘要避免刷屏。重点包括：{'、'.join(detail_items)}。",
+                category="宏观数据",
+                market="全球 / A股",
+                impact="high" if important else "medium",
+                source="东方财富财经日历",
+                source_url=SOURCE_URLS["东方财富财经日历"],
+                tags=lead[:10],
+            )
+        )
+    return events
+
+
+def _economic_label(title: str) -> str:
+    text = re.sub(r"\(报告期:[^)]+\)", "", _clean_text(title))
+    text = text.replace("：", ":")
+    country = ""
+    indicator = text
+    if ":" in text:
+        country, indicator = text.split(":", 1)
+        if country in {"欧盟27国", "欧元区19国", "欧元区20国"}:
+            country = "欧元区"
+        if country.startswith("中国香港"):
+            country = "中国香港"
+        if country.startswith("中国澳门"):
+            country = "中国澳门"
+    compact = indicator.replace(":", "")
+    patterns = [
+        ("ISM" in compact and "PMI" in compact, "ISM PMI"),
+        ("PMI" in compact, "PMI"),
+        ("核心CPI" in compact, "核心CPI"),
+        ("CPI" in compact, "CPI"),
+        ("PPI" in compact, "PPI"),
+        ("PCE" in compact, "PCE"),
+        ("GDP" in compact, "GDP"),
+        ("M1" in compact, "M1"),
+        ("M2" in compact, "M2"),
+        ("M3" in compact, "M3"),
+        ("LPR" in compact or "贷款市场报价利率" in compact, "LPR"),
+        ("零售销售" in compact, "零售销售"),
+        ("失业率" in compact, "失业率"),
+        ("就业" in compact, "就业"),
+        ("进出口" in compact, "进出口"),
+        ("出口" in compact, "出口"),
+        ("进口" in compact, "进口"),
+        ("贸易" in compact, "贸易"),
+        ("工业生产" in compact or "工业增加值" in compact, "工业生产"),
+        ("外汇储备" in compact, "外汇储备"),
+        ("库存" in compact, "库存"),
+    ]
+    for matched, label in patterns:
+        if matched:
+            return f"{country}{label}" if country else label
+    short = compact[:18]
+    return f"{country}{short}" if country and not short.startswith(country) else short
+
+
+def _important_economic_label(label: str) -> bool:
+    return any(
+        keyword in label
+        for keyword in ["CPI", "PPI", "PCE", "PMI", "GDP", "LPR", "就业", "失业率", "零售销售", "进出口", "外汇储备"]
+    )
+
+
 def _request_json(url: str, *, referer: str) -> dict[str, Any]:
     request = urllib.request.Request(
         url,
@@ -489,16 +571,20 @@ def _clean_text(value: Any) -> str:
 
 
 def _dedupe_key(value: str) -> str:
-    text = re.sub(r"[，。、《》：:；;（）()\[\]\s\"'“”‘’_\-—]+", "", value.lower())
+    text = re.sub(r"[\W_]+", "", value.lower(), flags=re.UNICODE)
     return text[:80]
 
 
 def _semantic_title_key(value: str) -> str:
     text = _dedupe_key(value)
+    text = re.sub(r"将于\d{1,2}月\d{1,2}日至\d{1,2}月\d{1,2}日(?:举办|举行|召开|开幕|启动)", "", text)
+    text = re.sub(r"于\d{1,2}月\d{1,2}日至\d{1,2}月\d{1,2}日(?:举办|举行|召开|开幕|启动)", "", text)
     text = re.sub(r"将于\d{1,2}月\d{1,2}日(?:至\d{1,2}日)?(?:举办|举行|召开|开幕|启动)", "", text)
     text = re.sub(r"定于\d{1,2}月\d{1,2}(?:至\d{1,2})?日(?:举办|举行|召开)", "", text)
     text = re.sub(r"于\d{1,2}月\d{1,2}日(?:至\d{1,2}日)?(?:举办|举行|召开|开幕|启动)", "", text)
     text = re.sub(r"自\d{1,2}月\d{1,2}日起", "", text)
+    text = re.sub(r"(?<!届)2026(?=起点|论坛|大会|展览会|峰会)", "", text)
+    text = text.replace("产业峰会", "峰会").replace("技术论坛", "论坛")
     text = text.replace("同传", "")
     return text[:80]
 

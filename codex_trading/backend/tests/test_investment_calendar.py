@@ -71,6 +71,62 @@ def test_dedupe_merges_long_and_short_same_day_event_titles() -> None:
     assert set(result[0].source.split(" / ")) == {"财联社", "东方财富财经日历"}
 
 
+def test_dedupe_normalizes_eastmoney_title_punctuation_and_fill_words() -> None:
+    events = [
+        CalendarEvent(
+            date="2026-06-16",
+            title="2026第三届AEPT固态电池峰会暨起点固态电池论坛将于6月16日至18日举办",
+            detail="财联社标题",
+            category="事件",
+            market="A股",
+            impact="medium",
+            source="财联社",
+        ),
+        CalendarEvent(
+            date="2026-06-16",
+            title="2026第三届AEPT固态电池产业峰会暨2026起点固态电池技术论坛",
+            detail="东方财富标题",
+            category="行业会议",
+            market="A股",
+            impact="medium",
+            source="东方财富财经日历",
+        ),
+    ]
+
+    result = calendar._dedupe_events(events)
+
+    assert len(result) == 1
+    assert set(result[0].source.split(" / ")) == {"财联社", "东方财富财经日历"}
+
+
+def test_dedupe_handles_cross_month_event_ranges() -> None:
+    events = [
+        CalendarEvent(
+            date="2026-06-11",
+            title="2026年世界杯将于6月11日至7月19日举行",
+            detail="长标题",
+            category="事件",
+            market="全球",
+            impact="medium",
+            source="财联社",
+        ),
+        CalendarEvent(
+            date="2026-06-11",
+            title="2026年世界杯",
+            detail="短标题",
+            category="赛事活动",
+            market="全球",
+            impact="medium",
+            source="东方财富财经日历",
+        ),
+    ]
+
+    result = calendar._dedupe_events(events)
+
+    assert len(result) == 1
+    assert set(result[0].source.split(" / ")) == {"财联社", "东方财富财经日历"}
+
+
 def test_cls_events_parse_current_shape(monkeypatch) -> None:
     payload = {
         "code": 200,
@@ -121,3 +177,41 @@ def test_ths_events_parse_jsonp_shape(monkeypatch) -> None:
     assert result[0].date == "2026-06-02"
     assert result[0].category == "科技产业"
     assert result[0].tags == ["消费电子概念"]
+
+
+def test_eastmoney_economic_rows_are_collapsed_into_daily_summary(monkeypatch) -> None:
+    payload = {
+        "success": True,
+        "result": {
+            "data": [
+                {
+                    "START_DATE": "2026-06-02 00:00:00",
+                    "END_DATE": "2026-06-02 00:00:00",
+                    "FE_NAME": "美国:ISM:PMI:制造业:季调(报告期:2026年05月)",
+                    "FE_TYPE": "经济数据",
+                },
+                {
+                    "START_DATE": "2026-06-02 00:00:00",
+                    "END_DATE": "2026-06-02 00:00:00",
+                    "FE_NAME": "美国:ISM:PMI:产出:季调(报告期:2026年05月)",
+                    "FE_TYPE": "经济数据",
+                },
+                {
+                    "START_DATE": "2026-06-02 00:00:00",
+                    "END_DATE": "2026-06-02 00:00:00",
+                    "FE_NAME": "第四届天津国际航运产业博览会",
+                    "FE_TYPE": "行业会议",
+                    "CONTENT": "会议内容",
+                    "CITY": "天津市",
+                },
+            ]
+        },
+    }
+    monkeypatch.setattr(calendar, "_request_json", lambda *args, **kwargs: payload)
+
+    result = calendar._fetch_eastmoney_finance_events(date(2026, 6, 1), date(2026, 6, 30))
+
+    assert len(result) == 2
+    summary = next(event for event in result if event.category == "宏观数据")
+    assert summary.title == "宏观数据集中公布：美国ISM PMI"
+    assert "收录 2 项宏观数据" in summary.detail

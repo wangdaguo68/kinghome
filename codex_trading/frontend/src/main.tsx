@@ -47,6 +47,8 @@ type Trade = {
 
 type BacktestResponse = {
   source: string;
+  latest_date?: string | null;
+  range_days?: number;
   metrics: Record<string, number>;
   trades: Trade[];
   rejected_count: number;
@@ -1401,7 +1403,7 @@ function BacktestPage({ backtest, experiments, feeModel }: { backtest: BacktestR
         <div className="report-headline">
           <div>
             <h2>回测摘要</h2>
-            <p>正式严格回测：{backtest?.metrics.trade_count ?? 0} 笔；下方按保守、平衡、进攻实验维度拆解。</p>
+            <p>行情最新交易日：{backtest?.latest_date ?? "读取中"}；样本区间 {backtest?.range_days ?? "-"} 个交易日。正式严格回测：{backtest?.metrics.trade_count ?? 0} 笔。</p>
           </div>
           <div className="preset-tabs">
             {(experiments?.experiments ?? []).map((item) => (

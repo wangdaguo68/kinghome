@@ -9,6 +9,7 @@ from app.data.tushare_provider import (
     _is_limit_down_count,
     _is_limit_up,
     _is_limit_up_touch,
+    _is_hs_market_symbol,
     _is_tradeable_symbol,
 )
 
@@ -43,6 +44,81 @@ def test_market_stat_limit_counts_match_loose_market_board_thresholds() -> None:
     assert not _is_limit_up_touch("688783.SH", "西安奕材-U", 33.61, 40.33)
     assert _is_limit_down_count("600000.SH", "浦发银行", -9.5)
     assert _is_limit_down_count("300001.SZ", "特锐德", -19.5)
+
+
+def test_market_width_uses_hs_a_share_close_limit_counts(monkeypatch) -> None:
+    trade_date = date(2026, 6, 1)
+    rows = [
+        {
+            "ts_code": "600001.SH",
+            "trade_date": "20260601",
+            "open": 10,
+            "high": 11,
+            "low": 10,
+            "close": 11,
+            "pre_close": 10,
+            "pct_chg": 10,
+            "amount": 200000,
+        },
+        {
+            "ts_code": "000001.SZ",
+            "trade_date": "20260601",
+            "open": 10,
+            "high": 11,
+            "low": 9.9,
+            "close": 10.5,
+            "pre_close": 10,
+            "pct_chg": 5,
+            "amount": 300000,
+        },
+        {
+            "ts_code": "000002.SZ",
+            "trade_date": "20260601",
+            "open": 10,
+            "high": 10,
+            "low": 9,
+            "close": 9,
+            "pre_close": 10,
+            "pct_chg": -10,
+            "amount": 400000,
+        },
+        {
+            "ts_code": "830000.BJ",
+            "trade_date": "20260601",
+            "open": 10,
+            "high": 13,
+            "low": 10,
+            "close": 13,
+            "pre_close": 10,
+            "pct_chg": 30,
+            "amount": 500000,
+        },
+    ]
+    names = {
+        "600001.SH": "sample sh",
+        "000001.SZ": "sample sz touch",
+        "000002.SZ": "sample sz down",
+        "830000.BJ": "sample bj",
+    }
+
+    fetch_recent_market_data.cache_clear()
+    monkeypatch.setattr(tushare_provider, "latest_trade_date", lambda: trade_date)
+    monkeypatch.setattr(tushare_provider, "recent_open_dates", lambda end_date, count: [trade_date])
+    monkeypatch.setattr(tushare_provider, "stock_name_map", lambda: names)
+    monkeypatch.setattr(tushare_provider, "_daily_rows", lambda value: rows)
+
+    market_days, _ = fetch_recent_market_data(1)
+
+    assert _is_hs_market_symbol("600001.SH")
+    assert not _is_hs_market_symbol("830000.BJ")
+    assert market_days[0].red_count == 2
+    assert market_days[0].down_count == 1
+    assert market_days[0].limit_up_count == 1
+    assert market_days[0].limit_down_count == 1
+    assert market_days[0].turnover_billion == 9
+    assert market_days[0].sh_turnover_billion == 2
+    assert market_days[0].sz_turnover_billion == 7
+    fetch_recent_market_data.cache_clear()
 
 
 def test_stock_bar_rank_keeps_full_candidate_position(monkeypatch) -> None:
@@ -102,3 +178,37 @@ def test_next_open_date_falls_back_to_weekday_on_rate_limit(monkeypatch) -> None
 
     assert next_open_date(date(2026, 5, 29)) == date(2026, 6, 1)
     next_open_date.cache_clear()
+
+
+def test_recent_daily_rows_are_not_memory_cached(monkeypatch) -> None:
+    trade_date = date.today()
+    calls = {"count": 0}
+
+    def _call_tushare(*args, **kwargs):
+        calls["count"] += 1
+        return {
+            "fields": ["ts_code", "trade_date", "open", "high", "low", "close", "pre_close", "pct_chg", "amount"],
+            "items": [
+                [
+                    "600001.SH",
+                    trade_date.strftime("%Y%m%d"),
+                    10,
+                    10 + calls["count"],
+                    10,
+                    10,
+                    10,
+                    calls["count"],
+                    100000,
+                ]
+            ],
+        }
+
+    fetch_recent_market_data.cache_clear()
+    monkeypatch.setattr(tushare_provider, "call_tushare", _call_tushare)
+
+    first = tushare_provider._daily_rows(trade_date)
+    second = tushare_provider._daily_rows(trade_date)
+
+    assert calls["count"] == 2
+    assert first[0]["high"] != second[0]["high"]
+    fetch_recent_market_data.cache_clear()

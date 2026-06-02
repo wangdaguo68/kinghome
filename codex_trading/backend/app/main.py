@@ -21,7 +21,7 @@ from app.backtest.versioning import (
 )
 from app.cycle.engine import build_cycle_states
 from app.data.schemas import Pattern, Signal, StockBar
-from app.data.tushare_provider import TushareError, fetch_recent_market_data, next_open_date, token_available
+from app.data.tushare_provider import TushareError, clear_market_data_cache, fetch_recent_market_data, next_open_date, token_available
 from app.investment_calendar import fetch_investment_calendar
 from app.live.intraday import intraday_status, load_intraday_quotes, scan_intraday_quotes
 from app.live.qmt_adapter import QmtAdapter
@@ -280,6 +280,8 @@ def cached_backtest(_cache_token: str) -> dict[str, object]:
     result = make_engine().run(market_days, stock_bars)
     return {
         "source": source,
+        "latest_date": market_days[-1].trade_date if market_days else None,
+        "range_days": len(market_days),
         "metrics": result.metrics,
         "trades": [trade.__dict__ for trade in result.trades],
         "rejected_count": len(result.rejected_signals),
@@ -387,6 +389,7 @@ def strategy_versions() -> dict[str, object]:
 
 @app.get("/api/cache/clear")
 def clear_runtime_cache() -> dict[str, object]:
+    clear_market_data_cache()
     cached_backtest.cache_clear()
     cached_strategy_experiments.cache_clear()
     cached_strategy_optimization.cache_clear()

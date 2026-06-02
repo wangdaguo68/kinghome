@@ -96,6 +96,7 @@ def _latest_trade_date_uncached() -> date:
                 "is_open": "1",
             },
             fields="cal_date,is_open",
+            use_cache=False,
         )
         items = data.get("items") or []
         if items:
@@ -162,26 +163,32 @@ def _fetch_recent_market_data(count: int, end_date: date, bar_limit: int) -> tup
 
     for trade_date in dates:
         rows = _daily_rows(trade_date)
-        stats_rows = [row for row in rows if _is_market_stat_symbol(str(row["ts_code"]), names.get(str(row["ts_code"]), ""))]
-        red_count = sum(1 for row in rows if _float(row["pct_chg"]) > 0)
-        turnover_100m = sum(_float(row["amount"]) / 100000 for row in rows)
+        stats_rows = [row for row in rows if _is_hs_market_symbol(str(row["ts_code"]))]
+        red_count = sum(1 for row in stats_rows if _float(row["pct_chg"]) > 0)
+        down_count = sum(1 for row in stats_rows if _float(row["pct_chg"]) < 0)
+        sh_turnover_100m = sum(_float(row["amount"]) / 100000 for row in stats_rows if str(row["ts_code"]).endswith(".SH"))
+        sz_turnover_100m = sum(_float(row["amount"]) / 100000 for row in stats_rows if str(row["ts_code"]).endswith(".SZ"))
+        turnover_100m = sh_turnover_100m + sz_turnover_100m
         limit_up_count = sum(
             1
             for row in stats_rows
-            if _is_limit_up_touch(
+            if _is_limit_up(
                 symbol=str(row["ts_code"]),
                 name=names.get(str(row["ts_code"]), ""),
                 pre_close=_float(row["pre_close"]),
                 high_price=_float(row["high"]),
+                close_price=_float(row["close"]),
             )
         )
         limit_down_count = sum(
             1
             for row in stats_rows
-            if _is_limit_down_count(
+            if _is_limit_down(
                 symbol=str(row["ts_code"]),
                 name=names.get(str(row["ts_code"]), ""),
-                pct_chg=_float(row["pct_chg"]),
+                pre_close=_float(row["pre_close"]),
+                low_price=_float(row["low"]),
+                close_price=_float(row["close"]),
             )
         )
         market_days.append(
@@ -192,6 +199,9 @@ def _fetch_recent_market_data(count: int, end_date: date, bar_limit: int) -> tup
                 limit_down_count=limit_down_count,
                 index_return=0,
                 turnover_billion=round(turnover_100m, 2),
+                down_count=down_count,
+                sh_turnover_billion=round(sh_turnover_100m, 2),
+                sz_turnover_billion=round(sz_turnover_100m, 2),
             )
         )
 
@@ -251,7 +261,14 @@ def _fetch_recent_market_data(count: int, end_date: date, bar_limit: int) -> tup
     return market_days, stock_bars
 
 
-fetch_recent_market_data.cache_clear = _fetch_recent_market_data.cache_clear  # type: ignore[attr-defined]
+def clear_market_data_cache() -> None:
+    for cached_fn in [latest_trade_date_cached, _fetch_recent_market_data, _daily_rows_cached, stock_name_map, next_open_date]:
+        cache_clear = getattr(cached_fn, "cache_clear", None)
+        if cache_clear is not None:
+            cache_clear()
+
+
+fetch_recent_market_data.cache_clear = clear_market_data_cache  # type: ignore[attr-defined]
 
 
 @lru_cache(maxsize=1)
@@ -267,9 +284,19 @@ def stock_name_map() -> dict[str, str]:
     return {str(item[code_index]): str(item[name_index]) for item in data.get("items", [])}
 
 
-@lru_cache(maxsize=512)
 def _daily_rows(trade_date: date) -> list[dict[str, Any]]:
     use_cache = trade_date < date.today() - timedelta(days=3)
+    if use_cache:
+        return _daily_rows_cached(trade_date)
+    return _daily_rows_uncached(trade_date, use_cache=False)
+
+
+@lru_cache(maxsize=512)
+def _daily_rows_cached(trade_date: date) -> list[dict[str, Any]]:
+    return _daily_rows_uncached(trade_date, use_cache=True)
+
+
+def _daily_rows_uncached(trade_date: date, *, use_cache: bool) -> list[dict[str, Any]]:
     data = call_tushare(
         "daily",
         params={"trade_date": _format_trade_date(trade_date)},
@@ -330,6 +357,10 @@ def _is_market_stat_symbol(symbol: str, name: str) -> bool:
     if not _is_non_st_symbol(symbol, name):
         return False
     return "-U" not in name.upper()
+
+
+def _is_hs_market_symbol(symbol: str) -> bool:
+    return symbol.endswith((".SH", ".SZ"))
 
 
 def _is_limit_up(symbol: str, name: str, pre_close: float, high_price: float, close_price: float) -> bool:

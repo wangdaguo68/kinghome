@@ -11,6 +11,16 @@ from pathlib import Path
 from typing import Any
 
 from app.data.schemas import MarketDay, StockBar
+from app.data.mysql_store import (
+    load_daily_rows,
+    load_daily_rows_from_connection,
+    load_limit_candidate_rows_from_connection,
+    load_market_aggregate_from_connection,
+    load_top_amount_rows_from_connection,
+    mysql_connection,
+    save_daily_rows,
+    save_daily_rows_from_connection,
+)
 
 TUSHARE_URL = "http://api.tushare.pro"
 DAILY_FIELDS = "ts_code,trade_date,open,high,low,close,pre_close,pct_chg,amount"
@@ -150,7 +160,7 @@ def fetch_recent_market_data(count: int = 250) -> tuple[list[MarketDay], list[St
     return _fetch_recent_market_data(count, end_date, bar_limit)
 
 
-@lru_cache(maxsize=8)
+@lru_cache(maxsize=2)
 def _fetch_recent_market_data(count: int, end_date: date, bar_limit: int) -> tuple[list[MarketDay], list[StockBar]]:
     dates = recent_open_dates(end_date, count)
     if len(dates) < count:
@@ -161,108 +171,202 @@ def _fetch_recent_market_data(count: int, end_date: date, bar_limit: int) -> tup
     stock_bars: list[StockBar] = []
     consecutive_limits: dict[str, int] = {}
 
-    for trade_date in dates:
-        rows = _daily_rows(trade_date)
-        stats_rows = [row for row in rows if _is_hs_market_symbol(str(row["ts_code"]))]
-        red_count = sum(1 for row in stats_rows if _float(row["pct_chg"]) > 0)
-        down_count = sum(1 for row in stats_rows if _float(row["pct_chg"]) < 0)
-        sh_turnover_100m = sum(_float(row["amount"]) / 100000 for row in stats_rows if str(row["ts_code"]).endswith(".SH"))
-        sz_turnover_100m = sum(_float(row["amount"]) / 100000 for row in stats_rows if str(row["ts_code"]).endswith(".SZ"))
-        turnover_100m = sh_turnover_100m + sz_turnover_100m
-        limit_up_count = sum(
-            1
-            for row in stats_rows
-            if _is_limit_up(
-                symbol=str(row["ts_code"]),
-                name=names.get(str(row["ts_code"]), ""),
-                pre_close=_float(row["pre_close"]),
-                high_price=_float(row["high"]),
-                close_price=_float(row["close"]),
-            )
-        )
-        limit_down_count = sum(
-            1
-            for row in stats_rows
-            if _is_limit_down(
-                symbol=str(row["ts_code"]),
-                name=names.get(str(row["ts_code"]), ""),
-                pre_close=_float(row["pre_close"]),
-                low_price=_float(row["low"]),
-                close_price=_float(row["close"]),
-            )
-        )
-        market_days.append(
-            MarketDay(
-                trade_date=trade_date,
-                red_count=red_count,
-                limit_up_count=limit_up_count,
-                limit_down_count=limit_down_count,
-                index_return=0,
-                turnover_billion=round(turnover_100m, 2),
-                down_count=down_count,
-                sh_turnover_billion=round(sh_turnover_100m, 2),
-                sz_turnover_billion=round(sz_turnover_100m, 2),
-            )
-        )
+    with mysql_connection() as connection:
+        for trade_date in dates:
+            aggregate = load_market_aggregate_from_connection(connection, trade_date) if connection is not None else None
+            if aggregate:
+                limit_rows = load_limit_candidate_rows_from_connection(connection, trade_date)
+                limit_up_symbols: set[str] = set()
+                limit_down_count = 0
+                for row in limit_rows:
+                    symbol = str(row["ts_code"])
+                    name = names.get(symbol, "")
+                    if _is_limit_up(
+                        symbol=symbol,
+                        name=name,
+                        pre_close=_float(row["pre_close"]),
+                        high_price=_float(row["high"]),
+                        close_price=_float(row["close"]),
+                    ):
+                        limit_up_symbols.add(symbol)
+                    if _is_limit_down(
+                        symbol=symbol,
+                        name=name,
+                        pre_close=_float(row["pre_close"]),
+                        low_price=_float(row["low"]),
+                        close_price=_float(row["close"]),
+                    ):
+                        limit_down_count += 1
+                limit_up_count = len(limit_up_symbols)
+                for symbol in list(consecutive_limits):
+                    if symbol not in limit_up_symbols:
+                        consecutive_limits[symbol] = 0
+                for symbol in limit_up_symbols:
+                    consecutive_limits[symbol] = consecutive_limits.get(symbol, 0) + 1
 
-        eligible_rows = [
-            row for row in rows if _is_tradeable_symbol(str(row["ts_code"]), names.get(str(row["ts_code"]), ""))
-        ]
-        limit_meta: dict[str, tuple[bool, int]] = {}
-        for row in eligible_rows:
-            symbol = str(row["ts_code"])
-            name = names.get(symbol, "")
-            limit_up = _is_limit_up(
-                symbol=symbol,
-                name=name,
-                pre_close=_float(row["pre_close"]),
-                high_price=_float(row["high"]),
-                close_price=_float(row["close"]),
-            )
-            consecutive = consecutive_limits.get(symbol, 0) + 1 if limit_up else 0
-            consecutive_limits[symbol] = consecutive
-            limit_meta[symbol] = (limit_up, consecutive)
+                market_days.append(
+                    MarketDay(
+                        trade_date=trade_date,
+                        red_count=int(aggregate["red_count"]),
+                        limit_up_count=limit_up_count,
+                        limit_down_count=limit_down_count,
+                        index_return=0,
+                        turnover_billion=round(aggregate["turnover_billion"], 2),
+                        down_count=int(aggregate["down_count"]),
+                        sh_turnover_billion=round(aggregate["sh_turnover_billion"], 2),
+                        sz_turnover_billion=round(aggregate["sz_turnover_billion"], 2),
+                    )
+                )
 
-        ranked = sorted(eligible_rows, key=lambda row: _float(row["amount"]), reverse=True)
-        for rank, row in enumerate(ranked[:bar_limit], start=1):
-            symbol = str(row["ts_code"])
-            pre_close = _float(row["pre_close"])
-            open_price = _float(row["open"])
-            high_price = _float(row["high"])
-            low_price = _float(row["low"])
-            close_price = _float(row["close"])
-            close_pct = _float(row["pct_chg"])
-            amount_100m = _float(row["amount"]) / 100000
-            limit_up, consecutive = limit_meta[symbol]
+                top_rows = load_top_amount_rows_from_connection(connection, trade_date, max(bar_limit * 3, bar_limit + 200))
+                eligible_rows = [
+                    row for row in top_rows if _is_tradeable_symbol(str(row["ts_code"]), names.get(str(row["ts_code"]), ""))
+                ][:bar_limit]
+                for rank, row in enumerate(eligible_rows, start=1):
+                    symbol = str(row["ts_code"])
+                    stock_bars.append(_stock_bar_from_row(row, names, trade_date, rank, symbol in limit_up_symbols, consecutive_limits.get(symbol, 0)))
+                continue
 
-            stock_bars.append(
-                StockBar(
-                    trade_date=trade_date,
-                    symbol=symbol,
-                    name=names.get(symbol, symbol),
-                    open_price=round(open_price, 3),
-                    high_price=round(high_price, 3),
-                    low_price=round(low_price, 3),
-                    close_price=round(close_price, 3),
-                    pre_close=round(pre_close, 3),
-                    open_pct=round(_pct(open_price, pre_close), 2),
-                    close_pct=round(close_pct, 2),
-                    high_pct=round(_pct(high_price, pre_close), 2),
-                    low_pct=round(_pct(low_price, pre_close), 2),
-                    amount_billion=round(amount_100m, 2),
-                    auction_amount_million=0,
-                    volume_ratio=0,
-                    limit_up=limit_up,
-                    first_limit=limit_up and consecutive == 1,
-                    consecutive_limits=consecutive,
-                    sector_rank=rank,
+            rows = _daily_rows(trade_date, connection)
+            stats_rows = [row for row in rows if _is_hs_market_symbol(str(row["ts_code"]))]
+            red_count = sum(1 for row in stats_rows if _float(row["pct_chg"]) > 0)
+            down_count = sum(1 for row in stats_rows if _float(row["pct_chg"]) < 0)
+            sh_turnover_100m = sum(_float(row["amount"]) / 100000 for row in stats_rows if str(row["ts_code"]).endswith(".SH"))
+            sz_turnover_100m = sum(_float(row["amount"]) / 100000 for row in stats_rows if str(row["ts_code"]).endswith(".SZ"))
+            turnover_100m = sh_turnover_100m + sz_turnover_100m
+            limit_up_count = sum(
+                1
+                for row in stats_rows
+                if _is_limit_up(
+                    symbol=str(row["ts_code"]),
+                    name=names.get(str(row["ts_code"]), ""),
+                    pre_close=_float(row["pre_close"]),
+                    high_price=_float(row["high"]),
+                    close_price=_float(row["close"]),
                 )
             )
+            limit_down_count = sum(
+                1
+                for row in stats_rows
+                if _is_limit_down(
+                    symbol=str(row["ts_code"]),
+                    name=names.get(str(row["ts_code"]), ""),
+                    pre_close=_float(row["pre_close"]),
+                    low_price=_float(row["low"]),
+                    close_price=_float(row["close"]),
+                )
+            )
+            market_days.append(
+                MarketDay(
+                    trade_date=trade_date,
+                    red_count=red_count,
+                    limit_up_count=limit_up_count,
+                    limit_down_count=limit_down_count,
+                    index_return=0,
+                    turnover_billion=round(turnover_100m, 2),
+                    down_count=down_count,
+                    sh_turnover_billion=round(sh_turnover_100m, 2),
+                    sz_turnover_billion=round(sz_turnover_100m, 2),
+                )
+            )
+
+            eligible_rows = [
+                row for row in rows if _is_tradeable_symbol(str(row["ts_code"]), names.get(str(row["ts_code"]), ""))
+            ]
+            limit_meta: dict[str, tuple[bool, int]] = {}
+            for row in eligible_rows:
+                symbol = str(row["ts_code"])
+                name = names.get(symbol, "")
+                limit_up = _is_limit_up(
+                    symbol=symbol,
+                    name=name,
+                    pre_close=_float(row["pre_close"]),
+                    high_price=_float(row["high"]),
+                    close_price=_float(row["close"]),
+                )
+                consecutive = consecutive_limits.get(symbol, 0) + 1 if limit_up else 0
+                consecutive_limits[symbol] = consecutive
+                limit_meta[symbol] = (limit_up, consecutive)
+
+            ranked = sorted(eligible_rows, key=lambda row: _float(row["amount"]), reverse=True)
+            for rank, row in enumerate(ranked[:bar_limit], start=1):
+                symbol = str(row["ts_code"])
+                pre_close = _float(row["pre_close"])
+                open_price = _float(row["open"])
+                high_price = _float(row["high"])
+                low_price = _float(row["low"])
+                close_price = _float(row["close"])
+                close_pct = _float(row["pct_chg"])
+                amount_100m = _float(row["amount"]) / 100000
+                limit_up, consecutive = limit_meta[symbol]
+
+                stock_bars.append(
+                    StockBar(
+                        trade_date=trade_date,
+                        symbol=symbol,
+                        name=names.get(symbol, symbol),
+                        open_price=round(open_price, 3),
+                        high_price=round(high_price, 3),
+                        low_price=round(low_price, 3),
+                        close_price=round(close_price, 3),
+                        pre_close=round(pre_close, 3),
+                        open_pct=round(_pct(open_price, pre_close), 2),
+                        close_pct=round(close_pct, 2),
+                        high_pct=round(_pct(high_price, pre_close), 2),
+                        low_pct=round(_pct(low_price, pre_close), 2),
+                        amount_billion=round(amount_100m, 2),
+                        auction_amount_million=0,
+                        volume_ratio=0,
+                        limit_up=limit_up,
+                        first_limit=limit_up and consecutive == 1,
+                        consecutive_limits=consecutive,
+                        sector_rank=rank,
+                    )
+                )
     return market_days, stock_bars
 
 
+def _stock_bar_from_row(
+    row: dict[str, Any],
+    names: dict[str, str],
+    trade_date: date,
+    rank: int,
+    limit_up: bool,
+    consecutive: int,
+) -> StockBar:
+    symbol = str(row["ts_code"])
+    pre_close = _float(row["pre_close"])
+    open_price = _float(row["open"])
+    high_price = _float(row["high"])
+    low_price = _float(row["low"])
+    close_price = _float(row["close"])
+    close_pct = _float(row["pct_chg"])
+    amount_100m = _float(row["amount"]) / 100000
+    return StockBar(
+        trade_date=trade_date,
+        symbol=symbol,
+        name=names.get(symbol, symbol),
+        open_price=round(open_price, 3),
+        high_price=round(high_price, 3),
+        low_price=round(low_price, 3),
+        close_price=round(close_price, 3),
+        pre_close=round(pre_close, 3),
+        open_pct=round(_pct(open_price, pre_close), 2),
+        close_pct=round(close_pct, 2),
+        high_pct=round(_pct(high_price, pre_close), 2),
+        low_pct=round(_pct(low_price, pre_close), 2),
+        amount_billion=round(amount_100m, 2),
+        auction_amount_million=0,
+        volume_ratio=0,
+        limit_up=limit_up,
+        first_limit=limit_up and consecutive == 1,
+        consecutive_limits=consecutive,
+        sector_rank=rank,
+    )
+
+
 def clear_market_data_cache() -> None:
-    for cached_fn in [latest_trade_date_cached, _fetch_recent_market_data, _daily_rows_cached, stock_name_map, next_open_date]:
+    for cached_fn in [latest_trade_date_cached, _fetch_recent_market_data, stock_name_map, next_open_date]:
         cache_clear = getattr(cached_fn, "cache_clear", None)
         if cache_clear is not None:
             cache_clear()
@@ -284,16 +388,17 @@ def stock_name_map() -> dict[str, str]:
     return {str(item[code_index]): str(item[name_index]) for item in data.get("items", [])}
 
 
-def _daily_rows(trade_date: date) -> list[dict[str, Any]]:
+def _daily_rows(trade_date: date, connection: Any = None) -> list[dict[str, Any]]:
+    rows = load_daily_rows_from_connection(connection, trade_date) if connection is not None else load_daily_rows(trade_date)
+    if rows:
+        return rows
     use_cache = trade_date < date.today() - timedelta(days=3)
-    if use_cache:
-        return _daily_rows_cached(trade_date)
-    return _daily_rows_uncached(trade_date, use_cache=False)
-
-
-@lru_cache(maxsize=512)
-def _daily_rows_cached(trade_date: date) -> list[dict[str, Any]]:
-    return _daily_rows_uncached(trade_date, use_cache=True)
+    rows = _daily_rows_uncached(trade_date, use_cache=use_cache)
+    if connection is not None:
+        save_daily_rows_from_connection(connection, trade_date, rows)
+    else:
+        save_daily_rows(trade_date, rows)
+    return rows
 
 
 def _daily_rows_uncached(trade_date: date, *, use_cache: bool) -> list[dict[str, Any]]:

@@ -105,7 +105,7 @@ def test_market_width_uses_hs_a_share_close_limit_counts(monkeypatch) -> None:
     monkeypatch.setattr(tushare_provider, "latest_trade_date", lambda: trade_date)
     monkeypatch.setattr(tushare_provider, "recent_open_dates", lambda end_date, count: [trade_date])
     monkeypatch.setattr(tushare_provider, "stock_name_map", lambda: names)
-    monkeypatch.setattr(tushare_provider, "_daily_rows", lambda value: rows)
+    monkeypatch.setattr(tushare_provider, "_daily_rows", lambda value, connection=None: rows)
 
     market_days, _ = fetch_recent_market_data(1)
 
@@ -147,7 +147,7 @@ def test_stock_bar_rank_keeps_full_candidate_position(monkeypatch) -> None:
     monkeypatch.setattr(tushare_provider, "latest_trade_date", lambda: trade_date)
     monkeypatch.setattr(tushare_provider, "recent_open_dates", lambda end_date, count: [trade_date])
     monkeypatch.setattr(tushare_provider, "stock_name_map", lambda: names)
-    monkeypatch.setattr(tushare_provider, "_daily_rows", lambda value: rows)
+    monkeypatch.setattr(tushare_provider, "_daily_rows", lambda value, connection=None: rows)
 
     _, stock_bars = fetch_recent_market_data(1)
 
@@ -204,6 +204,8 @@ def test_recent_daily_rows_are_not_memory_cached(monkeypatch) -> None:
         }
 
     fetch_recent_market_data.cache_clear()
+    monkeypatch.setattr(tushare_provider, "load_daily_rows", lambda value: None)
+    monkeypatch.setattr(tushare_provider, "save_daily_rows", lambda value, rows: None)
     monkeypatch.setattr(tushare_provider, "call_tushare", _call_tushare)
 
     first = tushare_provider._daily_rows(trade_date)
@@ -211,4 +213,51 @@ def test_recent_daily_rows_are_not_memory_cached(monkeypatch) -> None:
 
     assert calls["count"] == 2
     assert first[0]["high"] != second[0]["high"]
+    fetch_recent_market_data.cache_clear()
+
+
+def test_daily_rows_use_mysql_before_tushare(monkeypatch) -> None:
+    trade_date = date(2026, 6, 1)
+    db_rows = [
+        {
+            "ts_code": "600001.SH",
+            "trade_date": "20260601",
+            "open": 10,
+            "high": 11,
+            "low": 10,
+            "close": 11,
+            "pre_close": 10,
+            "pct_chg": 10,
+            "amount": 100000,
+        }
+    ]
+
+    fetch_recent_market_data.cache_clear()
+    monkeypatch.setattr(tushare_provider, "load_daily_rows", lambda value: db_rows)
+    monkeypatch.setattr(tushare_provider, "call_tushare", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("Tushare should not be called")))
+
+    assert tushare_provider._daily_rows(trade_date) == db_rows
+    fetch_recent_market_data.cache_clear()
+
+
+def test_daily_rows_backfill_mysql_after_tushare(monkeypatch) -> None:
+    trade_date = date(2026, 6, 1)
+    saved = {}
+
+    def _call_tushare(*args, **kwargs):
+        return {
+            "fields": ["ts_code", "trade_date", "open", "high", "low", "close", "pre_close", "pct_chg", "amount"],
+            "items": [["600001.SH", "20260601", 10, 11, 10, 11, 10, 10, 100000]],
+        }
+
+    fetch_recent_market_data.cache_clear()
+    monkeypatch.setattr(tushare_provider, "load_daily_rows", lambda value: None)
+    monkeypatch.setattr(tushare_provider, "call_tushare", _call_tushare)
+    monkeypatch.setattr(tushare_provider, "save_daily_rows", lambda value, rows: saved.update({"date": value, "rows": rows}))
+
+    rows = tushare_provider._daily_rows(trade_date)
+
+    assert rows[0]["ts_code"] == "600001.SH"
+    assert saved["date"] == trade_date
+    assert saved["rows"] == rows
     fetch_recent_market_data.cache_clear()

@@ -202,6 +202,39 @@ def load_top_amount_rows_from_connection(connection: Connection, trade_date: dat
     return [_db_row_to_daily(row) for row in rows]
 
 
+def load_provider_summary(count: int, bar_limit: int) -> dict[str, Any] | None:
+    try:
+        with mysql_connection() as connection:
+            if connection is None:
+                return None
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    f"""
+                    SELECT trade_date
+                    FROM (
+                        SELECT DISTINCT trade_date
+                        FROM {DAILY_TABLE}
+                        ORDER BY trade_date DESC
+                        LIMIT %s
+                    ) recent
+                    ORDER BY trade_date
+                    """,
+                    (count,),
+                )
+                rows = cursor.fetchall()
+    except Exception:
+        return None
+    if not rows:
+        return None
+    market_days = len(rows)
+    return {
+        "source": "tushare",
+        "market_days": market_days,
+        "stock_bars": market_days * bar_limit,
+        "latest_date": rows[-1]["trade_date"],
+    }
+
+
 def save_daily_rows(trade_date: date, rows: list[dict[str, Any]]) -> None:
     if not rows:
         return

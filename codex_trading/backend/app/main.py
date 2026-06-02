@@ -20,6 +20,7 @@ from app.backtest.versioning import (
     strategy_version_fingerprint,
 )
 from app.cycle.engine import build_cycle_states
+from app.data.mysql_store import load_provider_summary
 from app.data.schemas import Pattern, Signal, StockBar
 from app.data.tushare_provider import TushareError, clear_market_data_cache, fetch_recent_market_data, next_open_date, token_available
 from app.investment_calendar import fetch_investment_calendar
@@ -267,6 +268,12 @@ def load_cycle_market_data() -> tuple[str, list, list]:
 
 @app.get("/api/provider")
 def provider() -> dict[str, object]:
+    recent_days = int(os.getenv("TUSHARE_RECENT_DAYS", "250"))
+    bar_limit = int(os.getenv("TUSHARE_STOCK_BAR_LIMIT", "500"))
+    summary = load_provider_summary(recent_days, bar_limit)
+    if summary is not None:
+        return summary
+
     source, market_days, stock_bars = load_market_data()
     return {
         "source": source,

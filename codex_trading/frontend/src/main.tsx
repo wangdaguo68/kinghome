@@ -57,6 +57,16 @@ type BacktestResponse = {
   rejected_count: number;
 };
 
+type EnergyBacktestResponse = BacktestResponse & {
+  strategy: {
+    id: string;
+    name: string;
+    description: string;
+  };
+  quality: QualityBreakdown;
+  reflection: TradeReflection;
+};
+
 type MarketCoverageDay = {
   trade_date: string;
   red_count: number;
@@ -91,6 +101,7 @@ type StrategyExperiment = {
     position_pct?: number | null;
     max_signals_per_strategy?: number;
     research_only?: boolean;
+    include_energy?: boolean;
   };
   metrics: Record<string, number>;
   trade_count: number;
@@ -423,6 +434,7 @@ function patternText(pattern: string) {
     ExtremeArbitrage: "极值套利",
     FirstLimit: "首板打板",
     OneToTwo: "一进二",
+    EnergyBreakout: "能量策略",
   };
   return map[pattern] ?? pattern;
 }
@@ -541,6 +553,7 @@ function App() {
   const [activePage, setActivePage] = useState<PageId>("calendar");
   const [cycles, setCycles] = useState<CycleState[]>([]);
   const [backtest, setBacktest] = useState<BacktestResponse | null>(null);
+  const [energyBacktest, setEnergyBacktest] = useState<EnergyBacktestResponse | null>(null);
   const [experiments, setExperiments] = useState<StrategyExperimentsResponse | null>(null);
   const [tomorrowPlan, setTomorrowPlan] = useState<TomorrowPlanResponse | null>(null);
   const [intradayScan, setIntradayScan] = useState<IntradayScanResponse | null>(null);
@@ -579,6 +592,10 @@ function App() {
       void fetch(`${API_BASE}/api/strategy-experiments`)
         .then((response) => (response.ok ? response.json() : Promise.reject(response)))
         .then(setExperiments)
+        .catch(() => undefined);
+      void fetch(`${API_BASE}/api/energy-backtest`)
+        .then((response) => (response.ok ? response.json() : Promise.reject(response)))
+        .then(setEnergyBacktest)
         .catch(() => undefined);
       setLastRefresh(new Date().toLocaleTimeString("zh-CN", { hour12: false }));
     } catch (err) {
@@ -703,7 +720,7 @@ function App() {
         {activePage === "intraday" && <IntradayPage scan={intradayScan} onRefresh={refreshLiveData} />}
         {activePage === "live" && <LiveAlertsPage status={alertStatus} tracked={trackedSignals} onRefresh={refreshLiveData} />}
         {activePage === "strategy" && <StrategyPage patterns={patterns} experiments={experiments} onRefreshData={refreshData} />}
-        {activePage === "backtest" && <BacktestPage backtest={backtest} experiments={experiments} feeModel={feeModel} />}
+        {activePage === "backtest" && <BacktestPage backtest={backtest} energyBacktest={energyBacktest} experiments={experiments} feeModel={feeModel} />}
         {activePage === "risk" && <RiskPage riskCheck={riskCheck} currentCycle={currentCycle} rejectedCount={backtest?.rejected_count ?? 0} />}
         {activePage === "data" && <DataPage cycles={cycles} source={backtest?.source} />}
         {activePage === "ledger" && <LedgerPage backtest={backtest} />}
@@ -1410,7 +1427,17 @@ function ReflectionList({ title, rows }: { title: string; rows: string[] }) {
   );
 }
 
-function BacktestPage({ backtest, experiments, feeModel }: { backtest: BacktestResponse | null; experiments: StrategyExperimentsResponse | null; feeModel: FeeModel | null }) {
+function BacktestPage({
+  backtest,
+  energyBacktest,
+  experiments,
+  feeModel,
+}: {
+  backtest: BacktestResponse | null;
+  energyBacktest: EnergyBacktestResponse | null;
+  experiments: StrategyExperimentsResponse | null;
+  feeModel: FeeModel | null;
+}) {
   const [activePreset, setActivePreset] = useState("conservative");
   const selected = experiments?.experiments.find((item) => item.id === activePreset) ?? experiments?.experiments[0] ?? null;
   const rows = selected?.trades ?? [];
@@ -1460,6 +1487,36 @@ function BacktestPage({ backtest, experiments, feeModel }: { backtest: BacktestR
             <span>印花税：{(feeModel.stamp_tax_rate * 10000).toFixed(2)} / 万</span>
             <span>沪市过户费：{(feeModel.transfer_fee_rate * 10000).toFixed(2)} / 万</span>
             <span>佣金率上界：{(feeModel.commission_rate_upper_bound * 10000).toFixed(2)} / 万</span>
+          </div>
+        )}
+      </div>
+
+      <div className="paper-card energy-card">
+        <div className="report-headline">
+          <div>
+            <h2>{energyBacktest?.strategy.name ?? "能量策略专项样本"}</h2>
+            <p>{energyBacktest?.strategy.description ?? "近20日至少2次长上影试探60日线失败后，放量收盘站上60日线，次日开盘买入。"}</p>
+          </div>
+          <span className="pill">{energyBacktest ? `样本 ${energyBacktest.trades.length} 笔` : "读取中"}</span>
+        </div>
+        <div className="metrics energy-metrics">
+          <span><b>{energyBacktest?.metrics.trade_count ?? 0}</b> 交易数</span>
+          <span><b>{pct(energyBacktest?.metrics.total_return_pct)}</b> 总收益</span>
+          <span><b>{pct(energyBacktest?.metrics.win_rate_pct)}</b> 胜率</span>
+          <span><b>{pct(energyBacktest?.metrics.max_drawdown_pct)}</b> 最大回撤</span>
+          <span><b>{energyBacktest?.metrics.profit_loss_ratio?.toFixed(2) ?? "-"}</b> 盈亏比</span>
+          <span><b>{energyBacktest?.rejected_count ?? 0}</b> 拒绝信号</span>
+        </div>
+        {energyBacktest && (
+          <div className="energy-samples">
+            {[...energyBacktest.trades].slice(-5).reverse().map((trade) => (
+              <div className="energy-sample" key={`energy-${trade.symbol}-${trade.signal_date}-${trade.entry_date}`}>
+                <span>{trade.entry_date}</span>
+                <b>{trade.name}</b>
+                <small>{trade.symbol}</small>
+                <strong className={pnlClass(trade.pnl_pct)}>{pct(trade.pnl_pct)}</strong>
+              </div>
+            ))}
           </div>
         )}
       </div>

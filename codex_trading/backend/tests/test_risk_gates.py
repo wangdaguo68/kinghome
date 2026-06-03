@@ -41,6 +41,16 @@ def test_allows_valid_first_limit_signal() -> None:
     assert decision.allowed
 
 
+def test_allows_energy_breakout_in_enabled_cycle() -> None:
+    decision = evaluate_signal(
+        _signal(Pattern.ENERGY_BREAKOUT),
+        _cycle(CycleTag.LOW_SHAKE),
+        _bar(),
+        AccountState(),
+    )
+    assert decision.allowed
+
+
 def test_rejects_pattern_disabled_cycle() -> None:
     decision = evaluate_signal(_signal(), _cycle(CycleTag.DOWNTREND), _bar(), AccountState())
     assert not decision.allowed

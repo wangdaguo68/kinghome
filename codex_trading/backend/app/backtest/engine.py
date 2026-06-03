@@ -56,6 +56,9 @@ class BacktestEngine:
         bars_by_date = {
             day.trade_date: [bar for bar in stock_bars if bar.trade_date == day.trade_date] for day in market_days
         }
+        history_by_symbol: dict[str, list[StockBar]] = {}
+        for bar in sorted(stock_bars, key=lambda item: (item.symbol, item.trade_date)):
+            history_by_symbol.setdefault(bar.symbol, []).append(bar)
         account = AccountState()
         open_positions: list[OpenPosition] = []
         trades: list[Trade] = []
@@ -76,7 +79,7 @@ class BacktestEngine:
             entered_symbols_today = {position.symbol for position in open_positions}
 
             for strategy in self.strategies:
-                for signal in strategy.generate(decision_cycle, decision_bars):
+                for signal in strategy.generate_with_history(decision_cycle, decision_bars, history_by_symbol):
                     if signal.symbol in entered_symbols_today:
                         rejected.append((signal, ("同一标的同一开仓日已被其他模式占用",)))
                         continue

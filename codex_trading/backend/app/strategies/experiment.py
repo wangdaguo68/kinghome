@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from app.data.schemas import CycleState, CycleTag, Pattern, Signal, StockBar
 from app.strategies.base import Strategy
+from app.strategies.energy_breakout import EnergyBreakoutConfig, EnergyBreakoutStrategy
 
 
 @dataclass(frozen=True)
@@ -20,6 +21,7 @@ class StrategyPreset:
     position_pct: float | None = None
     max_signals_per_strategy: int = 4
     research_only: bool = False
+    include_energy: bool = True
 
 
 PRESETS: tuple[StrategyPreset, ...] = (
@@ -174,7 +176,47 @@ def strategies_for_preset(preset: StrategyPreset) -> list[Strategy]:
         ExperimentalExtremeStrategy(preset),
         ExperimentalFirstLimitStrategy(preset),
         ExperimentalOneToTwoStrategy(preset),
+        ExperimentalEnergyBreakoutStrategy(preset),
     ]
+
+
+class ExperimentalEnergyBreakoutStrategy(EnergyBreakoutStrategy):
+    def __init__(self, preset: StrategyPreset) -> None:
+        volume_ratio = 2.0 if preset.id == "conservative" else 1.8 if preset.id == "balanced" else 1.5
+        min_amount = max(preset.amount_min_billion, 5 if preset.id == "conservative" else 3)
+        config = EnergyBreakoutConfig(
+            min_failed_attempts=2,
+            volume_ratio_min=volume_ratio,
+            min_amount_billion=min_amount,
+            max_signals=max(1, min(3, preset.max_signals_per_strategy)),
+            position_pct=preset.position_pct or 5,
+        )
+        super().__init__(config, cycle_filter=preset.cycle_filter)
+        self.preset = preset
+
+    def generate_with_history(
+        self,
+        cycle: CycleState,
+        bars: list[StockBar],
+        history_by_symbol: dict[str, list[StockBar]],
+    ) -> list[Signal]:
+        if not self.preset.include_energy:
+            return []
+        signals = super().generate_with_history(cycle, bars, history_by_symbol)
+        return [
+            Signal(
+                trade_date=signal.trade_date,
+                symbol=signal.symbol,
+                name=signal.name,
+                pattern=signal.pattern,
+                score=signal.score,
+                planned_position_pct=signal.planned_position_pct,
+                stop_loss_pct=signal.stop_loss_pct,
+                reason=f"{self.preset.name}{signal.reason}",
+                min_entry_open_pct=signal.min_entry_open_pct,
+            )
+            for signal in signals
+        ]
 
 
 def _touch_limit(bar: StockBar) -> bool:

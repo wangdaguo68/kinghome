@@ -20,6 +20,7 @@ class Pattern(StrEnum):
     EXTREME_ARBITRAGE = "ExtremeArbitrage"
     FIRST_LIMIT = "FirstLimit"
     ONE_TO_TWO = "OneToTwo"
+    ENERGY_BREAKOUT = "EnergyBreakout"
 
 
 @dataclass(frozen=True)

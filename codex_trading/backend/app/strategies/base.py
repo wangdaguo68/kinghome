@@ -12,3 +12,10 @@ class Strategy(ABC):
     def generate(self, cycle: CycleState, bars: list[StockBar]) -> list[Signal]:
         raise NotImplementedError
 
+    def generate_with_history(
+        self,
+        cycle: CycleState,
+        bars: list[StockBar],
+        history_by_symbol: dict[str, list[StockBar]],
+    ) -> list[Signal]:
+        return self.generate(cycle, bars)

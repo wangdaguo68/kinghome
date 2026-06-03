@@ -29,6 +29,7 @@ from app.live.qmt_adapter import QmtAdapter
 from app.live.tracker import refresh_tracking, sync_intraday_signals, sync_tomorrow_signals, tracked_signals
 from app.notify.feishu import FeishuNotifier
 from app.risk.gates import AccountState, evaluate_signal
+from app.strategies.energy_breakout import EnergyBreakoutConfig, EnergyBreakoutStrategy
 from app.strategies.extreme_arbitrage import ExtremeArbitrageStrategy
 from app.strategies.experiment import PRESETS, StrategyPreset, strategies_for_preset
 from app.strategies.first_limit import FirstLimitStrategy
@@ -68,7 +69,7 @@ app.add_middleware(
 
 def make_engine() -> BacktestEngine:
     return BacktestEngine(
-        [ExtremeArbitrageStrategy(), FirstLimitStrategy(), OneToTwoStrategy()],
+        [ExtremeArbitrageStrategy(), FirstLimitStrategy(), OneToTwoStrategy(), EnergyBreakoutStrategy()],
         fee_model=load_broker_fee_model(),
         capital=backtest_capital(),
     )
@@ -88,6 +89,7 @@ def preset_settings(preset: StrategyPreset) -> dict[str, object]:
         "position_pct": preset.position_pct,
         "max_signals_per_strategy": preset.max_signals_per_strategy,
         "research_only": preset.research_only,
+        "include_energy": preset.include_energy,
     }
 
 
@@ -118,6 +120,7 @@ def optimization_candidates(base: StrategyPreset) -> list[StrategyPreset]:
             position_pct=base.position_pct,
             max_signals_per_strategy=base.max_signals_per_strategy,
             research_only=base.research_only,
+            include_energy=base.include_energy,
         )
         for suffix, amount, rank, open_min in variants
     ]
@@ -170,6 +173,8 @@ def tomorrow_version_map(market_days: list, stock_bars: list) -> tuple[dict[str,
 
 
 def execution_rule(signal: Signal) -> str:
+    if signal.pattern == Pattern.ENERGY_BREAKOUT:
+        return "下一交易日开盘买入，若明显高开冲高则按人工纪律控制追价"
     if signal.pattern == Pattern.ONE_TO_TWO and signal.min_entry_open_pct is not None:
         return f"\u4ec5\u5f53\u4e0b\u4e00\u4ea4\u6613\u65e5\u5f00\u76d8\u6da8\u5e45 >= {signal.min_entry_open_pct:g}% \u65f6\u8003\u8651\u4eba\u5de5\u4e70\u5165"
     if signal.pattern == Pattern.FIRST_LIMIT:
@@ -305,6 +310,11 @@ def backtest() -> dict[str, object]:
     return cached_backtest(runtime_cache_token())
 
 
+@app.get("/api/energy-backtest")
+def energy_backtest() -> dict[str, object]:
+    return cached_energy_backtest(runtime_cache_token())
+
+
 @lru_cache(maxsize=8)
 def cached_backtest(_cache_token: str) -> dict[str, object]:
     source, market_days, stock_bars = load_market_data()
@@ -314,6 +324,33 @@ def cached_backtest(_cache_token: str) -> dict[str, object]:
         **backtest_coverage_payload(market_days),
         "metrics": result.metrics,
         "trades": [trade.__dict__ for trade in result.trades],
+        "rejected_count": len(result.rejected_signals),
+    }
+
+
+@lru_cache(maxsize=8)
+def cached_energy_backtest(_cache_token: str) -> dict[str, object]:
+    source, market_days, stock_bars = load_market_data()
+    result = BacktestEngine(
+        [EnergyBreakoutStrategy(EnergyBreakoutConfig(min_failed_attempts=2))],
+        risk_min_amount_billion=3,
+        enforce_pattern_cycle=True,
+        consecutive_loss_limit=None,
+        fee_model=load_broker_fee_model(),
+        capital=backtest_capital(),
+    ).run(market_days, stock_bars)
+    return {
+        "source": source,
+        **backtest_coverage_payload(market_days),
+        "strategy": {
+            "id": "energy",
+            "name": "能量策略",
+            "description": "近20日至少2次长上影试探60日线失败后，放量收盘站上60日线，次日开盘买入。",
+        },
+        "metrics": result.metrics,
+        "trades": [trade.__dict__ for trade in result.trades],
+        "quality": quality_breakdown(result.trades),
+        "reflection": trade_reflection(result.trades),
         "rejected_count": len(result.rejected_signals),
     }
 
@@ -421,6 +458,7 @@ def strategy_versions() -> dict[str, object]:
 def clear_runtime_cache() -> dict[str, object]:
     clear_market_data_cache()
     cached_backtest.cache_clear()
+    cached_energy_backtest.cache_clear()
     cached_strategy_experiments.cache_clear()
     cached_strategy_optimization.cache_clear()
     cached_strategy_versions.cache_clear()

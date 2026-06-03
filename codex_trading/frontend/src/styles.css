@@ -208,6 +208,51 @@ button.primary, button.full { background: #d0a95f; color: #15120b; border-color:
 .metrics { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
 .metrics span { border: 1px solid #c7b78e; border-radius: 6px; padding: 12px; color: #675d44; }
 .metrics b { display: block; color: #20231f; font-size: 24px; margin-bottom: 4px; }
+.pill {
+  border: 1px solid #c7b78e;
+  border-radius: 999px;
+  color: #675d44;
+  background: #eadfc7;
+  padding: 7px 11px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.energy-card {
+  border-color: #a6b7a2;
+  background: #f0eee4;
+}
+.energy-metrics span {
+  border-color: #a6b7a2;
+  background: #edf1e7;
+}
+.energy-samples {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(130px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+.energy-sample {
+  border: 1px solid #b9c2b0;
+  border-radius: 6px;
+  background: #f7f4eb;
+  padding: 10px;
+  display: grid;
+  gap: 3px;
+  color: #465347;
+  min-height: 94px;
+}
+.energy-sample b, .energy-sample small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.energy-sample span, .energy-sample small {
+  color: #687263;
+  font-size: 12px;
+}
+.energy-sample strong {
+  font-size: 18px;
+}
 .coverage-note {
   margin: 12px 0 10px;
   color: #675d44;
@@ -1200,7 +1245,7 @@ button.primary, button.full { background: #d0a95f; color: #15120b; border-color:
   .rail { position: static; }
   .hero-grid, .content-grid, .report-grid, .calendar-board-layout, .ledger-overview-body { grid-template-columns: 1fr; }
   .experiment-grid, .lab-summary, .tomorrow-summary, .live-summary, .reflection-grid, .optimization-grid, .version-grid, .ledger-grid { grid-template-columns: 1fr; }
-  .market-coverage-grid { grid-template-columns: repeat(3, minmax(128px, 1fr)); }
+  .market-coverage-grid, .energy-samples { grid-template-columns: repeat(3, minmax(128px, 1fr)); }
   .calendar-detail-panel { position: static; }
   .calendar-board { grid-template-columns: repeat(4, minmax(130px, 1fr)); }
   .calendar-week-head { display: none; }
@@ -1210,7 +1255,7 @@ button.primary, button.full { background: #d0a95f; color: #15120b; border-color:
   .workspace { padding: 16px; }
   .topbar { align-items: flex-start; flex-direction: column; }
   .metrics, .matrix-head, .matrix-row, .trade-row, .cycle-strip, .strategy-grid, .data-table, .tomorrow-table, .tracked-table, .intraday-table, .calendar-stats, .ledger-metrics { grid-template-columns: 1fr 1fr; }
-  .experiment-grid, .experiment-metrics, .sample-head, .sample-row, .market-coverage-grid { grid-template-columns: 1fr; }
+  .experiment-grid, .experiment-metrics, .sample-head, .sample-row, .market-coverage-grid, .energy-samples { grid-template-columns: 1fr; }
   .calendar-hero-body { grid-template-columns: 1fr; }
   .calendar-board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .calendar-cell { min-height: 138px; }

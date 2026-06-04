@@ -21,6 +21,7 @@ class Pattern(StrEnum):
     FIRST_LIMIT = "FirstLimit"
     ONE_TO_TWO = "OneToTwo"
     ENERGY_BREAKOUT = "EnergyBreakout"
+    SHORT_ENERGY = "ShortEnergy"
 
 
 @dataclass(frozen=True)

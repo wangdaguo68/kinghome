@@ -222,6 +222,10 @@ button.primary, button.full { background: #d0a95f; color: #15120b; border-color:
   border-color: #a6b7a2;
   background: #f0eee4;
 }
+.short-energy-card {
+  border-color: #b7a06f;
+  background: #f2eadb;
+}
 .energy-metrics span {
   border-color: #a6b7a2;
   background: #edf1e7;
@@ -472,7 +476,7 @@ button.primary, button.full { background: #d0a95f; color: #15120b; border-color:
 }
 .tomorrow-table {
   display: grid;
-  grid-template-columns: 1.05fr .75fr .65fr .75fr .45fr .45fr .55fr 1.55fr;
+  grid-template-columns: 1.05fr .75fr .65fr .75fr .45fr .45fr .55fr 1.8fr 1.45fr;
   border: 1px solid #263642;
   border-radius: 6px;
   overflow: hidden;
@@ -519,7 +523,7 @@ button.primary, button.full { background: #d0a95f; color: #15120b; border-color:
   min-width: 0;
   overflow-wrap: anywhere;
 }
-.tomorrow-table > :nth-child(-n+8) {
+.tomorrow-table > :nth-child(-n+9) {
   color: #f0c56b;
   background: #0b1116;
   font-size: 12px;

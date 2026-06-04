@@ -34,6 +34,7 @@ from app.strategies.extreme_arbitrage import ExtremeArbitrageStrategy
 from app.strategies.experiment import PRESETS, StrategyPreset, strategies_for_preset
 from app.strategies.first_limit import FirstLimitStrategy
 from app.strategies.one_to_two import OneToTwoStrategy
+from app.strategies.short_energy import ShortEnergyConfig, ShortEnergyStrategy
 
 load_local_env()
 
@@ -69,7 +70,7 @@ app.add_middleware(
 
 def make_engine() -> BacktestEngine:
     return BacktestEngine(
-        [ExtremeArbitrageStrategy(), FirstLimitStrategy(), OneToTwoStrategy(), EnergyBreakoutStrategy()],
+        [ExtremeArbitrageStrategy(), FirstLimitStrategy(), OneToTwoStrategy(), EnergyBreakoutStrategy(), ShortEnergyStrategy()],
         fee_model=load_broker_fee_model(),
         capital=backtest_capital(),
     )
@@ -173,6 +174,8 @@ def tomorrow_version_map(market_days: list, stock_bars: list) -> tuple[dict[str,
 
 
 def execution_rule(signal: Signal) -> str:
+    if signal.pattern == Pattern.SHORT_ENERGY:
+        return "下一交易日只在开盘承接强、题材未退潮时人工确认买入；高开过猛或后排先弱则放弃"
     if signal.pattern == Pattern.ENERGY_BREAKOUT:
         return "下一交易日开盘买入，若明显高开冲高则按人工纪律控制追价"
     if signal.pattern == Pattern.ONE_TO_TWO and signal.min_entry_open_pct is not None:
@@ -315,6 +318,11 @@ def energy_backtest() -> dict[str, object]:
     return cached_energy_backtest(runtime_cache_token())
 
 
+@app.get("/api/short-energy-backtest")
+def short_energy_backtest() -> dict[str, object]:
+    return cached_short_energy_backtest(runtime_cache_token())
+
+
 @lru_cache(maxsize=8)
 def cached_backtest(_cache_token: str) -> dict[str, object]:
     source, market_days, stock_bars = load_market_data()
@@ -346,6 +354,34 @@ def cached_energy_backtest(_cache_token: str) -> dict[str, object]:
             "id": "energy",
             "name": "能量策略",
             "description": "近20日至少2次长上影试探60日线失败后，放量收盘站上60日线，次日开盘买入。",
+        },
+        "metrics": result.metrics,
+        "trades": [trade.__dict__ for trade in result.trades],
+        "quality": quality_breakdown(result.trades),
+        "reflection": trade_reflection(result.trades),
+        "rejected_count": len(result.rejected_signals),
+    }
+
+
+@lru_cache(maxsize=8)
+def cached_short_energy_backtest(_cache_token: str) -> dict[str, object]:
+    source, market_days, stock_bars = load_market_data()
+    result = BacktestEngine(
+        [ShortEnergyStrategy(ShortEnergyConfig())],
+        risk_min_amount_billion=3,
+        enforce_pattern_cycle=True,
+        consecutive_loss_limit=None,
+        fee_model=load_broker_fee_model(),
+        capital=backtest_capital(),
+        single_position_limit_pct=30,
+    ).run(market_days, stock_bars)
+    return {
+        "source": source,
+        **backtest_coverage_payload(market_days),
+        "strategy": {
+            "id": "short-energy",
+            "name": "超短能量交易",
+            "description": "按市场能量、个股能量、前排/龙头分和买入模式筛选主线前排、低位补涨与新题材点火机会。",
         },
         "metrics": result.metrics,
         "trades": [trade.__dict__ for trade in result.trades],
@@ -459,6 +495,7 @@ def clear_runtime_cache() -> dict[str, object]:
     clear_market_data_cache()
     cached_backtest.cache_clear()
     cached_energy_backtest.cache_clear()
+    cached_short_energy_backtest.cache_clear()
     cached_strategy_experiments.cache_clear()
     cached_strategy_optimization.cache_clear()
     cached_strategy_versions.cache_clear()
@@ -492,6 +529,9 @@ def build_tomorrow_plan() -> dict[str, object]:
     decision_date = decision_cycle.trade_date
     bars = [bar for bar in stock_bars if bar.trade_date == decision_date]
     bars_by_symbol = {bar.symbol: bar for bar in bars}
+    history_by_symbol: dict[str, list[StockBar]] = {}
+    for bar in sorted(stock_bars, key=lambda item: (item.symbol, item.trade_date)):
+        history_by_symbol.setdefault(bar.symbol, []).append(bar)
 
     try:
         planned_entry_date = next_open_date(decision_date)
@@ -519,7 +559,7 @@ def build_tomorrow_plan() -> dict[str, object]:
         selected_symbols: set[str] = set()
         if version_allowed:
             for strategy in strategies_for_preset(preset):
-                for signal in strategy.generate(decision_cycle, bars):
+                for signal in strategy.generate_with_history(decision_cycle, bars, history_by_symbol):
                     bar = bars_by_symbol.get(signal.symbol)
                     if bar is None:
                         rejected_count += 1
@@ -558,6 +598,70 @@ def build_tomorrow_plan() -> dict[str, object]:
                 "rejected_count": rejected_count,
             }
         )
+
+    short_energy_strategy = ShortEnergyStrategy(
+        ShortEnergyConfig(
+            market_threshold=45,
+            stock_threshold=58,
+            leader_threshold=45,
+            min_avg_amount_billion=1,
+            min_close_pct=3,
+            max_sector_rank=220,
+            max_signals=6,
+            position_pct=5,
+            ignition_position_pct=3,
+            allow_watch_candidates=True,
+        ),
+        cycle_filter=False,
+    )
+    short_energy_picks = []
+    short_energy_rejected = 0
+    short_energy_symbols: set[str] = set()
+    for signal in short_energy_strategy.generate_with_history(decision_cycle, bars, history_by_symbol):
+        bar = bars_by_symbol.get(signal.symbol)
+        if bar is None or signal.symbol in short_energy_symbols:
+            short_energy_rejected += 1
+            continue
+        decision = evaluate_signal(
+            signal,
+            decision_cycle,
+            bar,
+            AccountState(),
+            min_amount_billion=3,
+            enforce_pattern_cycle=False,
+            consecutive_loss_limit=None,
+            single_position_limit_pct=30,
+            total_position_limit_pct=100,
+        )
+        if not decision.allowed:
+            short_energy_rejected += 1
+            continue
+        short_energy_symbols.add(signal.symbol)
+        short_energy_picks.append(tomorrow_signal_row(signal, bar, planned_entry_date, decision_cycle.tag))
+
+    plans.append(
+        {
+            "id": "short-energy",
+            "name": "超短能量",
+            "description": "根据市场能量、个股能量和前排/龙头分筛选明日可参考标的。",
+            "settings": {
+                "amount_min_billion": 3,
+                "rank_limit": 120,
+                "first_limit_mode": "market_energy",
+                "one_to_two_open_min_pct": 0,
+                "cycle_filter": True,
+                "position_pct": None,
+                "max_signals_per_strategy": 6,
+                "research_only": True,
+            },
+            "version_id": "short-energy-live",
+            "version_eligible": True,
+            "version_verdict": "独立能量扫描",
+            "version_reasons": ["按最新交易日收盘数据生成；退潮期只作为观察候选，开盘承接不符合时放弃"],
+            "signals": sorted(short_energy_picks, key=lambda item: float(item["score"]), reverse=True),
+            "rejected_count": short_energy_rejected,
+        }
+    )
 
     return {
         "source": source,

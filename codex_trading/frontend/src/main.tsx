@@ -67,6 +67,8 @@ type EnergyBacktestResponse = BacktestResponse & {
   reflection: TradeReflection;
 };
 
+type StrategyBacktestResponse = EnergyBacktestResponse;
+
 type MarketCoverageDay = {
   trade_date: string;
   red_count: number;
@@ -435,6 +437,7 @@ function patternText(pattern: string) {
     FirstLimit: "首板打板",
     OneToTwo: "一进二",
     EnergyBreakout: "能量策略",
+    ShortEnergy: "超短能量交易",
   };
   return map[pattern] ?? pattern;
 }
@@ -554,6 +557,7 @@ function App() {
   const [cycles, setCycles] = useState<CycleState[]>([]);
   const [backtest, setBacktest] = useState<BacktestResponse | null>(null);
   const [energyBacktest, setEnergyBacktest] = useState<EnergyBacktestResponse | null>(null);
+  const [shortEnergyBacktest, setShortEnergyBacktest] = useState<StrategyBacktestResponse | null>(null);
   const [experiments, setExperiments] = useState<StrategyExperimentsResponse | null>(null);
   const [tomorrowPlan, setTomorrowPlan] = useState<TomorrowPlanResponse | null>(null);
   const [intradayScan, setIntradayScan] = useState<IntradayScanResponse | null>(null);
@@ -596,6 +600,10 @@ function App() {
       void fetch(`${API_BASE}/api/energy-backtest`)
         .then((response) => (response.ok ? response.json() : Promise.reject(response)))
         .then(setEnergyBacktest)
+        .catch(() => undefined);
+      void fetch(`${API_BASE}/api/short-energy-backtest`)
+        .then((response) => (response.ok ? response.json() : Promise.reject(response)))
+        .then(setShortEnergyBacktest)
         .catch(() => undefined);
       setLastRefresh(new Date().toLocaleTimeString("zh-CN", { hour12: false }));
     } catch (err) {
@@ -720,7 +728,7 @@ function App() {
         {activePage === "intraday" && <IntradayPage scan={intradayScan} onRefresh={refreshLiveData} />}
         {activePage === "live" && <LiveAlertsPage status={alertStatus} tracked={trackedSignals} onRefresh={refreshLiveData} />}
         {activePage === "strategy" && <StrategyPage patterns={patterns} experiments={experiments} onRefreshData={refreshData} />}
-        {activePage === "backtest" && <BacktestPage backtest={backtest} energyBacktest={energyBacktest} experiments={experiments} feeModel={feeModel} />}
+        {activePage === "backtest" && <BacktestPage backtest={backtest} energyBacktest={energyBacktest} shortEnergyBacktest={shortEnergyBacktest} experiments={experiments} feeModel={feeModel} />}
         {activePage === "risk" && <RiskPage riskCheck={riskCheck} currentCycle={currentCycle} rejectedCount={backtest?.rejected_count ?? 0} />}
         {activePage === "data" && <DataPage cycles={cycles} source={backtest?.source} />}
         {activePage === "ledger" && <LedgerPage backtest={backtest} />}
@@ -1012,7 +1020,7 @@ function TomorrowPage({ plan }: { plan: TomorrowPlanResponse | null }) {
           </div>
         ) : null}
         <div className="tomorrow-table">
-          <span>标的</span><span>模式</span><span>收盘涨幅</span><span>成交额</span><span>排名</span><span>仓位</span><span>止损</span><span>执行条件</span>
+          <span>标的</span><span>模式</span><span>收盘涨幅</span><span>成交额</span><span>排名</span><span>仓位</span><span>止损</span><span>买入原因</span><span>执行条件</span>
           {(selected?.signals ?? []).map((signal) => (
             <React.Fragment key={`${selected?.id}-${signal.symbol}-${signal.pattern}`}>
               <strong>{signal.name}<small>{signal.symbol}</small></strong>
@@ -1022,6 +1030,7 @@ function TomorrowPage({ plan }: { plan: TomorrowPlanResponse | null }) {
               <span>{signal.sector_rank}</span>
               <span>{signal.planned_position_pct}%</span>
               <span>{pct(signal.stop_loss_pct)}</span>
+              <span>{signal.reason}</span>
               <span>{signal.execution_rule}</span>
             </React.Fragment>
           ))}
@@ -1430,11 +1439,13 @@ function ReflectionList({ title, rows }: { title: string; rows: string[] }) {
 function BacktestPage({
   backtest,
   energyBacktest,
+  shortEnergyBacktest,
   experiments,
   feeModel,
 }: {
   backtest: BacktestResponse | null;
   energyBacktest: EnergyBacktestResponse | null;
+  shortEnergyBacktest: StrategyBacktestResponse | null;
   experiments: StrategyExperimentsResponse | null;
   feeModel: FeeModel | null;
 }) {
@@ -1511,6 +1522,36 @@ function BacktestPage({
           <div className="energy-samples">
             {[...energyBacktest.trades].slice(-5).reverse().map((trade) => (
               <div className="energy-sample" key={`energy-${trade.symbol}-${trade.signal_date}-${trade.entry_date}`}>
+                <span>{trade.entry_date}</span>
+                <b>{trade.name}</b>
+                <small>{trade.symbol}</small>
+                <strong className={pnlClass(trade.pnl_pct)}>{pct(trade.pnl_pct)}</strong>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="paper-card energy-card short-energy-card">
+        <div className="report-headline">
+          <div>
+            <h2>{shortEnergyBacktest?.strategy.name ?? "超短能量交易专项样本"}</h2>
+            <p>{shortEnergyBacktest?.strategy.description ?? "按市场能量、个股能量、前排/龙头分和买入模式筛选主线前排、低位补涨与新题材点火机会。"}</p>
+          </div>
+          <span className="pill">{shortEnergyBacktest ? `样本 ${shortEnergyBacktest.trades.length} 笔` : "读取中"}</span>
+        </div>
+        <div className="metrics energy-metrics">
+          <span><b>{shortEnergyBacktest?.metrics.trade_count ?? 0}</b> 交易数</span>
+          <span><b>{pct(shortEnergyBacktest?.metrics.total_return_pct)}</b> 总收益</span>
+          <span><b>{pct(shortEnergyBacktest?.metrics.win_rate_pct)}</b> 胜率</span>
+          <span><b>{pct(shortEnergyBacktest?.metrics.max_drawdown_pct)}</b> 最大回撤</span>
+          <span><b>{shortEnergyBacktest?.metrics.profit_loss_ratio?.toFixed(2) ?? "-"}</b> 盈亏比</span>
+          <span><b>{shortEnergyBacktest?.rejected_count ?? 0}</b> 拒绝信号</span>
+        </div>
+        {shortEnergyBacktest && (
+          <div className="energy-samples">
+            {[...shortEnergyBacktest.trades].slice(-5).reverse().map((trade) => (
+              <div className="energy-sample" key={`short-energy-${trade.symbol}-${trade.signal_date}-${trade.entry_date}`}>
                 <span>{trade.entry_date}</span>
                 <b>{trade.name}</b>
                 <small>{trade.symbol}</small>

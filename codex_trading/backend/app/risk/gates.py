@@ -11,6 +11,7 @@ PATTERN_CYCLES: dict[Pattern, set[CycleTag]] = {
     Pattern.FIRST_LIMIT: {CycleTag.TURN_UP, CycleTag.MAIN_RALLY, CycleTag.LOW_SHAKE},
     Pattern.ONE_TO_TWO: {CycleTag.TURN_UP, CycleTag.MAIN_RALLY},
     Pattern.ENERGY_BREAKOUT: {CycleTag.TURN_UP, CycleTag.MAIN_RALLY, CycleTag.LOW_SHAKE},
+    Pattern.SHORT_ENERGY: {CycleTag.TURN_UP, CycleTag.MAIN_RALLY, CycleTag.LOW_SHAKE, CycleTag.CLIMAX},
 }
 
 POSITION_LIMITS: dict[CycleTag, float] = {

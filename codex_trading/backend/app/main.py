@@ -1,12 +1,16 @@
 ﻿from __future__ import annotations
 
+import hashlib
+import json
 import os
 import threading
 import time
 from contextlib import asynccontextmanager
 from functools import lru_cache
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
+from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import load_local_env
@@ -37,6 +41,9 @@ from app.strategies.one_to_two import OneToTwoStrategy
 from app.strategies.short_energy import ShortEnergyConfig, ShortEnergyStrategy
 
 load_local_env()
+
+CACHE_SCHEMA_VERSION = "20260607-speed-1"
+MATERIALIZED_CACHE_DIR = Path(os.getenv("MATERIALIZED_CACHE_DIR", "cache/materialized"))
 
 
 @asynccontextmanager
@@ -223,18 +230,44 @@ def load_market_data() -> tuple[str, list, list]:
 
 
 def market_cache_token() -> str:
+    recent_days = os.getenv("TUSHARE_RECENT_DAYS", "250")
+    bar_limit = os.getenv("TUSHARE_STOCK_BAR_LIMIT", "500")
+    summary = load_provider_summary(int(recent_days), int(bar_limit))
+    latest_date = str(summary.get("latest_date")) if summary else time.strftime("%Y%m%d%H")
     return "|".join(
         [
-            os.getenv("TUSHARE_RECENT_DAYS", "250"),
+            recent_days,
             os.getenv("TUSHARE_CYCLE_DAYS", "23"),
-            os.getenv("TUSHARE_STOCK_BAR_LIMIT", "500"),
-            time.strftime("%Y%m%d%H"),
+            bar_limit,
+            latest_date,
         ]
     )
 
 
 def runtime_cache_token() -> str:
-    return "|".join([market_cache_token(), str(backtest_capital()), str(load_broker_fee_model().__dict__)])
+    return "|".join([CACHE_SCHEMA_VERSION, market_cache_token(), str(backtest_capital()), str(load_broker_fee_model().__dict__)])
+
+
+def materialized_payload(name: str, token: str, builder) -> dict[str, object]:
+    MATERIALIZED_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    digest = hashlib.sha256(token.encode("utf-8")).hexdigest()[:24]
+    path = MATERIALIZED_CACHE_DIR / f"{name}-{digest}.json"
+    if path.exists():
+        try:
+            with path.open("r", encoding="utf-8") as handle:
+                payload = json.load(handle)
+            if isinstance(payload, dict):
+                return payload
+        except Exception:
+            path.unlink(missing_ok=True)
+
+    payload = builder()
+    encoded = jsonable_encoder(payload)
+    tmp_path = path.with_suffix(".tmp")
+    with tmp_path.open("w", encoding="utf-8") as handle:
+        json.dump(encoded, handle, ensure_ascii=False, separators=(",", ":"))
+    tmp_path.replace(path)
+    return encoded
 
 
 def backtest_coverage_payload(market_days: list) -> dict[str, object]:
@@ -325,70 +358,79 @@ def short_energy_backtest() -> dict[str, object]:
 
 @lru_cache(maxsize=8)
 def cached_backtest(_cache_token: str) -> dict[str, object]:
-    source, market_days, stock_bars = load_market_data()
-    result = make_engine().run(market_days, stock_bars)
-    return {
-        "source": source,
-        **backtest_coverage_payload(market_days),
-        "metrics": result.metrics,
-        "trades": [trade.__dict__ for trade in result.trades],
-        "rejected_count": len(result.rejected_signals),
-    }
+    def build() -> dict[str, object]:
+        source, market_days, stock_bars = load_market_data()
+        result = make_engine().run(market_days, stock_bars)
+        return {
+            "source": source,
+            **backtest_coverage_payload(market_days),
+            "metrics": result.metrics,
+            "trades": [trade.__dict__ for trade in result.trades],
+            "rejected_count": len(result.rejected_signals),
+        }
+
+    return materialized_payload("backtest", _cache_token, build)
 
 
 @lru_cache(maxsize=8)
 def cached_energy_backtest(_cache_token: str) -> dict[str, object]:
-    source, market_days, stock_bars = load_market_data()
-    result = BacktestEngine(
-        [EnergyBreakoutStrategy(EnergyBreakoutConfig(min_failed_attempts=2))],
-        risk_min_amount_billion=3,
-        enforce_pattern_cycle=True,
-        consecutive_loss_limit=None,
-        fee_model=load_broker_fee_model(),
-        capital=backtest_capital(),
-    ).run(market_days, stock_bars)
-    return {
-        "source": source,
-        **backtest_coverage_payload(market_days),
-        "strategy": {
-            "id": "energy",
-            "name": "能量策略",
-            "description": "近20日至少2次长上影试探60日线失败后，放量收盘站上60日线，次日开盘买入。",
-        },
-        "metrics": result.metrics,
-        "trades": [trade.__dict__ for trade in result.trades],
-        "quality": quality_breakdown(result.trades),
-        "reflection": trade_reflection(result.trades),
-        "rejected_count": len(result.rejected_signals),
-    }
+    def build() -> dict[str, object]:
+        source, market_days, stock_bars = load_market_data()
+        result = BacktestEngine(
+            [EnergyBreakoutStrategy(EnergyBreakoutConfig(min_failed_attempts=2))],
+            risk_min_amount_billion=3,
+            enforce_pattern_cycle=True,
+            consecutive_loss_limit=None,
+            fee_model=load_broker_fee_model(),
+            capital=backtest_capital(),
+        ).run(market_days, stock_bars)
+        return {
+            "source": source,
+            **backtest_coverage_payload(market_days),
+            "strategy": {
+                "id": "energy",
+                "name": "能量策略",
+                "description": "近20日至少2次长上影试探60日线失败后，放量收盘站上60日线，次日开盘买入。",
+            },
+            "metrics": result.metrics,
+            "trades": [trade.__dict__ for trade in result.trades],
+            "quality": quality_breakdown(result.trades),
+            "reflection": trade_reflection(result.trades),
+            "rejected_count": len(result.rejected_signals),
+        }
+
+    return materialized_payload("energy-backtest", _cache_token, build)
 
 
 @lru_cache(maxsize=8)
 def cached_short_energy_backtest(_cache_token: str) -> dict[str, object]:
-    source, market_days, stock_bars = load_market_data()
-    result = BacktestEngine(
-        [ShortEnergyStrategy(ShortEnergyConfig())],
-        risk_min_amount_billion=3,
-        enforce_pattern_cycle=True,
-        consecutive_loss_limit=None,
-        fee_model=load_broker_fee_model(),
-        capital=backtest_capital(),
-        single_position_limit_pct=30,
-    ).run(market_days, stock_bars)
-    return {
-        "source": source,
-        **backtest_coverage_payload(market_days),
-        "strategy": {
-            "id": "short-energy",
-            "name": "超短能量交易",
-            "description": "按市场能量、个股能量、前排/龙头分和买入模式筛选主线前排、低位补涨与新题材点火机会。",
-        },
-        "metrics": result.metrics,
-        "trades": [trade.__dict__ for trade in result.trades],
-        "quality": quality_breakdown(result.trades),
-        "reflection": trade_reflection(result.trades),
-        "rejected_count": len(result.rejected_signals),
-    }
+    def build() -> dict[str, object]:
+        source, market_days, stock_bars = load_market_data()
+        result = BacktestEngine(
+            [ShortEnergyStrategy(ShortEnergyConfig())],
+            risk_min_amount_billion=3,
+            enforce_pattern_cycle=True,
+            consecutive_loss_limit=None,
+            fee_model=load_broker_fee_model(),
+            capital=backtest_capital(),
+            single_position_limit_pct=30,
+        ).run(market_days, stock_bars)
+        return {
+            "source": source,
+            **backtest_coverage_payload(market_days),
+            "strategy": {
+                "id": "short-energy",
+                "name": "超短能量交易",
+                "description": "按市场能量、个股能量、前排/龙头分和买入模式筛选主线前排、低位补涨与新题材点火机会。",
+            },
+            "metrics": result.metrics,
+            "trades": [trade.__dict__ for trade in result.trades],
+            "quality": quality_breakdown(result.trades),
+            "reflection": trade_reflection(result.trades),
+            "rejected_count": len(result.rejected_signals),
+        }
+
+    return materialized_payload("short-energy-backtest", _cache_token, build)
 
 
 @app.get("/api/strategy-experiments")
@@ -398,41 +440,44 @@ def strategy_experiments() -> dict[str, object]:
 
 @lru_cache(maxsize=8)
 def cached_strategy_experiments(_cache_token: str) -> dict[str, object]:
-    source, market_days, stock_bars = load_market_data()
-    fee_model = load_broker_fee_model()
-    capital = backtest_capital()
-    experiments = []
-    for preset in PRESETS:
-        result = BacktestEngine(
-            strategies_for_preset(preset),
-            risk_min_amount_billion=preset.amount_min_billion,
-            enforce_pattern_cycle=preset.cycle_filter,
-            single_position_limit_pct=100 if preset.research_only else 20,
-            total_position_limit_pct=100 if preset.research_only else None,
-            consecutive_loss_limit=None,
-            fee_model=fee_model,
-            capital=capital,
-        ).run(market_days, stock_bars)
-        experiments.append(
-            {
-                "id": preset.id,
-                "name": preset.name,
-                "description": preset.description,
-                "settings": preset_settings(preset),
-                "metrics": result.metrics,
-                "trade_count": result.metrics.get("trade_count", 0),
-                "sample_trades": [trade.__dict__ for trade in sorted(result.trades, key=lambda item: item.entry_date, reverse=True)[:5]],
-                "trades": [trade.__dict__ for trade in result.trades],
-                "quality": quality_breakdown(result.trades),
-                "reflection": trade_reflection(result.trades),
-                "rejected_count": len(result.rejected_signals),
-            }
-        )
-    return {
-        "source": source,
-        **backtest_coverage_payload(market_days),
-        "experiments": experiments,
-    }
+    def build() -> dict[str, object]:
+        source, market_days, stock_bars = load_market_data()
+        fee_model = load_broker_fee_model()
+        capital = backtest_capital()
+        experiments = []
+        for preset in PRESETS:
+            result = BacktestEngine(
+                strategies_for_preset(preset),
+                risk_min_amount_billion=preset.amount_min_billion,
+                enforce_pattern_cycle=preset.cycle_filter,
+                single_position_limit_pct=100 if preset.research_only else 20,
+                total_position_limit_pct=100 if preset.research_only else None,
+                consecutive_loss_limit=None,
+                fee_model=fee_model,
+                capital=capital,
+            ).run(market_days, stock_bars)
+            experiments.append(
+                {
+                    "id": preset.id,
+                    "name": preset.name,
+                    "description": preset.description,
+                    "settings": preset_settings(preset),
+                    "metrics": result.metrics,
+                    "trade_count": result.metrics.get("trade_count", 0),
+                    "sample_trades": [trade.__dict__ for trade in sorted(result.trades, key=lambda item: item.entry_date, reverse=True)[:5]],
+                    "trades": [trade.__dict__ for trade in result.trades],
+                    "quality": quality_breakdown(result.trades),
+                    "reflection": trade_reflection(result.trades),
+                    "rejected_count": len(result.rejected_signals),
+                }
+            )
+        return {
+            "source": source,
+            **backtest_coverage_payload(market_days),
+            "experiments": experiments,
+        }
+
+    return materialized_payload("strategy-experiments", _cache_token, build)
 
 
 @app.get("/api/strategy-optimization")
@@ -496,6 +541,7 @@ def clear_runtime_cache() -> dict[str, object]:
     cached_backtest.cache_clear()
     cached_energy_backtest.cache_clear()
     cached_short_energy_backtest.cache_clear()
+    cached_tomorrow_plan.cache_clear()
     cached_strategy_experiments.cache_clear()
     cached_strategy_optimization.cache_clear()
     cached_strategy_versions.cache_clear()
@@ -504,22 +550,34 @@ def clear_runtime_cache() -> dict[str, object]:
 
 @lru_cache(maxsize=8)
 def cached_strategy_versions(_cache_token: str) -> dict[str, object]:
-    source, market_days, stock_bars = load_market_data()
-    payload = build_strategy_versions(
-        PRESETS,
-        market_days,
-        stock_bars,
-        load_broker_fee_model(),
-        backtest_capital(),
-        optimization_candidates,
-        preset_settings,
-    )
-    payload["source"] = source
-    payload["range_days"] = len(market_days)
-    return payload
+    def build() -> dict[str, object]:
+        source, market_days, stock_bars = load_market_data()
+        payload = build_strategy_versions(
+            PRESETS,
+            market_days,
+            stock_bars,
+            load_broker_fee_model(),
+            backtest_capital(),
+            optimization_candidates,
+            preset_settings,
+        )
+        payload["source"] = source
+        payload["range_days"] = len(market_days)
+        return payload
+
+    return materialized_payload("strategy-versions", _cache_token, build)
 
 
 def build_tomorrow_plan() -> dict[str, object]:
+    return cached_tomorrow_plan(runtime_cache_token())
+
+
+@lru_cache(maxsize=8)
+def cached_tomorrow_plan(_cache_token: str) -> dict[str, object]:
+    return materialized_payload("tomorrow-plan", _cache_token, _build_tomorrow_plan)
+
+
+def _build_tomorrow_plan() -> dict[str, object]:
     source, market_days, stock_bars = load_market_data()
     if not market_days:
         raise HTTPException(status_code=502, detail="没有可用市场数据")
@@ -704,6 +762,15 @@ def intraday_radar_status() -> dict[str, object]:
 
 @app.get("/api/intraday/scan")
 def intraday_scan() -> dict[str, object]:
+    status = intraday_status()
+    if not status.get("ready"):
+        return {
+            "status": status,
+            "scanned_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "cycle_tag": None,
+            "signal_count": 0,
+            "signals": [],
+        }
     _, market_days, stock_bars = load_market_data()
     cycle_states = build_cycle_states(market_days)
     status, quotes = load_intraday_quotes(stock_bars)
@@ -720,9 +787,10 @@ def intraday_sync_alerts() -> dict[str, object]:
 
 
 @app.get("/api/signals/tracked")
-def signals_tracked() -> dict[str, object]:
-    _, _, stock_bars = load_market_data()
-    refresh_tracking(stock_bars)
+def signals_tracked(refresh: bool = False) -> dict[str, object]:
+    if refresh:
+        _, _, stock_bars = load_market_data()
+        refresh_tracking(stock_bars)
     return tracked_signals()
 
 

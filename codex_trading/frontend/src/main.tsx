@@ -1,13 +1,13 @@
 ﻿import React, { useCallback, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Activity, BarChart3, BellRing, BookOpenText, CalendarCheck, CalendarDays, Clock3, Database, FlaskConical, Globe2, Radar, ShieldCheck, Zap } from "lucide-react";
+import { Activity, BarChart3, BellRing, BookOpenText, CalendarCheck, CalendarDays, ChevronLeft, ChevronRight, Clock3, Database, FileText, FlaskConical, Globe2, Newspaper, Radar, RefreshCw, Search, ShieldCheck, Zap } from "lucide-react";
 import "./styles.css";
 
 const API_HOST = window.location.hostname || "127.0.0.1";
 const API_BASE = `${window.location.protocol}//${API_HOST}:19093`;
 const FRONTEND_PORT_HINT = "19092";
 
-type PageId = "calendar" | "cycle" | "tomorrow" | "intraday" | "live" | "strategy" | "backtest" | "risk" | "data" | "ledger";
+type PageId = "calendar" | "research" | "cycle" | "tomorrow" | "intraday" | "live" | "strategy" | "backtest" | "risk" | "data" | "ledger";
 
 type CycleState = {
   trade_date: string;
@@ -349,8 +349,60 @@ type InvestmentCalendarResponse = {
   warnings: string[];
 };
 
+type IndustryResearchItem = {
+  id: number;
+  title: string;
+  summary: string;
+  content: string;
+  report_type: string;
+  source_name: string;
+  source_type: string;
+  source_url: string;
+  institution: string;
+  author: string;
+  industry: string;
+  symbols: string[];
+  tags: string[];
+  published_at: string | null;
+  crawled_at: string | null;
+};
+
+type IndustryResearchResponse = {
+  page: number;
+  page_size: number;
+  total: number;
+  total_pages: number;
+  items: IndustryResearchItem[];
+  warning: string;
+};
+
+type IndustryResearchStats = {
+  total: number;
+  today_count: number;
+  source_count: number;
+  latest_published_at: string | null;
+  latest_crawled_at: string | null;
+  warning: string;
+};
+
+type IndustryResearchSource = {
+  name: string;
+  source_type: string;
+  url: string;
+  enabled: boolean;
+  last_sync_at: string | null;
+  last_status: string;
+  last_error: string;
+};
+
+type IndustryResearchSourcesResponse = {
+  sources: IndustryResearchSource[];
+  warning: string;
+};
+
 const navItems: Array<{ id: PageId; label: string; icon: React.ReactNode }> = [
   { id: "calendar", label: "投资日历", icon: <CalendarDays size={17} /> },
+  { id: "research", label: "产业研报", icon: <Newspaper size={17} /> },
   { id: "cycle", label: "周期雷达", icon: <Activity size={17} /> },
   { id: "tomorrow", label: "明日策略", icon: <CalendarCheck size={17} /> },
   { id: "intraday", label: "盘中雷达", icon: <Radar size={17} /> },
@@ -552,6 +604,11 @@ function calendarDates(startDate: string, endDate: string) {
   });
 }
 
+function formatDateTime(value?: string | null) {
+  if (!value) return "-";
+  return new Date(value).toLocaleString("zh-CN", { hour12: false });
+}
+
 function App() {
   const [activePage, setActivePage] = useState<PageId>("calendar");
   const [cycles, setCycles] = useState<CycleState[]>([]);
@@ -694,6 +751,7 @@ function App() {
         {error && <div className="error-banner">{error}。如果你当前打开的是 19096 之类的旧前端地址，请改开 19092。后端固定在 19093。</div>}
 
         {activePage === "calendar" && <InvestmentCalendarPage />}
+        {activePage === "research" && <IndustryResearchPage />}
         {activePage === "cycle" && (
           <>
             <section className="hero-grid">
@@ -734,6 +792,195 @@ function App() {
         {activePage === "ledger" && <LedgerPage backtest={backtest} />}
       </section>
     </main>
+  );
+}
+
+function IndustryResearchPage() {
+  const [data, setData] = useState<IndustryResearchResponse>({ page: 1, page_size: 20, total: 0, total_pages: 0, items: [], warning: "" });
+  const [stats, setStats] = useState<IndustryResearchStats>({ total: 0, today_count: 0, source_count: 0, latest_published_at: null, latest_crawled_at: null, warning: "" });
+  const [sources, setSources] = useState<IndustryResearchSource[]>([]);
+  const [page, setPage] = useState(1);
+  const [keyword, setKeyword] = useState("");
+  const [symbol, setSymbol] = useState("");
+  const [reportType, setReportType] = useState("");
+  const [source, setSource] = useState("");
+  const [industry, setIndustry] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const pageSize = 20;
+
+  const loadResearch = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({
+        page: String(page),
+        page_size: String(pageSize),
+        report_type: reportType,
+        source,
+        industry,
+        symbol,
+        keyword,
+      });
+      const [itemsResponse, statsResponse, sourcesResponse] = await Promise.all([
+        fetch(`${API_BASE}/api/industry-research?${params.toString()}`),
+        fetch(`${API_BASE}/api/industry-research/stats`),
+        fetch(`${API_BASE}/api/industry-research/sources`),
+      ]);
+      if (!itemsResponse.ok || !statsResponse.ok || !sourcesResponse.ok) throw new Error("产业研报接口异常");
+      const itemsPayload: IndustryResearchResponse = await itemsResponse.json();
+      const statsPayload: IndustryResearchStats = await statsResponse.json();
+      const sourcesPayload: IndustryResearchSourcesResponse = await sourcesResponse.json();
+      setData(itemsPayload);
+      setStats(statsPayload);
+      setSources(sourcesPayload.sources);
+    } catch {
+      setData((current) => ({ ...current, warning: "产业研报接口读取失败，请检查后端和 MySQL。" }));
+    } finally {
+      setLoading(false);
+    }
+  }, [industry, keyword, page, reportType, source, symbol]);
+
+  useEffect(() => {
+    void loadResearch();
+  }, [loadResearch]);
+
+  const resetAndSearch = () => {
+    setPage(1);
+    void loadResearch();
+  };
+
+  const triggerSync = async () => {
+    setSyncing(true);
+    try {
+      const response = await fetch(`${API_BASE}/api/industry-research/sync?force=true`);
+      if (!response.ok) throw new Error("同步失败");
+      setPage(1);
+      await loadResearch();
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const sourceOptions = sources.map((item) => item.name);
+  const industryOptions = Array.from(new Set(data.items.map((item) => item.industry).filter(Boolean))).slice(0, 20);
+  const reportTypes = ["产业报告", "个股拆解", "策略报告", "宏观研究", "券商晨会", "财务模型", "授权导入"];
+
+  return (
+    <section className="research-page">
+      <div className="terminal-panel research-hero">
+        <div className="panel-head">
+          <span>产业研究数据库</span>
+          <b>{loading ? "读取中" : `共 ${stats.total} 条`}</b>
+        </div>
+        <div className="research-hero-body">
+          <div>
+            <small>最新材料</small>
+            <strong>{stats.total}</strong>
+            <span>公开研报元数据、授权导入材料和后续自定义来源统一入库，按时间倒序分页。</span>
+          </div>
+          <button className="primary" onClick={triggerSync} type="button"><RefreshCw size={16} /> {syncing ? "同步中" : "同步研报"}</button>
+        </div>
+        <div className="research-stats">
+          <span><b>{stats.today_count}</b>今日入库</span>
+          <span><b>{stats.source_count}</b>数据来源</span>
+          <span><b>{formatDateTime(stats.latest_published_at).slice(0, 10)}</b>最新发布</span>
+          <span><b>{formatDateTime(stats.latest_crawled_at).slice(0, 10)}</b>最近同步</span>
+        </div>
+        {(data.warning || stats.warning) && <div className="calendar-warning">{data.warning || stats.warning}</div>}
+      </div>
+
+      <div className="terminal-panel research-filter-panel">
+        <div className="research-filter-grid">
+          <label>
+            <span>关键词</span>
+            <input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="半导体、机器人、CPO..." />
+          </label>
+          <label>
+            <span>股票</span>
+            <input value={symbol} onChange={(event) => setSymbol(event.target.value)} placeholder="300750 或 宁德时代" />
+          </label>
+          <label>
+            <span>类型</span>
+            <select value={reportType} onChange={(event) => { setReportType(event.target.value); setPage(1); }}>
+              <option value="">全部类型</option>
+              {reportTypes.map((item) => <option key={item} value={item}>{item}</option>)}
+            </select>
+          </label>
+          <label>
+            <span>来源</span>
+            <select value={source} onChange={(event) => { setSource(event.target.value); setPage(1); }}>
+              <option value="">全部来源</option>
+              {sourceOptions.map((item) => <option key={item} value={item}>{item}</option>)}
+            </select>
+          </label>
+          <label>
+            <span>行业</span>
+            <select value={industry} onChange={(event) => { setIndustry(event.target.value); setPage(1); }}>
+              <option value="">全部行业</option>
+              {industryOptions.map((item) => <option key={item} value={item}>{item}</option>)}
+            </select>
+          </label>
+          <button onClick={resetAndSearch} type="button"><Search size={16} /> 检索</button>
+        </div>
+      </div>
+
+      <div className="research-layout">
+        <section className="research-list">
+          {data.items.map((item) => (
+            <article className="terminal-panel research-card" key={item.id}>
+              <div className="research-card-top">
+                <span>{item.report_type}</span>
+                <b>{formatDateTime(item.published_at)}</b>
+              </div>
+              <h2>{item.title}</h2>
+              <p>{item.summary || "暂无摘要，后续可通过授权文件导入全文或模型拆解。"}</p>
+              <div className="research-tags">
+                {item.institution && <span>{item.institution}</span>}
+                {item.industry && <span>{item.industry}</span>}
+                {item.author && <span>{item.author}</span>}
+                {item.symbols.map((value) => <span key={value}>{value}</span>)}
+                {item.tags.slice(0, 4).map((value) => <span key={value}>{value}</span>)}
+              </div>
+              <div className="research-meta">
+                <span><FileText size={14} /> {item.source_type} · {item.source_name}</span>
+                {item.source_url ? <a href={item.source_url} target="_blank" rel="noreferrer">查看来源</a> : <span>无来源链接</span>}
+              </div>
+            </article>
+          ))}
+          {!data.items.length && (
+            <div className="terminal-panel research-empty">
+              <FileText size={22} />
+              <strong>暂无产业研报数据</strong>
+              <span>点击“同步研报”拉取公开来源；授权材料可放入 `INDUSTRY_RESEARCH_IMPORT_DIR` 后入库。</span>
+            </div>
+          )}
+          <div className="research-pagination">
+            <button disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))} type="button"><ChevronLeft size={16} /> 上一页</button>
+            <span>第 {data.page || page} / {data.total_pages || 1} 页 · {data.total} 条</span>
+            <button disabled={data.total_pages === 0 || page >= data.total_pages} onClick={() => setPage((value) => value + 1)} type="button">下一页 <ChevronRight size={16} /></button>
+          </div>
+        </section>
+
+        <aside className="terminal-panel research-source-panel">
+          <div className="panel-head"><span>来源状态</span><b>{sources.length} 个</b></div>
+          <div className="research-source-list">
+            {sources.map((item) => (
+              <div key={item.name}>
+                <strong>{item.name}</strong>
+                <span>{item.source_type} · {item.last_status || "pending"}</span>
+                <small>{formatDateTime(item.last_sync_at)}</small>
+                {item.last_error ? <em>{item.last_error}</em> : null}
+              </div>
+            ))}
+            {!sources.length ? <p>首次同步后会显示来源状态。</p> : null}
+          </div>
+          <div className="theme-stack compact-themes">
+            <div><strong>公开来源</strong><span>只采公开元数据和摘要，不绕过权限抓取全文。</span></div>
+            <div><strong>授权导入</strong><span>买方模型、电话会议纪要和个股拆解可通过本地目录入库。</span></div>
+          </div>
+        </aside>
+      </div>
+    </section>
   );
 }
 

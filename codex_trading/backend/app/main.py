@@ -33,6 +33,8 @@ from app.live.qmt_adapter import QmtAdapter
 from app.live.tracker import refresh_tracking, sync_intraday_signals, sync_tomorrow_signals, tracked_signals
 from app.notify.feishu import FeishuNotifier
 from app.risk.gates import AccountState, evaluate_signal
+from app.research.service import scheduler_sleep_seconds, should_run_daily_sync, sync_industry_research
+from app.research.store import list_research_items, research_sources, research_stats
 from app.strategies.energy_breakout import EnergyBreakoutConfig, EnergyBreakoutStrategy
 from app.strategies.extreme_arbitrage import ExtremeArbitrageStrategy
 from app.strategies.experiment import PRESETS, StrategyPreset, strategies_for_preset
@@ -49,6 +51,7 @@ MATERIALIZED_CACHE_DIR = Path(os.getenv("MATERIALIZED_CACHE_DIR", "cache/materia
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     start_signal_monitor()
+    start_industry_research_scheduler()
     yield
 
 
@@ -333,6 +336,42 @@ def fee_model() -> dict[str, object]:
 @app.get("/api/investment-calendar")
 def investment_calendar(days: int = 30, force_refresh: bool = False) -> dict[str, object]:
     return fetch_investment_calendar(days=days, force_refresh=force_refresh)
+
+
+@app.get("/api/industry-research")
+def industry_research(
+    page: int = 1,
+    page_size: int = 20,
+    report_type: str = "",
+    source: str = "",
+    industry: str = "",
+    symbol: str = "",
+    keyword: str = "",
+) -> dict[str, object]:
+    return list_research_items(
+        page=page,
+        page_size=page_size,
+        report_type=report_type,
+        source=source,
+        industry=industry,
+        symbol=symbol,
+        keyword=keyword,
+    )
+
+
+@app.get("/api/industry-research/stats")
+def industry_research_stats() -> dict[str, object]:
+    return research_stats()
+
+
+@app.get("/api/industry-research/sources")
+def industry_research_sources() -> dict[str, object]:
+    return research_sources()
+
+
+@app.get("/api/industry-research/sync")
+def industry_research_sync(force: bool = True) -> dict[str, object]:
+    return sync_industry_research(force=force)
 
 
 @app.get("/api/cycles")
@@ -813,5 +852,28 @@ def start_signal_monitor() -> None:
             except Exception:
                 pass
             time.sleep(interval)
+
+    threading.Thread(target=loop, daemon=True).start()
+
+
+_INDUSTRY_RESEARCH_SCHEDULER_STARTED = False
+
+
+def start_industry_research_scheduler() -> None:
+    global _INDUSTRY_RESEARCH_SCHEDULER_STARTED
+    if _INDUSTRY_RESEARCH_SCHEDULER_STARTED:
+        return
+    _INDUSTRY_RESEARCH_SCHEDULER_STARTED = True
+
+    def loop() -> None:
+        last_run_day: str | None = None
+        while True:
+            try:
+                if should_run_daily_sync(last_run_day):
+                    sync_industry_research(force=True)
+                    last_run_day = time.strftime("%Y-%m-%d")
+            except Exception:
+                pass
+            time.sleep(scheduler_sleep_seconds())
 
     threading.Thread(target=loop, daemon=True).start()

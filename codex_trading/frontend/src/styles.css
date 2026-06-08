@@ -1244,13 +1244,229 @@ button.primary, button.full { background: #d0a95f; color: #15120b; border-color:
   color: #f0c56b;
   background: #10161c;
 }
+.research-page {
+  display: grid;
+  gap: 14px;
+}
+.research-hero {
+  background:
+    linear-gradient(135deg, rgba(208, 169, 95, .1), transparent 42%),
+    linear-gradient(90deg, rgba(95, 159, 216, .09), transparent 58%),
+    #0e1419;
+}
+.research-hero-body {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: 16px;
+}
+.research-hero-body small,
+.research-hero-body span {
+  display: block;
+  color: #84939f;
+}
+.research-hero-body strong {
+  display: block;
+  color: #f0c56b;
+  font-size: 58px;
+  line-height: 1;
+  margin: 4px 0 8px;
+}
+.research-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-top: 14px;
+}
+.research-stats span {
+  border: 1px solid #263642;
+  border-radius: 6px;
+  background: #0b1116;
+  color: #84939f;
+  padding: 12px;
+}
+.research-stats b {
+  display: block;
+  color: #dce5eb;
+  font-size: 20px;
+  margin-bottom: 4px;
+}
+.research-filter-panel {
+  padding: 14px;
+}
+.research-filter-grid {
+  display: grid;
+  grid-template-columns: 1.3fr .9fr .8fr 1fr .8fr auto;
+  gap: 10px;
+  align-items: end;
+}
+.research-filter-grid label,
+.research-filter-grid span {
+  display: block;
+}
+.research-filter-grid label span {
+  color: #84939f;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+.research-filter-grid input,
+.research-filter-grid select {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid #30404d;
+  border-radius: 6px;
+  background: #0b1116;
+  color: #dce5eb;
+  padding: 0 11px;
+  font: inherit;
+}
+.research-filter-grid input:focus,
+.research-filter-grid select:focus {
+  outline: none;
+  border-color: #d0a95f;
+}
+.research-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 14px;
+  align-items: start;
+}
+.research-list {
+  display: grid;
+  gap: 12px;
+}
+.research-card {
+  padding: 15px;
+  background:
+    linear-gradient(180deg, rgba(208, 169, 95, .05), transparent 34%),
+    #10161c;
+}
+.research-card-top,
+.research-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  color: #84939f;
+  font-size: 12px;
+}
+.research-card-top span {
+  border: 1px solid rgba(208, 169, 95, .45);
+  border-radius: 999px;
+  color: #f0c56b;
+  background: rgba(208, 169, 95, .08);
+  padding: 4px 9px;
+}
+.research-card-top b {
+  color: #aab5bd;
+  font-weight: 500;
+}
+.research-card h2 {
+  margin: 12px 0 8px;
+  color: #dce5eb;
+  font-size: 22px;
+  line-height: 1.3;
+}
+.research-card p {
+  margin: 0;
+  color: #aab5bd;
+  line-height: 1.65;
+}
+.research-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 13px 0;
+}
+.research-tags span {
+  border: 1px solid #334655;
+  border-radius: 999px;
+  color: #bec8d0;
+  background: #0d141a;
+  padding: 5px 8px;
+  font-size: 12px;
+}
+.research-meta {
+  border-top: 1px solid rgba(132, 152, 166, .16);
+  padding-top: 10px;
+}
+.research-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.research-meta a {
+  color: #f0c56b;
+  text-decoration: none;
+}
+.research-meta a:hover {
+  text-decoration: underline;
+}
+.research-source-panel {
+  position: sticky;
+  top: 18px;
+}
+.research-source-list {
+  display: grid;
+  gap: 10px;
+}
+.research-source-list div,
+.research-empty {
+  border: 1px solid #263642;
+  border-radius: 8px;
+  background: #0b1116;
+  padding: 13px;
+}
+.research-source-list strong,
+.research-source-list span,
+.research-source-list small,
+.research-source-list em {
+  display: block;
+}
+.research-source-list strong {
+  color: #dce5eb;
+}
+.research-source-list span,
+.research-source-list small,
+.research-source-list p {
+  color: #84939f;
+  line-height: 1.55;
+  margin: 5px 0 0;
+}
+.research-source-list em {
+  color: #f07973;
+  font-style: normal;
+  margin-top: 6px;
+  overflow-wrap: anywhere;
+}
+.research-empty {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  color: #84939f;
+}
+.research-empty strong {
+  color: #dce5eb;
+  font-size: 18px;
+}
+.research-pagination {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  color: #84939f;
+}
+button:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
 @media (max-width: 1180px) {
   .shell { grid-template-columns: 1fr; }
   .rail { position: static; }
-  .hero-grid, .content-grid, .report-grid, .calendar-board-layout, .ledger-overview-body { grid-template-columns: 1fr; }
-  .experiment-grid, .lab-summary, .tomorrow-summary, .live-summary, .reflection-grid, .optimization-grid, .version-grid, .ledger-grid { grid-template-columns: 1fr; }
+  .hero-grid, .content-grid, .report-grid, .calendar-board-layout, .ledger-overview-body, .research-layout, .research-hero-body { grid-template-columns: 1fr; }
+  .experiment-grid, .lab-summary, .tomorrow-summary, .live-summary, .reflection-grid, .optimization-grid, .version-grid, .ledger-grid, .research-filter-grid { grid-template-columns: 1fr; }
   .market-coverage-grid, .energy-samples { grid-template-columns: repeat(3, minmax(128px, 1fr)); }
-  .calendar-detail-panel { position: static; }
+  .calendar-detail-panel, .research-source-panel { position: static; }
   .calendar-board { grid-template-columns: repeat(4, minmax(130px, 1fr)); }
   .calendar-week-head { display: none; }
 }
@@ -1258,9 +1474,10 @@ button.primary, button.full { background: #d0a95f; color: #15120b; border-color:
 @media (max-width: 720px) {
   .workspace { padding: 16px; }
   .topbar { align-items: flex-start; flex-direction: column; }
-  .metrics, .matrix-head, .matrix-row, .trade-row, .cycle-strip, .strategy-grid, .data-table, .tomorrow-table, .tracked-table, .intraday-table, .calendar-stats, .ledger-metrics { grid-template-columns: 1fr 1fr; }
+  .metrics, .matrix-head, .matrix-row, .trade-row, .cycle-strip, .strategy-grid, .data-table, .tomorrow-table, .tracked-table, .intraday-table, .calendar-stats, .ledger-metrics, .research-stats { grid-template-columns: 1fr 1fr; }
   .experiment-grid, .experiment-metrics, .sample-head, .sample-row, .market-coverage-grid, .energy-samples { grid-template-columns: 1fr; }
   .calendar-hero-body { grid-template-columns: 1fr; }
   .calendar-board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .calendar-cell { min-height: 138px; }
+  .research-card-top, .research-meta, .research-pagination { align-items: flex-start; flex-direction: column; }
 }

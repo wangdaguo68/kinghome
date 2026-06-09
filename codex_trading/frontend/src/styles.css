@@ -1327,7 +1327,7 @@ button.primary, button.full { background: #d0a95f; color: #15120b; border-color:
 }
 .research-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 44vw);
   gap: 14px;
   align-items: start;
 }
@@ -1340,6 +1340,18 @@ button.primary, button.full { background: #d0a95f; color: #15120b; border-color:
   background:
     linear-gradient(180deg, rgba(208, 169, 95, .05), transparent 34%),
     #10161c;
+  cursor: pointer;
+  transition: border-color .15s ease, transform .15s ease, background .15s ease;
+}
+.research-card:hover,
+.research-card.active {
+  border-color: rgba(208, 169, 95, .58);
+  background:
+    linear-gradient(180deg, rgba(208, 169, 95, .09), transparent 38%),
+    #111920;
+}
+.research-card.active {
+  transform: translateY(-1px);
 }
 .research-card-top,
 .research-meta {
@@ -1402,9 +1414,60 @@ button.primary, button.full { background: #d0a95f; color: #15120b; border-color:
 .research-meta a:hover {
   text-decoration: underline;
 }
-.research-source-panel {
+.research-side {
+  display: grid;
+  gap: 14px;
   position: sticky;
   top: 18px;
+}
+.research-detail-panel {
+  min-height: 520px;
+}
+.research-detail-head {
+  display: grid;
+  gap: 8px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(132, 152, 166, .16);
+}
+.research-detail-head span {
+  width: fit-content;
+  border: 1px solid rgba(208, 169, 95, .45);
+  border-radius: 999px;
+  color: #f0c56b;
+  background: rgba(208, 169, 95, .08);
+  padding: 4px 9px;
+  font-size: 12px;
+}
+.research-detail-head h2 {
+  margin: 0;
+  color: #e7eef3;
+  font-size: 23px;
+  line-height: 1.35;
+}
+.research-detail-head div {
+  color: #84939f;
+}
+.research-detail-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 11px 0;
+}
+.research-detail-actions a,
+.research-detail-actions span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #f0c56b;
+  text-decoration: none;
+}
+.research-fulltext {
+  max-height: min(62vh, 760px);
+  overflow: auto;
+  white-space: pre-wrap;
+  color: #c8d2d9;
+  line-height: 1.78;
+  font-size: 14px;
+  padding-right: 8px;
 }
 .research-source-list {
   display: grid;
@@ -1445,6 +1508,9 @@ button.primary, button.full { background: #d0a95f; color: #15120b; border-color:
   justify-items: start;
   color: #84939f;
 }
+.research-empty.inline {
+  margin-top: 14px;
+}
 .research-empty strong {
   color: #dce5eb;
   font-size: 18px;
@@ -1466,7 +1532,7 @@ button:disabled {
   .hero-grid, .content-grid, .report-grid, .calendar-board-layout, .ledger-overview-body, .research-layout, .research-hero-body { grid-template-columns: 1fr; }
   .experiment-grid, .lab-summary, .tomorrow-summary, .live-summary, .reflection-grid, .optimization-grid, .version-grid, .ledger-grid, .research-filter-grid { grid-template-columns: 1fr; }
   .market-coverage-grid, .energy-samples { grid-template-columns: repeat(3, minmax(128px, 1fr)); }
-  .calendar-detail-panel, .research-source-panel { position: static; }
+  .calendar-detail-panel, .research-side { position: static; }
   .calendar-board { grid-template-columns: repeat(4, minmax(130px, 1fr)); }
   .calendar-week-head { display: none; }
 }

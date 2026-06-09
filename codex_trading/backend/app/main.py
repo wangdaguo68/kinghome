@@ -34,7 +34,7 @@ from app.live.tracker import refresh_tracking, sync_intraday_signals, sync_tomor
 from app.notify.feishu import FeishuNotifier
 from app.risk.gates import AccountState, evaluate_signal
 from app.research.service import scheduler_sleep_seconds, should_run_daily_sync, sync_industry_research
-from app.research.store import list_research_items, research_sources, research_stats
+from app.research.store import get_research_item, list_research_items, research_sources, research_stats
 from app.strategies.energy_breakout import EnergyBreakoutConfig, EnergyBreakoutStrategy
 from app.strategies.extreme_arbitrage import ExtremeArbitrageStrategy
 from app.strategies.experiment import PRESETS, StrategyPreset, strategies_for_preset
@@ -370,8 +370,13 @@ def industry_research_sources() -> dict[str, object]:
 
 
 @app.get("/api/industry-research/sync")
-def industry_research_sync(force: bool = True) -> dict[str, object]:
-    return sync_industry_research(force=force)
+def industry_research_sync(force: bool = True, reset: bool = False) -> dict[str, object]:
+    return sync_industry_research(force=force, reset=reset)
+
+
+@app.get("/api/industry-research/{item_id}")
+def industry_research_detail(item_id: int) -> dict[str, object]:
+    return get_research_item(item_id)
 
 
 @app.get("/api/cycles")

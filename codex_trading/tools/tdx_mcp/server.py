@@ -4,12 +4,18 @@ import json
 import os
 import re
 import time
+import urllib.parse
+import urllib.request
 from contextlib import asynccontextmanager
 from contextlib import contextmanager
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 
+from mcp import ClientSession
+from mcp.client.streamable_http import streamablehttp_client
 from mcp.server.fastmcp import FastMCP
+from pypdf import PdfReader
 from pytdx.hq import TdxHq_API
 from starlette.applications import Starlette
 from starlette.concurrency import run_in_threadpool
@@ -40,6 +46,9 @@ CATEGORY_MAP = {
     "week": 5,
     "month": 6,
 }
+DEFAULT_OFFICIAL_TDX_MCP_URL = "https://txmcp.tdx.com.cn:3001/txmcp"
+DEFAULT_RESEARCH_QUERY = "查一下A股最新产业深度研报"
+PDF_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36"
 
 
 def load_env(path: Path = ROOT / ".env") -> None:
@@ -258,6 +267,209 @@ def screener(query: str, limit: int = 30) -> dict[str, Any]:
     return {"query": query, "scanned": len(quotes), "count": len(filtered[:limit]), "items": filtered[:limit]}
 
 
+async def call_official_tool(tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    token = os.getenv("TDX_TOKEN", "").strip()
+    if not token:
+        raise RuntimeError("TDX_TOKEN not configured")
+    headers = {"Authorization": f"Bearer {token}"}
+    official_url = os.getenv("TDX_OFFICIAL_MCP_URL", DEFAULT_OFFICIAL_TDX_MCP_URL)
+    async with streamablehttp_client(official_url, headers=headers) as (read_stream, write_stream, _):
+        async with ClientSession(read_stream, write_stream) as session:
+            await session.initialize()
+            result = await session.call_tool(tool_name, arguments)
+    structured = getattr(result, "structuredContent", None)
+    if isinstance(structured, dict):
+        return structured
+    text_parts = []
+    for item in getattr(result, "content", []) or []:
+        if getattr(item, "type", "") == "text":
+            text_parts.append(getattr(item, "text", ""))
+    text = "".join(text_parts).strip()
+    if not text:
+        return {"ok": False, "data": [], "error": "empty official TDX MCP response"}
+    try:
+        parsed = json.loads(text)
+        return parsed if isinstance(parsed, dict) else {"ok": True, "data": parsed}
+    except json.JSONDecodeError:
+        return {"ok": False, "data": [], "raw_text": text}
+
+
+def build_wenda_query(
+    query: str = "",
+    name: str = "",
+    symbol: str = "",
+    bdate: str = "",
+    edate: str = "",
+    keywords: str = "",
+    desc: str = "",
+) -> str:
+    query = str(query or "").strip()
+    if query:
+        return query
+    subject = str(name or symbol or "").strip()
+    fields = [subject, str(bdate or "").strip(), str(edate or "").strip(), str(keywords or "").strip(), str(desc or "").strip()]
+    compact = "|".join(fields).strip("|")
+    return compact or os.getenv("TDX_RESEARCH_DEFAULT_QUERY", DEFAULT_RESEARCH_QUERY)
+
+
+async def research_search(
+    query: str = "",
+    name: str = "",
+    symbol: str = "",
+    bdate: str = "",
+    edate: str = "",
+    keywords: str = "",
+    desc: str = "",
+    limit: int = 20,
+    fetch_content: bool = False,
+) -> dict[str, Any]:
+    final_query = build_wenda_query(query, name, symbol, bdate, edate, keywords, desc)
+    limit = max(1, min(int(limit), 100))
+    payload = await call_official_tool("wenda_report_query", {"query": final_query})
+    items = normalize_report_rows(payload)[:limit]
+    if fetch_content:
+        max_chars = int(os.getenv("TDX_RESEARCH_CONTENT_MAX_CHARS", "80000"))
+        for item in items:
+            detail = await research_detail(item.get("source_url", ""), item.get("title", ""), item.get("summary", ""), max_chars=max_chars)
+            item["content"] = detail.get("content", "")
+            if detail.get("content_error"):
+                item["content_error"] = detail["content_error"]
+    return {
+        "ok": bool(payload.get("ok", True)) if isinstance(payload, dict) else True,
+        "provider": "official-tdx-mcp",
+        "tool": "wenda_report_query",
+        "query": final_query,
+        "count": len(items),
+        "items": items,
+        "raw": payload,
+    }
+
+
+def normalize_report_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    data = payload.get("data") if isinstance(payload, dict) else []
+    if not isinstance(data, list) or not data:
+        return []
+    header = [str(value).strip() for value in data[0]] if isinstance(data[0], list) else []
+    rows = data[1:] if header else data
+    items: list[dict[str, Any]] = []
+    for row in rows:
+        if isinstance(row, dict):
+            mapped = row
+        elif isinstance(row, list):
+            mapped = {header[index] if index < len(header) else str(index): value for index, value in enumerate(row)}
+        else:
+            continue
+        title = clean_text(mapped.get("标题") or mapped.get("title"))
+        if not title:
+            continue
+        source_url = clean_text(mapped.get("链接") or mapped.get("url") or mapped.get("source_url"))
+        summary = clean_text(mapped.get("摘要") or mapped.get("summary"))
+        institution = clean_text(mapped.get("来源") or mapped.get("机构") or mapped.get("institution"))
+        published_at = clean_text(mapped.get("时间") or mapped.get("日期") or mapped.get("published_at"))
+        items.append(
+            {
+                "title": title,
+                "published_at": published_at,
+                "source_url": source_url,
+                "institution": institution,
+                "summary": summary,
+                "content": "",
+                "source_name": "通达信问达研报",
+                "source_type": "通达信MCP",
+                "report_type": classify_report_type(title, summary),
+                "raw_payload": mapped,
+            }
+        )
+    return dedupe_reports(items)
+
+
+def dedupe_reports(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    seen: set[str] = set()
+    unique: list[dict[str, Any]] = []
+    for item in items:
+        key = "|".join([item.get("source_url", ""), item.get("title", ""), item.get("published_at", "")]).lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(item)
+    return unique
+
+
+async def research_detail(url: str, title: str = "", summary: str = "", max_chars: int = 80000) -> dict[str, Any]:
+    url = str(url or "").strip()
+    summary = clean_text(summary)
+    if not url:
+        return {"ok": bool(summary), "url": url, "title": title, "content": summary, "content_error": "missing report url"}
+    try:
+        if ".pdf" in url.lower():
+            content = await run_in_threadpool(fetch_pdf_text, url, max_chars)
+        else:
+            content = await run_in_threadpool(fetch_text_url, url, max_chars)
+        return {"ok": True, "url": url, "title": title, "content": content or summary, "content_error": ""}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "url": url, "title": title, "content": summary, "content_error": str(exc)}
+
+
+def fetch_pdf_text(url: str, max_chars: int = 80000) -> str:
+    request = urllib.request.Request(quote_url(url), headers={"User-Agent": PDF_USER_AGENT, "Accept": "application/pdf,*/*"})
+    with urllib.request.urlopen(request, timeout=25) as response:  # noqa: S310
+        data = response.read(int(os.getenv("TDX_RESEARCH_PDF_MAX_BYTES", "25165824")))
+    reader = PdfReader(BytesIO(data))
+    parts: list[str] = []
+    for page in reader.pages:
+        text = page.extract_text() or ""
+        if text:
+            parts.append(text)
+        if sum(len(part) for part in parts) >= max_chars:
+            break
+    return clean_text_block("\n".join(parts))[:max_chars]
+
+
+def fetch_text_url(url: str, max_chars: int = 80000) -> str:
+    request = urllib.request.Request(quote_url(url), headers={"User-Agent": PDF_USER_AGENT, "Accept": "text/html,text/plain,*/*"})
+    with urllib.request.urlopen(request, timeout=20) as response:  # noqa: S310
+        charset = response.headers.get_content_charset() or "utf-8"
+        data = response.read(int(os.getenv("TDX_RESEARCH_TEXT_MAX_BYTES", "5242880")))
+    text = data.decode(charset, errors="ignore")
+    text = re.sub(r"<script[\s\S]*?</script>", " ", text, flags=re.I)
+    text = re.sub(r"<style[\s\S]*?</style>", " ", text, flags=re.I)
+    text = re.sub(r"<[^>]+>", " ", text)
+    return clean_text_block(text)[:max_chars]
+
+
+def quote_url(url: str) -> str:
+    parts = urllib.parse.urlsplit(str(url).strip())
+    path = urllib.parse.quote(parts.path, safe="/%")
+    query = urllib.parse.quote(parts.query, safe="=&%/:,+")
+    return urllib.parse.urlunsplit((parts.scheme, parts.netloc, path, query, parts.fragment))
+
+
+def classify_report_type(title: str, summary: str = "") -> str:
+    text = f"{title} {summary}"
+    if any(word in text for word in ["晨会", "早会"]):
+        return "券商晨会"
+    if any(word in text for word in ["宏观", "利率", "GDP", "CPI", "PPI"]):
+        return "宏观研究"
+    if any(word in text for word in ["策略", "配置", "市场周报", "A股周报"]):
+        return "策略报告"
+    if any(word in text for word in ["财务模型", "盈利预测", "估值模型"]):
+        return "财务模型"
+    if re.search(r"\b(?:00|30|60|68)\d{4}\b", text) or any(word in text for word in ["公司", "个股", "评级", "目标价"]):
+        return "个股拆解"
+    return "产业报告"
+
+
+def clean_text(value: Any) -> str:
+    if value is None:
+        return ""
+    return re.sub(r"\s+", " ", str(value)).strip()
+
+
+def clean_text_block(value: str) -> str:
+    lines = [clean_text(line) for line in str(value or "").splitlines()]
+    return "\n".join(line for line in lines if line).strip()
+
+
 def health_payload() -> dict[str, Any]:
     token_configured = bool(os.getenv("TDX_TOKEN", ""))
     return {
@@ -325,6 +537,38 @@ def tdx_screener(query: str, limit: int = 30) -> dict[str, Any]:
     return screener(query, limit=limit)
 
 
+@mcp.tool()
+async def tdx_research_search(
+    query: str = "",
+    name: str = "",
+    symbol: str = "",
+    bdate: str = "",
+    edate: str = "",
+    keywords: str = "",
+    desc: str = "",
+    limit: int = 20,
+    fetch_content: bool = False,
+) -> dict[str, Any]:
+    """Search TDX Wenda research reports and optionally extract linked PDF text."""
+    return await research_search(
+        query=query,
+        name=name,
+        symbol=symbol,
+        bdate=bdate,
+        edate=edate,
+        keywords=keywords,
+        desc=desc,
+        limit=limit,
+        fetch_content=fetch_content,
+    )
+
+
+@mcp.tool()
+async def tdx_research_detail(url: str, title: str = "", summary: str = "", max_chars: int = 80000) -> dict[str, Any]:
+    """Fetch report detail content from a TDX research report URL."""
+    return await research_detail(url=url, title=title, summary=summary, max_chars=max_chars)
+
+
 async def health(_request: Request) -> JSONResponse:
     return JSONResponse(health_payload())
 
@@ -356,6 +600,37 @@ async def rest_lookup(request: Request) -> JSONResponse:
 
 async def rest_screener(request: Request) -> JSONResponse:
     return await safe_json_async(lambda: screener(request.query_params.get("query", ""), int(request.query_params.get("limit", "30"))))
+
+
+async def rest_research_search(request: Request) -> JSONResponse:
+    try:
+        payload = await research_search(
+            query=request.query_params.get("query", ""),
+            name=request.query_params.get("name", ""),
+            symbol=request.query_params.get("symbol", ""),
+            bdate=request.query_params.get("bdate", ""),
+            edate=request.query_params.get("edate", ""),
+            keywords=request.query_params.get("keywords", ""),
+            desc=request.query_params.get("desc", ""),
+            limit=int(request.query_params.get("limit", "20")),
+            fetch_content=request.query_params.get("fetch_content", "0").lower() in {"1", "true", "yes"},
+        )
+        return JSONResponse(payload)
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse({"error": str(exc)}, status_code=500)
+
+
+async def rest_research_detail(request: Request) -> JSONResponse:
+    try:
+        payload = await research_detail(
+            url=request.query_params.get("url", ""),
+            title=request.query_params.get("title", ""),
+            summary=request.query_params.get("summary", ""),
+            max_chars=int(request.query_params.get("max_chars", "80000")),
+        )
+        return JSONResponse(payload)
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse({"error": str(exc)}, status_code=500)
 
 
 def safe_json(builder) -> JSONResponse:
@@ -394,6 +669,8 @@ def create_app() -> Starlette:
             Route("/kline/{code:str}", rest_kline),
             Route("/lookup", rest_lookup),
             Route("/screener", rest_screener),
+            Route("/research/search", rest_research_search),
+            Route("/research/detail", rest_research_detail),
             Mount("/", app=mcp_app),
         ],
         lifespan=lifespan,

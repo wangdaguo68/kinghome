@@ -3,3 +3,4 @@ pytdx>=1.72
 starlette>=0.37
 uvicorn[standard]>=0.30
 pydantic>=2
+pypdf>=4.3

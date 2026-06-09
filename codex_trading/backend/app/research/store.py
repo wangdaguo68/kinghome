@@ -267,7 +267,7 @@ def list_research_items(
                 total = int((cursor.fetchone() or {}).get("total", 0))
                 cursor.execute(
                     f"""
-                    SELECT id, title, summary, content, report_type, source_name, source_type, source_url,
+                    SELECT id, title, summary, '' AS content, report_type, source_name, source_type, source_url,
                            institution, author, industry, symbols_json, tags_json, published_at, crawled_at
                     FROM {ITEMS_TABLE}
                     {where_sql}
@@ -339,6 +339,39 @@ def research_sources() -> dict[str, Any]:
     except Exception as exc:  # noqa: BLE001
         return {"sources": [], "warning": str(exc)}
     return {"sources": [_row_to_source(row) for row in rows], "warning": ""}
+
+
+def get_research_item(item_id: int) -> dict[str, Any]:
+    try:
+        with mysql_connection() as connection:
+            if connection is None:
+                return {"item": None, "warning": "MySQL 未连接。"}
+            ensure_research_schema_once(connection)
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    f"""
+                    SELECT id, title, summary, content, report_type, source_name, source_type, source_url,
+                           institution, author, industry, symbols_json, tags_json, published_at, crawled_at
+                    FROM {ITEMS_TABLE}
+                    WHERE id = %s
+                    """,
+                    (item_id,),
+                )
+                row = cursor.fetchone()
+    except Exception as exc:  # noqa: BLE001
+        return {"item": None, "warning": str(exc)}
+    return {"item": _row_to_item(row) if row else None, "warning": "" if row else "未找到研报。"}
+
+
+def reset_research_data() -> None:
+    with mysql_connection() as connection:
+        if connection is None:
+            return
+        ensure_research_schema_once(connection)
+        with connection.cursor() as cursor:
+            cursor.execute(f"TRUNCATE TABLE {ITEMS_TABLE}")
+            cursor.execute(f"TRUNCATE TABLE {RUNS_TABLE}")
+            cursor.execute(f"TRUNCATE TABLE {SOURCES_TABLE}")
 
 
 def _research_filters(report_type: str, source: str, industry: str, symbol: str, keyword: str) -> tuple[str, list[Any]]:

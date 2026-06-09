@@ -807,6 +807,8 @@ function IndustryResearchPage() {
   const [industry, setIndustry] = useState("");
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [selected, setSelected] = useState<IndustryResearchItem | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
   const pageSize = 20;
 
   const loadResearch = useCallback(async () => {
@@ -840,9 +842,32 @@ function IndustryResearchPage() {
     }
   }, [industry, keyword, page, reportType, source, symbol]);
 
+  const loadDetail = useCallback(async (item: IndustryResearchItem) => {
+    setSelected(item);
+    setDetailLoading(true);
+    try {
+      const response = await fetch(`${API_BASE}/api/industry-research/${item.id}`);
+      if (!response.ok) throw new Error("详情读取失败");
+      const payload: { item: IndustryResearchItem | null; warning: string } = await response.json();
+      setSelected(payload.item || item);
+    } finally {
+      setDetailLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     void loadResearch();
   }, [loadResearch]);
+
+  useEffect(() => {
+    if (!data.items.length) {
+      setSelected(null);
+      return;
+    }
+    if (!selected || !data.items.some((item) => item.id === selected.id)) {
+      void loadDetail(data.items[0]);
+    }
+  }, [data.items, loadDetail, selected]);
 
   const resetAndSearch = () => {
     setPage(1);
@@ -852,7 +877,7 @@ function IndustryResearchPage() {
   const triggerSync = async () => {
     setSyncing(true);
     try {
-      const response = await fetch(`${API_BASE}/api/industry-research/sync?force=true`);
+      const response = await fetch(`${API_BASE}/api/industry-research/sync?force=true&reset=true`);
       if (!response.ok) throw new Error("同步失败");
       setPage(1);
       await loadResearch();
@@ -876,7 +901,7 @@ function IndustryResearchPage() {
           <div>
             <small>最新材料</small>
             <strong>{stats.total}</strong>
-            <span>公开研报元数据、授权导入材料和后续自定义来源统一入库，按时间倒序分页。</span>
+            <span>通达信问达研报入库，保留来源链接并解析 PDF 正文，按时间倒序分页。</span>
           </div>
           <button className="primary" onClick={triggerSync} type="button"><RefreshCw size={16} /> {syncing ? "同步中" : "同步研报"}</button>
         </div>
@@ -927,13 +952,22 @@ function IndustryResearchPage() {
       <div className="research-layout">
         <section className="research-list">
           {data.items.map((item) => (
-            <article className="terminal-panel research-card" key={item.id}>
+            <article
+              className={`terminal-panel research-card ${selected?.id === item.id ? "active" : ""}`}
+              key={item.id}
+              onClick={() => void loadDetail(item)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") void loadDetail(item);
+              }}
+              role="button"
+              tabIndex={0}
+            >
               <div className="research-card-top">
                 <span>{item.report_type}</span>
                 <b>{formatDateTime(item.published_at)}</b>
               </div>
               <h2>{item.title}</h2>
-              <p>{item.summary || "暂无摘要，后续可通过授权文件导入全文或模型拆解。"}</p>
+              <p>{item.summary || "暂无摘要，可打开详情查看已解析正文或来源 PDF。"}</p>
               <div className="research-tags">
                 {item.institution && <span>{item.institution}</span>}
                 {item.industry && <span>{item.industry}</span>}
@@ -943,7 +977,7 @@ function IndustryResearchPage() {
               </div>
               <div className="research-meta">
                 <span><FileText size={14} /> {item.source_type} · {item.source_name}</span>
-                {item.source_url ? <a href={item.source_url} target="_blank" rel="noreferrer">查看来源</a> : <span>无来源链接</span>}
+                {item.source_url ? <a href={item.source_url} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>查看来源</a> : <span>无来源链接</span>}
               </div>
             </article>
           ))}
@@ -951,7 +985,7 @@ function IndustryResearchPage() {
             <div className="terminal-panel research-empty">
               <FileText size={22} />
               <strong>暂无产业研报数据</strong>
-              <span>点击“同步研报”拉取公开来源；授权材料可放入 `INDUSTRY_RESEARCH_IMPORT_DIR` 后入库。</span>
+              <span>点击“同步研报”从通达信 MCP 拉取最新研报并解析正文。</span>
             </div>
           )}
           <div className="research-pagination">
@@ -961,23 +995,42 @@ function IndustryResearchPage() {
           </div>
         </section>
 
-        <aside className="terminal-panel research-source-panel">
-          <div className="panel-head"><span>来源状态</span><b>{sources.length} 个</b></div>
-          <div className="research-source-list">
-            {sources.map((item) => (
-              <div key={item.name}>
-                <strong>{item.name}</strong>
-                <span>{item.source_type} · {item.last_status || "pending"}</span>
-                <small>{formatDateTime(item.last_sync_at)}</small>
-                {item.last_error ? <em>{item.last_error}</em> : null}
-              </div>
-            ))}
-            {!sources.length ? <p>首次同步后会显示来源状态。</p> : null}
-          </div>
-          <div className="theme-stack compact-themes">
-            <div><strong>公开来源</strong><span>只采公开元数据和摘要，不绕过权限抓取全文。</span></div>
-            <div><strong>授权导入</strong><span>买方模型、电话会议纪要和个股拆解可通过本地目录入库。</span></div>
-          </div>
+        <aside className="research-side">
+          <section className="terminal-panel research-detail-panel">
+            <div className="panel-head"><span>研报正文</span><b>{detailLoading ? "读取中" : selected ? "已选中" : "未选择"}</b></div>
+            {selected ? (
+              <>
+                <div className="research-detail-head">
+                  <span>{selected.report_type}</span>
+                  <h2>{selected.title}</h2>
+                  <div>{selected.institution || selected.source_name} · {formatDateTime(selected.published_at)}</div>
+                </div>
+                <div className="research-detail-actions">
+                  {selected.source_url ? <a href={selected.source_url} target="_blank" rel="noreferrer"><FileText size={14} /> 来源 PDF</a> : <span>无来源链接</span>}
+                </div>
+                <article className="research-fulltext">
+                  {selected.content || selected.summary || "暂未解析出正文。"}
+                </article>
+              </>
+            ) : (
+              <div className="research-empty inline"><FileText size={20} /><strong>选择一篇研报</strong><span>正文会在这里显示。</span></div>
+            )}
+          </section>
+
+          <section className="terminal-panel research-source-panel">
+            <div className="panel-head"><span>来源状态</span><b>{sources.length} 个</b></div>
+            <div className="research-source-list">
+              {sources.map((item) => (
+                <div key={item.name}>
+                  <strong>{item.name}</strong>
+                  <span>{item.source_type} · {item.last_status || "pending"}</span>
+                  <small>{formatDateTime(item.last_sync_at)}</small>
+                  {item.last_error ? <em>{item.last_error}</em> : null}
+                </div>
+              ))}
+              {!sources.length ? <p>首次同步后会显示来源状态。</p> : null}
+            </div>
+          </section>
         </aside>
       </div>
     </section>

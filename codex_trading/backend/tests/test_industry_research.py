@@ -5,34 +5,30 @@ from pathlib import Path
 from app.research import service
 
 
-def test_eastmoney_report_row_becomes_research_item() -> None:
+def test_tdx_report_row_becomes_research_item() -> None:
     row = {
-        "title": "通信行业跟踪报告：CPO规模部署进程有望提速",
-        "stockName": "",
-        "stockCode": "",
-        "orgName": "万联证券股份有限公司",
-        "orgSName": "万联证券",
-        "publishDate": "2026-06-08 00:00:00.000",
-        "infoCode": "AP202606081823367892",
-        "industryName": "通信设备",
-        "emRatingName": "增持",
-        "reportType": 3,
-        "researcher": "夏清莹",
-        "attachPages": 7,
-        "attachSize": 710,
+        "title": "半导体行业深度报告：先进封装景气度持续提升",
+        "summary": "AI 算力拉动先进封装需求，产业链订单能见度提升。",
+        "content": "先进封装产业链包括设备、材料和封测环节。\n重点关注 688012 和 300604。",
+        "source_url": "https://data.tdx.com.cn/tdxfiles/yb/sample.pdf",
+        "institution": "通达信研报",
+        "published_at": "2026-06-08",
+        "report_type": "产业报告",
     }
-    source = {"name": "东方财富研报中心-行业研报", "source_type": "公开来源", "report_type": "产业报告", "url": "https://data.eastmoney.com/report/industry.jshtml"}
+    source = {"name": "通达信问达研报", "source_type": "通达信MCP"}
 
-    item = service._eastmoney_row_to_item(row, source)
+    item = service._tdx_report_to_item(row, source)
 
     assert item is not None
-    assert item.title.startswith("通信行业跟踪报告")
+    assert item.title.startswith("半导体行业深度报告")
     assert item.report_type == "产业报告"
-    assert item.source_name == "东方财富研报中心-行业研报"
-    assert item.institution == "万联证券"
-    assert item.industry == "通信设备"
-    assert "7页" in item.tags
-    assert "授权渠道导入" in item.summary
+    assert item.source_name == "通达信问达研报"
+    assert item.source_type == "通达信MCP"
+    assert item.institution == "通达信研报"
+    assert item.industry == "半导体"
+    assert item.symbols == ["300604", "688012"]
+    assert "已解析全文" in item.tags
+    assert item.content.startswith("先进封装产业链")
     assert item.content_hash
 
 
@@ -54,4 +50,5 @@ def test_configured_sources_adds_authorized_import_dir(monkeypatch, tmp_path: Pa
 
     sources = service._configured_sources()
 
+    assert any(source["name"] == "通达信问达研报" and source["kind"] == "tdx_research" for source in sources)
     assert any(source["name"] == "本地授权文件" and source["source_type"] == "用户授权文件" for source in sources)

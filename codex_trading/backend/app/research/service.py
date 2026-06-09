@@ -18,6 +18,7 @@ from app.research.store import (
     create_crawl_run,
     database_available,
     finish_crawl_run,
+    reset_research_data,
     upsert_research_items,
     upsert_source,
 )
@@ -27,6 +28,8 @@ USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrom
 EASTMONEY_REPORT_URL = "https://reportapi.eastmoney.com/report/list"
 EASTMONEY_REFERER = "https://data.eastmoney.com/report/"
 LOCAL_SOURCE_NAME = "本地授权文件"
+TDX_SOURCE_NAME = "通达信问达研报"
+TDX_SOURCE_TYPE = "通达信MCP"
 
 REPORT_TYPE_MAP = {
     "0": "个股拆解",
@@ -40,11 +43,13 @@ REPORT_TYPE_MAP = {
 }
 
 
-def sync_industry_research(force: bool = False) -> dict[str, Any]:
+def sync_industry_research(force: bool = False, reset: bool = False) -> dict[str, Any]:
     if not force and not _sync_enabled():
         return {"status": "disabled", "seen_count": 0, "inserted_count": 0, "sources": [], "errors": []}
     if not database_available():
         return {"status": "error", "seen_count": 0, "inserted_count": 0, "sources": [], "errors": ["MySQL 未连接，产业研报无法入库。"]}
+    if reset:
+        reset_research_data()
 
     started_at = datetime.now()
     total_seen = 0
@@ -109,37 +114,25 @@ def _configured_sources() -> list[dict[str, Any]]:
 
 
 def _default_sources() -> list[dict[str, Any]]:
-    days = int(os.getenv("INDUSTRY_RESEARCH_EASTMONEY_DAYS", "14"))
-    page_size = min(100, max(10, int(os.getenv("INDUSTRY_RESEARCH_EASTMONEY_PAGE_SIZE", "50"))))
-    max_pages = min(20, max(1, int(os.getenv("INDUSTRY_RESEARCH_EASTMONEY_MAX_PAGES", "4"))))
     return [
         {
-            "name": "东方财富研报中心-个股研报",
-            "source_type": "公开来源",
-            "kind": "eastmoney_reports",
-            "url": "https://data.eastmoney.com/report/stock.jshtml",
-            "q_type": "0",
-            "report_type": "个股拆解",
-            "days": days,
-            "page_size": page_size,
-            "max_pages": max_pages,
-        },
-        {
-            "name": "东方财富研报中心-行业研报",
-            "source_type": "公开来源",
-            "kind": "eastmoney_reports",
-            "url": "https://data.eastmoney.com/report/industry.jshtml",
-            "q_type": "1",
-            "report_type": "产业报告",
-            "days": days,
-            "page_size": page_size,
-            "max_pages": max_pages,
+            "name": TDX_SOURCE_NAME,
+            "source_type": TDX_SOURCE_TYPE,
+            "kind": "tdx_research",
+            "url": os.getenv("TDX_MCP_URL", "http://127.0.0.1:19110"),
+            "query": os.getenv("INDUSTRY_RESEARCH_TDX_QUERY", "查一下A股最新产业深度研报"),
+            "queries": _default_tdx_queries(),
+            "limit": int(os.getenv("INDUSTRY_RESEARCH_TDX_LIMIT", "30")),
+            "limit_per_query": int(os.getenv("INDUSTRY_RESEARCH_TDX_LIMIT_PER_QUERY", "8")),
+            "fetch_content": os.getenv("INDUSTRY_RESEARCH_FETCH_CONTENT", "1").strip().lower() not in {"0", "false", "no", "off"},
         },
     ]
 
 
 def _fetch_source(source: dict[str, Any]) -> list[ResearchItem]:
     kind = source.get("kind") or source.get("parser") or "html"
+    if kind == "tdx_research":
+        return _fetch_tdx_research(source)
     if kind == "eastmoney_reports":
         return _fetch_eastmoney_reports(source)
     if kind == "rss":
@@ -149,6 +142,139 @@ def _fetch_source(source: dict[str, Any]) -> list[ResearchItem]:
     if kind == "local_files":
         return _fetch_local_files(source)
     return _fetch_html_source(source)
+
+
+def _default_tdx_queries() -> list[str]:
+    configured = os.getenv("INDUSTRY_RESEARCH_TDX_QUERIES", "").strip()
+    if configured:
+        try:
+            payload = json.loads(configured)
+            if isinstance(payload, list):
+                return [str(item).strip() for item in payload if str(item).strip()]
+        except Exception:
+            pass
+        return [item.strip() for item in re.split(r"[;\n；]+", configured) if item.strip()]
+    return [
+        "查一下半导体行业最新深度研报",
+        "查一下AI算力产业链最新深度研报",
+        "查一下机器人行业最新深度研报",
+        "查一下新能源车和固态电池最新深度研报",
+        "查一下低空经济行业最新深度研报",
+        "查一下创新药和医疗器械最新深度研报",
+        "查一下军工电子行业最新深度研报",
+        "查一下消费电子和端侧AI最新深度研报",
+    ]
+
+
+def _fetch_tdx_research(source: dict[str, Any]) -> list[ResearchItem]:
+    base_url = str(source.get("url") or os.getenv("TDX_MCP_URL", "http://127.0.0.1:19110")).rstrip("/")
+    token = os.getenv("TDX_MCP_ACCESS_TOKEN", "").strip()
+    total_limit = min(100, max(1, int(source.get("limit", 30))))
+    per_query = min(20, max(1, int(source.get("limit_per_query", 8))))
+    queries = source.get("queries") if isinstance(source.get("queries"), list) else []
+    if not queries:
+        queries = [str(source.get("query") or "")]
+    rows: list[dict[str, Any]] = []
+    for query in [str(item).strip() for item in queries if str(item).strip()]:
+        params = {
+            "query": query,
+            "limit": str(per_query),
+            "fetch_content": "1" if source.get("fetch_content", True) else "0",
+        }
+        url = f"{base_url}/research/search?{urllib.parse.urlencode(params)}"
+        payload = _request_json(url, token=token)
+        batch = payload.get("items") or []
+        if isinstance(batch, list):
+            rows.extend(item for item in batch if isinstance(item, dict))
+        if len(rows) >= total_limit * 2:
+            break
+    items: list[ResearchItem] = []
+    seen: set[str] = set()
+    for row in rows:
+        item = _tdx_report_to_item(row, source)
+        if item is None:
+            continue
+        dedupe_key = _research_dedupe_key(item)
+        if item.content_hash in seen or dedupe_key in seen:
+            continue
+        seen.add(item.content_hash)
+        seen.add(dedupe_key)
+        items.append(item)
+        if len(items) >= total_limit:
+            break
+    return items
+
+
+def _tdx_report_to_item(row: dict[str, Any], source: dict[str, Any]) -> ResearchItem | None:
+    title = _clean(row.get("title"))
+    if not title:
+        return None
+    summary = _clean(row.get("summary"))
+    content = _clean_text_block(str(row.get("content") or ""))
+    if content and summary and content == summary:
+        content = ""
+    source_url = _clean(row.get("source_url"))
+    institution = _clean(row.get("institution"))
+    published_at = _parse_datetime(row.get("published_at"))
+    raw_payload = row.get("raw_payload") if isinstance(row.get("raw_payload"), dict) else row
+    report_type = _clean(row.get("report_type") or _classify_report_type(title, summary))
+    content_hash = _hash("|".join([source_url, title, institution, str(published_at or "")]))
+    return ResearchItem(
+        title=title,
+        summary=summary or (content[:500] if content else ""),
+        content=content or summary,
+        report_type=report_type,
+        source_name=str(source.get("name") or TDX_SOURCE_NAME),
+        source_type=str(source.get("source_type") or TDX_SOURCE_TYPE),
+        source_url=source_url,
+        institution=institution,
+        author="",
+        industry=_extract_industry(title, summary),
+        symbols=_extract_symbols(" ".join([title, summary, content[:2000]])),
+        tags=_tdx_tags(row, content),
+        published_at=published_at,
+        crawled_at=datetime.now(),
+        content_hash=content_hash,
+        raw_payload=raw_payload,
+    )
+
+
+def _research_dedupe_key(item: ResearchItem) -> str:
+    title_key = re.sub(r"[\s:：,，。._-]+", "", item.title).lower()
+    if len(title_key) <= 12:
+        return title_key
+    day = item.published_at.strftime("%Y-%m-%d") if item.published_at else ""
+    return "|".join([title_key, day])
+
+
+def _classify_report_type(title: str, summary: str = "") -> str:
+    text = f"{title} {summary}"
+    if any(word in text for word in ["晨会", "早会"]):
+        return "券商晨会"
+    if any(word in text for word in ["宏观", "利率", "GDP", "CPI", "PPI"]):
+        return "宏观研究"
+    if any(word in text for word in ["策略", "配置", "市场周报", "A股周报"]):
+        return "策略报告"
+    if any(word in text for word in ["财务模型", "盈利预测", "估值模型"]):
+        return "财务模型"
+    if re.search(r"\b(?:00|30|60|68)\d{4}\b", text) or any(word in text for word in ["公司", "个股", "评级", "目标价"]):
+        return "个股拆解"
+    return "产业报告"
+
+
+def _extract_industry(title: str, summary: str) -> str:
+    text = f"{title} {summary}"
+    match = re.search(r"([\u4e00-\u9fa5A-Za-z0-9]{2,12})(?:行业|产业链|板块)", text)
+    return match.group(1) if match else ""
+
+
+def _tdx_tags(row: dict[str, Any], content: str) -> list[str]:
+    tags = [TDX_SOURCE_TYPE]
+    if row.get("content_error"):
+        tags.append("正文解析失败")
+    if content:
+        tags.append("已解析全文")
+    return tags
 
 
 def _fetch_eastmoney_reports(source: dict[str, Any]) -> list[ResearchItem]:
@@ -390,23 +516,23 @@ def _generic_item(source: dict[str, Any], title: str, summary: str, content: str
     )
 
 
-def _request_json(url: str, referer: str = "") -> dict[str, Any]:
-    text = _request_text(url, referer)
+def _request_json(url: str, referer: str = "", token: str = "") -> dict[str, Any]:
+    text = _request_text(url, referer, token=token)
     stripped = text.strip()
     if stripped.startswith("callback(") and stripped.endswith(")"):
         stripped = stripped[len("callback(") : -1]
     return json.loads(stripped)
 
 
-def _request_text(url: str, referer: str = "") -> str:
-    request = urllib.request.Request(
-        url,
-        headers={
-            "User-Agent": USER_AGENT,
-            "Referer": referer or url,
-            "Accept": "application/json,text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        },
-    )
+def _request_text(url: str, referer: str = "", token: str = "") -> str:
+    headers = {
+        "User-Agent": USER_AGENT,
+        "Referer": referer or url,
+        "Accept": "application/json,text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    }
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    request = urllib.request.Request(url, headers=headers)
     with urllib.request.urlopen(request, timeout=15) as response:  # noqa: S310
         data = response.read()
         charset = response.headers.get_content_charset() or "utf-8"

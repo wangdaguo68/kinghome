@@ -1,0 +1,5 @@
+mcp>=1.8
+pytdx>=1.72
+starlette>=0.37
+uvicorn[standard]>=0.30
+pydantic>=2

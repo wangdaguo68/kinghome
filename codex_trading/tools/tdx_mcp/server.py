@@ -467,7 +467,17 @@ def clean_text(value: Any) -> str:
 
 def clean_text_block(value: str) -> str:
     lines = [clean_text(line) for line in str(value or "").splitlines()]
-    return "\n".join(line for line in lines if line).strip()
+    lines = [line for line in lines if line]
+    if len(lines) > 20:
+        window = lines[: min(120, len(lines))]
+        short_count = sum(1 for line in window if len(re.sub(r"\s+", "", line)) <= 2)
+        if short_count / len(window) >= 0.55:
+            compact = "".join(lines)
+            compact = re.sub(r"([。！？；])(?=\S)", r"\1\n", compact)
+            compact = re.sub(r"(风险提示|投资建议|核心观点|研究结论|事件点评|行业观点|公司观点|目录|正文|摘要)", r"\n\1", compact)
+            compact = re.sub(r"([一二三四五六七八九十]、)", r"\n\1", compact)
+            return re.sub(r"\n{3,}", "\n\n", compact).strip()
+    return "\n".join(lines).strip()
 
 
 def health_payload() -> dict[str, Any]:

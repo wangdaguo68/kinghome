@@ -1331,6 +1331,9 @@ button.primary, button.full { background: #d0a95f; color: #15120b; border-color:
   gap: 14px;
   align-items: start;
 }
+.research-layout.simple {
+  grid-template-columns: minmax(0, 1fr);
+}
 .research-list {
   display: grid;
   gap: 12px;
@@ -1340,18 +1343,13 @@ button.primary, button.full { background: #d0a95f; color: #15120b; border-color:
   background:
     linear-gradient(180deg, rgba(208, 169, 95, .05), transparent 34%),
     #10161c;
-  cursor: pointer;
   transition: border-color .15s ease, transform .15s ease, background .15s ease;
 }
-.research-card:hover,
-.research-card.active {
+.research-card:hover {
   border-color: rgba(208, 169, 95, .58);
   background:
     linear-gradient(180deg, rgba(208, 169, 95, .09), transparent 38%),
     #111920;
-}
-.research-card.active {
-  transform: translateY(-1px);
 }
 .research-card-top,
 .research-meta {
@@ -1414,11 +1412,30 @@ button.primary, button.full { background: #d0a95f; color: #15120b; border-color:
 .research-meta a:hover {
   text-decoration: underline;
 }
+.text-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  border: 1px solid rgba(208, 169, 95, .45);
+  border-radius: 6px;
+  background: rgba(208, 169, 95, .1);
+  color: #f0c56b;
+  padding: 0 10px;
+  font: inherit;
+  cursor: pointer;
+}
+.text-button:hover {
+  border-color: #f0c56b;
+}
 .research-side {
   display: grid;
   gap: 14px;
   position: sticky;
   top: 18px;
+}
+.research-side.compact {
+  position: static;
 }
 .research-detail-panel {
   min-height: 520px;
@@ -1463,14 +1480,23 @@ button.primary, button.full { background: #d0a95f; color: #15120b; border-color:
 .research-fulltext {
   max-height: min(62vh, 760px);
   overflow: auto;
-  white-space: pre-wrap;
+  white-space: pre-line;
   color: #c8d2d9;
-  line-height: 1.78;
-  font-size: 14px;
+  line-height: 1.9;
+  font-size: 15px;
   padding-right: 8px;
+  overflow-wrap: anywhere;
+}
+.research-fulltext.modal {
+  max-height: calc(82vh - 190px);
+  padding: 18px 22px 22px;
+  background: #0b1116;
+  border-top: 1px solid rgba(132, 152, 166, .16);
+  color: #d7e0e7;
 }
 .research-source-list {
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 10px;
 }
 .research-source-list div,
@@ -1522,6 +1548,87 @@ button.primary, button.full { background: #d0a95f; color: #15120b; border-color:
   align-items: center;
   color: #84939f;
 }
+.research-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  background: rgba(2, 6, 10, .72);
+  backdrop-filter: blur(8px);
+}
+.research-modal {
+  width: min(1040px, 100%);
+  max-height: 88vh;
+  overflow: hidden;
+  border: 1px solid #30404d;
+  border-radius: 8px;
+  background: #0f151b;
+  box-shadow: 0 28px 90px rgba(0, 0, 0, .42);
+}
+.research-modal-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: start;
+  padding: 20px 22px 14px;
+}
+.research-modal-head span {
+  display: inline-flex;
+  width: fit-content;
+  border: 1px solid rgba(208, 169, 95, .45);
+  border-radius: 999px;
+  color: #f0c56b;
+  background: rgba(208, 169, 95, .08);
+  padding: 4px 9px;
+  font-size: 12px;
+}
+.research-modal-head h2 {
+  margin: 10px 0 8px;
+  color: #edf4f8;
+  font-size: 26px;
+  line-height: 1.35;
+}
+.research-modal-head p,
+.research-modal-meta {
+  margin: 0;
+  color: #8fa0ac;
+}
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid #30404d;
+  border-radius: 6px;
+  background: #0b1116;
+  color: #dce5eb;
+  cursor: pointer;
+}
+.icon-button:hover {
+  border-color: #d0a95f;
+  color: #f0c56b;
+}
+.research-modal-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 0 22px 16px;
+  font-size: 13px;
+}
+.research-modal-meta a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #f0c56b;
+  text-decoration: none;
+}
+.research-modal-meta a:hover {
+  text-decoration: underline;
+}
 button:disabled {
   opacity: .45;
   cursor: not-allowed;
@@ -1546,4 +1653,9 @@ button:disabled {
   .calendar-board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .calendar-cell { min-height: 138px; }
   .research-card-top, .research-meta, .research-pagination { align-items: flex-start; flex-direction: column; }
+  .research-modal-backdrop { padding: 10px; }
+  .research-modal-head, .research-modal-meta { padding-left: 14px; padding-right: 14px; }
+  .research-modal-head h2 { font-size: 20px; }
+  .research-modal-meta { align-items: flex-start; flex-direction: column; }
+  .research-fulltext.modal { max-height: calc(90vh - 190px); padding: 14px; }
 }

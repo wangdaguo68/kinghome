@@ -1,6 +1,6 @@
 ﻿import React, { useCallback, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Activity, BarChart3, BellRing, BookOpenText, CalendarCheck, CalendarDays, ChevronLeft, ChevronRight, Clock3, Database, FileText, FlaskConical, Globe2, Newspaper, Radar, RefreshCw, Search, ShieldCheck, Zap } from "lucide-react";
+import { Activity, BarChart3, BellRing, BookOpenText, CalendarCheck, CalendarDays, ChevronLeft, ChevronRight, Clock3, Database, ExternalLink, FileText, FlaskConical, Globe2, Newspaper, Radar, RefreshCw, Search, ShieldCheck, X, Zap } from "lucide-react";
 import "./styles.css";
 
 const API_HOST = window.location.hostname || "127.0.0.1";
@@ -609,6 +609,26 @@ function formatDateTime(value?: string | null) {
   return new Date(value).toLocaleString("zh-CN", { hour12: false });
 }
 
+function normalizeResearchText(value: string) {
+  const raw = String(value || "").replace(/\r/g, "").trim();
+  if (!raw) return "";
+  const lines = raw.split("\n").map((line) => line.trim()).filter(Boolean);
+  if (lines.length < 20) return raw.replace(/\n{3,}/g, "\n\n");
+  const shortLines = lines.filter((line) => visibleLength(line) <= 2).length;
+  if (shortLines / lines.length < 0.55) return raw.replace(/\n{3,}/g, "\n\n");
+  const compact = lines.join("");
+  return compact
+    .replace(/([。！？；])(?=[^\n])/g, "$1\n")
+    .replace(/(风险提示|投资建议|核心观点|研究结论|事件点评|行业观点|公司观点|目录|正文|摘要)/g, "\n$1")
+    .replace(/([一二三四五六七八九十]、)/g, "\n$1")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function visibleLength(value: string) {
+  return Array.from(value.replace(/\s/g, "")).length;
+}
+
 function App() {
   const [activePage, setActivePage] = useState<PageId>("calendar");
   const [cycles, setCycles] = useState<CycleState[]>([]);
@@ -807,7 +827,7 @@ function IndustryResearchPage() {
   const [industry, setIndustry] = useState("");
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  const [selected, setSelected] = useState<IndustryResearchItem | null>(null);
+  const [detail, setDetail] = useState<IndustryResearchItem | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const pageSize = 20;
 
@@ -843,13 +863,13 @@ function IndustryResearchPage() {
   }, [industry, keyword, page, reportType, source, symbol]);
 
   const loadDetail = useCallback(async (item: IndustryResearchItem) => {
-    setSelected(item);
+    setDetail(item);
     setDetailLoading(true);
     try {
       const response = await fetch(`${API_BASE}/api/industry-research/${item.id}`);
       if (!response.ok) throw new Error("详情读取失败");
       const payload: { item: IndustryResearchItem | null; warning: string } = await response.json();
-      setSelected(payload.item || item);
+      setDetail(payload.item || item);
     } finally {
       setDetailLoading(false);
     }
@@ -858,16 +878,6 @@ function IndustryResearchPage() {
   useEffect(() => {
     void loadResearch();
   }, [loadResearch]);
-
-  useEffect(() => {
-    if (!data.items.length) {
-      setSelected(null);
-      return;
-    }
-    if (!selected || !data.items.some((item) => item.id === selected.id)) {
-      void loadDetail(data.items[0]);
-    }
-  }, [data.items, loadDetail, selected]);
 
   const resetAndSearch = () => {
     setPage(1);
@@ -949,19 +959,10 @@ function IndustryResearchPage() {
         </div>
       </div>
 
-      <div className="research-layout">
+      <div className="research-layout simple">
         <section className="research-list">
           {data.items.map((item) => (
-            <article
-              className={`terminal-panel research-card ${selected?.id === item.id ? "active" : ""}`}
-              key={item.id}
-              onClick={() => void loadDetail(item)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") void loadDetail(item);
-              }}
-              role="button"
-              tabIndex={0}
-            >
+            <article className="terminal-panel research-card" key={item.id}>
               <div className="research-card-top">
                 <span>{item.report_type}</span>
                 <b>{formatDateTime(item.published_at)}</b>
@@ -977,7 +978,7 @@ function IndustryResearchPage() {
               </div>
               <div className="research-meta">
                 <span><FileText size={14} /> {item.source_type} · {item.source_name}</span>
-                {item.source_url ? <a href={item.source_url} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>查看来源</a> : <span>无来源链接</span>}
+                <button className="text-button" onClick={() => void loadDetail(item)} type="button">查看详情</button>
               </div>
             </article>
           ))}
@@ -995,28 +996,7 @@ function IndustryResearchPage() {
           </div>
         </section>
 
-        <aside className="research-side">
-          <section className="terminal-panel research-detail-panel">
-            <div className="panel-head"><span>研报正文</span><b>{detailLoading ? "读取中" : selected ? "已选中" : "未选择"}</b></div>
-            {selected ? (
-              <>
-                <div className="research-detail-head">
-                  <span>{selected.report_type}</span>
-                  <h2>{selected.title}</h2>
-                  <div>{selected.institution || selected.source_name} · {formatDateTime(selected.published_at)}</div>
-                </div>
-                <div className="research-detail-actions">
-                  {selected.source_url ? <a href={selected.source_url} target="_blank" rel="noreferrer"><FileText size={14} /> 来源 PDF</a> : <span>无来源链接</span>}
-                </div>
-                <article className="research-fulltext">
-                  {selected.content || selected.summary || "暂未解析出正文。"}
-                </article>
-              </>
-            ) : (
-              <div className="research-empty inline"><FileText size={20} /><strong>选择一篇研报</strong><span>正文会在这里显示。</span></div>
-            )}
-          </section>
-
+        <aside className="research-side compact">
           <section className="terminal-panel research-source-panel">
             <div className="panel-head"><span>来源状态</span><b>{sources.length} 个</b></div>
             <div className="research-source-list">
@@ -1033,6 +1013,28 @@ function IndustryResearchPage() {
           </section>
         </aside>
       </div>
+
+      {detail && (
+        <div className="research-modal-backdrop" role="presentation" onMouseDown={() => setDetail(null)}>
+          <section className="research-modal" role="dialog" aria-modal="true" aria-label="研报详情" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="research-modal-head">
+              <div>
+                <span>{detail.report_type}</span>
+                <h2>{detail.title}</h2>
+                <p>{detail.institution || detail.source_name} · {formatDateTime(detail.published_at)}</p>
+              </div>
+              <button className="icon-button" onClick={() => setDetail(null)} aria-label="关闭详情" type="button"><X size={18} /></button>
+            </div>
+            <div className="research-modal-meta">
+              <span>{detail.source_type} · {detail.source_name}</span>
+              {detail.source_url ? <a href={detail.source_url} target="_blank" rel="noreferrer"><ExternalLink size={14} /> 来源 PDF</a> : <span>无来源链接</span>}
+            </div>
+            <article className="research-fulltext modal">
+              {detailLoading ? "正文读取中..." : normalizeResearchText(detail.content || detail.summary || "暂未解析出正文。")}
+            </article>
+          </section>
+        </div>
+      )}
     </section>
   );
 }

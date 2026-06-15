@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Personal Knowledge OS</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="./styles.css?v=20260614-9">
+  </head>
+  <body>
+    <div class="app-shell knowledge-os">
+      <aside class="left-rail" aria-label="知识域导航">
+        <header class="brand">
+          <div class="brand-mark">K</div>
+          <div>
+            <h1>Knowledge OS</h1>
+            <p>个人知识库操作系统</p>
+          </div>
+        </header>
+
+        <label class="search-box">
+          <span>全库搜索</span>
+          <input id="searchInput" type="search" placeholder="搜索领域、专题、概念、问题">
+        </label>
+
+        <section class="filter-block">
+          <h2>九大系统</h2>
+          <div class="domain-list" id="domainList"></div>
+        </section>
+
+        <section class="stats-grid" id="statsGrid"></section>
+      </aside>
+
+      <main class="workspace">
+        <div class="workspace-toolbar">
+          <div>
+            <p class="eyebrow" id="workspaceEyebrow">Current Domain</p>
+            <h2 id="focusTitle">个人知识库总览</h2>
+          </div>
+          <div class="view-tabs" id="viewTabs" aria-label="浏览视图">
+            <button data-view="home" class="active">首页</button>
+            <button data-view="library">目录</button>
+            <button data-view="reader">阅读</button>
+            <button data-view="graph">关系</button>
+            <button data-view="table">表格</button>
+            <button data-view="create">新建</button>
+          </div>
+        </div>
+
+        <section class="workspace-view active" id="homeView" aria-label="知识库首页">
+          <div class="overview-grid" id="overviewGrid"></div>
+          <div class="workspace-columns">
+            <section>
+              <div class="section-head">
+                <h3 id="topicSectionTitle">专题地图</h3>
+                <button id="allTopicsBtn">查看全部</button>
+              </div>
+              <div class="topic-grid" id="topicGrid"></div>
+            </section>
+            <section>
+              <div class="section-head">
+                <h3 id="recentSectionTitle">最近更新</h3>
+                <button id="allNotesBtn">进入目录</button>
+              </div>
+              <div class="note-list" id="recentList"></div>
+            </section>
+          </div>
+          <section class="question-panel">
+            <div class="section-head">
+              <h3 id="questionSectionTitle">待思考 / 待验证</h3>
+              <span id="questionCount"></span>
+            </div>
+            <div class="question-list" id="questionList"></div>
+          </section>
+          <section class="reading-panel">
+            <div class="section-head">
+              <h3 id="readingSectionTitle">定位阅读</h3>
+              <span id="readingCount"></span>
+            </div>
+            <div class="book-grid" id="readingListHome"></div>
+          </section>
+        </section>
+
+        <section class="workspace-view" id="libraryView" aria-label="知识目录">
+          <div class="library-list" id="libraryList"></div>
+        </section>
+
+        <section class="workspace-view reader-layout" id="readerView" aria-label="阅读视图">
+          <article id="markdownView" class="markdown-view"></article>
+        </section>
+
+        <section class="workspace-view graph-card" id="graphView" aria-label="关系地图">
+          <div class="graph-tools">
+            <div class="segmented" id="depthControl">
+              <button data-depth="1" class="active">焦点1跳</button>
+              <button data-depth="2">焦点2跳</button>
+              <button data-depth="99">系统全图</button>
+            </div>
+            <button id="resetBtn" title="回到知识库总览" aria-label="回到知识库总览">回到总览</button>
+          </div>
+          <div class="graph-summary" id="graphSummary"></div>
+          <svg id="graph" role="img" aria-label="知识库关系图"></svg>
+          <div class="legend" id="legend"></div>
+        </section>
+
+        <section class="workspace-view" id="tableView" aria-label="表格视图">
+          <div class="table-wrap">
+            <table class="data-table" id="dataTable"></table>
+          </div>
+        </section>
+
+        <section class="workspace-view create-layout" id="createView" aria-label="新建知识卡片">
+          <div class="create-shell">
+            <form id="createForm" class="create-form">
+              <div class="form-head">
+                <p class="eyebrow">Knowledge Card</p>
+                <h3>新建知识卡片</h3>
+                <p>按需求文档的结构生成 Markdown，先导出到本地 md，再放入对应目录沉淀。</p>
+              </div>
+              <label>
+                <span>概念名称</span>
+                <input name="title" placeholder="例如：Scaling Law">
+              </label>
+              <fieldset>
+                <legend>所属系统</legend>
+                <div class="system-picker" id="createSystemPicker"></div>
+              </fieldset>
+              <label>
+                <span>一句话解释</span>
+                <textarea name="summary" rows="3" placeholder="用最通俗的话解释这个概念"></textarea>
+              </label>
+              <label>
+                <span>核心原理</span>
+                <textarea name="principle" rows="4" placeholder="它为什么成立？底层逻辑是什么？"></textarea>
+              </label>
+              <label>
+                <span>关键模型</span>
+                <textarea name="models" rows="3" placeholder="每行一个模型"></textarea>
+              </label>
+              <label>
+                <span>典型案例</span>
+                <textarea name="cases" rows="3" placeholder="每行一个案例"></textarea>
+              </label>
+              <label>
+                <span>相关产业</span>
+                <textarea name="industries" rows="3" placeholder="相关行业、公司、产品、技术、趋势"></textarea>
+              </label>
+              <label>
+                <span>我的启发</span>
+                <textarea name="insight" rows="4" placeholder="这对我有什么启发？"></textarea>
+              </label>
+              <label>
+                <span>可迁移场景</span>
+                <textarea name="transfer" rows="3" placeholder="还能用在哪些地方？"></textarea>
+              </label>
+              <label>
+                <span>风险和误区</span>
+                <textarea name="risks" rows="3" placeholder="使用这个概念时容易犯什么错？"></textarea>
+              </label>
+              <label>
+                <span>关联知识</span>
+                <textarea name="related" rows="3" placeholder="每行一个关联知识，导出时会转成 Obsidian wikilink"></textarea>
+              </label>
+              <div class="form-actions">
+                <button type="button" id="saveDraftBtn">保存草稿</button>
+                <button type="button" id="clearDraftBtn">清空</button>
+                <button type="button" id="downloadCardBtn">导出 md</button>
+              </div>
+            </form>
+            <article class="markdown-view create-preview" id="createPreview"></article>
+          </div>
+        </section>
+      </main>
+
+      <aside class="context-panel" aria-label="当前笔记上下文">
+        <div class="detail-head">
+          <p id="detailType" class="eyebrow">笔记</p>
+          <h2 id="detailTitle">加载中</h2>
+          <p id="detailMeta"></p>
+        </div>
+        <div class="context-actions">
+          <button id="openReaderBtn">阅读</button>
+          <button id="openGraphBtn">看关系</button>
+        </div>
+        <div class="context-block">
+          <h3>定位</h3>
+          <div id="identityTags" class="tag-list"></div>
+        </div>
+        <div class="link-groups">
+          <div>
+            <h3>出链</h3>
+            <div id="outLinks" class="pill-list"></div>
+          </div>
+          <div>
+            <h3>反链</h3>
+            <div id="backLinks" class="pill-list"></div>
+          </div>
+        </div>
+        <div class="context-block">
+          <h3>上下游 / 关联概念</h3>
+          <div id="relatedConcepts" class="related-concepts"></div>
+        </div>
+        <div class="context-block">
+          <h3>推荐阅读</h3>
+          <div id="readingList" class="book-list"></div>
+        </div>
+        <div class="context-block">
+          <h3>目录</h3>
+          <div id="headingList" class="mini-list"></div>
+        </div>
+        <div class="context-block">
+          <h3>清单</h3>
+          <div id="checkList" class="mini-list"></div>
+        </div>
+      </aside>
+    </div>
+
+    <script src="./app.js?v=20260615-1"></script>
+  </body>
+</html>

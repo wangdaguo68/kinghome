@@ -1,3 +1,5 @@
+import os
+
 import anthropic
 from tenacity import (
     retry,
@@ -13,21 +15,33 @@ from zen_trader.exceptions import (
     AIAuthError,
     AIRateLimitError,
     AIServerError,
+    AITimeoutError,
     AITokenLimitError,
 )
 from zen_trader.providers.base import AbstractAIProvider
 
 
 def _classify_error(e: Exception) -> None:
+    err_text = str(e).lower()
+    err_name = type(e).__name__.lower()
     if isinstance(e, anthropic.AuthenticationError):
         raise AIAuthError(str(e)) from e
     if isinstance(e, anthropic.RateLimitError):
         raise AIRateLimitError(str(e)) from e
     if isinstance(e, anthropic.InternalServerError):
         raise AIServerError(str(e)) from e
-    if "token" in str(e).lower():
+    if "timeout" in err_text or "timed out" in err_text or "timeout" in err_name:
+        raise AITimeoutError(f"AI 接口 { _timeout_seconds() } 秒内没有返回，请稍后重试或换更快模型") from e
+    if "token" in err_text:
         raise AITokenLimitError(str(e)) from e
     raise AIServerError(str(e)) from e
+
+
+def _timeout_seconds() -> float:
+    try:
+        return float(os.getenv("AI_TIMEOUT_SECONDS", "90"))
+    except ValueError:
+        return 90.0
 
 
 class AnthropicProvider(AbstractAIProvider):
@@ -36,6 +50,8 @@ class AnthropicProvider(AbstractAIProvider):
         self.client = anthropic.Anthropic(
             api_key=settings.anthropic_api_key,
             base_url=settings.ai.api_base or None,
+            timeout=_timeout_seconds(),
+            max_retries=0,
         )
 
     def chat(

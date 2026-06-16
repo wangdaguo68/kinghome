@@ -131,33 +131,18 @@ export default function HtmlEpubReader({
 
         const doc = iframe.contentDocument;
         doc.open();
-        doc.write(`
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <meta charset="utf-8">
-            <style>
-              body {
-                font-size: ${fontSize}px;
-                line-height: ${lineHeight};
-                background: #FBF6ED;
-                color: #3E3232;
-                padding: 48px 56px;
-                max-width: ${marginWidth}px;
-                margin: 0 auto;
-                font-family: Georgia, "Songti SC", "Noto Serif SC", "STSong", serif;
-                transition: background 0.3s, color 0.3s;
-              }
-              h1, h2, h3, h4 { font-family: "Songti SC", "KaiTi", serif; margin: 0.8em 0 0.4em; }
-              p { margin: 0.8em 0; text-indent: 2em; }
-              a { color: #8B7355; }
-              img { max-width: 100%; height: auto; border-radius: 4px; }
-              ${css}
-            </style>
-          </head>
-          <body>${html}</body>
-          </html>
-        `);
+        // String concatenation safe against ${`} in user content
+        doc.write(
+          '<!DOCTYPE html><html><head><meta charset="utf-8"><style>' +
+          'body{font-size:' + fontSize + 'px;line-height:' + lineHeight +
+          ';background:#FBF6ED;color:#3E3232;padding:48px 56px;max-width:' + marginWidth +
+          'px;margin:0 auto;font-family:Georgia,"Songti SC","Noto Serif SC","STSong",serif;transition:background 0.3s,color 0.3s}' +
+          'h1,h2,h3,h4{font-family:"Songti SC","KaiTi",serif;margin:0.8em 0 0.4em}' +
+          'p{margin:0.8em 0;text-indent:2em}a{color:#8B7355}' +
+          'img{max-width:100%;height:auto;border-radius:4px}' +
+          css +
+          '</style></head><body>' + html + '</body></html>'
+        );
         doc.close();
 
         forwardKeyboard(iframe);
@@ -169,49 +154,63 @@ export default function HtmlEpubReader({
       });
   }, [bookId, currentIdx, chapters.length, fontSize, lineHeight, marginWidth, isMobi]);
 
-  // Render MOBI content
+  const blobUrlRef = useRef<string | null>(null);
+
+  // Render MOBI content via Blob URL (avoids srcdoc 2MB browser limit)
   useEffect(() => {
     if (!isMobi || !mobiContent) return;
     const iframe = iframeRef.current;
-    if (!iframe || !iframe.contentDocument) return;
-    const doc = iframe.contentDocument;
-    doc.open();
-    doc.write(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <style>
-          body {
-            font-size: ${fontSize}px;
-            line-height: ${lineHeight};
-            background: #FBF6ED;
-            color: #3E3232;
-            padding: 48px 56px;
-            max-width: ${marginWidth}px;
-            margin: 0 auto;
-            font-family: Georgia, "Songti SC", "Noto Serif SC", "STSong", serif;
-          }
-          pre { white-space: pre-wrap; font-family: inherit; margin: 0; }
-        </style>
-      </head>
-      <body><pre>${mobiContent}</pre></body>
-      </html>
-    `);
-    doc.close();
+    if (!iframe) return;
+    try {
+      const html =
+        '<!DOCTYPE html><html><head><meta charset="utf-8"><style id="mobi-base-style">' +
+        'body{font-size:' + fontSize + 'px;line-height:' + lineHeight +
+        ';background:#FBF6ED;color:#3E3232;padding:48px 56px;max-width:' + marginWidth +
+        'px;margin:0 auto;font-family:Georgia,"Songti SC","Noto Serif SC","STSong",serif}' +
+        'img{max-width:100%;height:auto;border-radius:4px}' +
+        '</style></head><body>' + mobiContent + '</body></html>';
+      const blob = new Blob([html], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
 
-    forwardKeyboard(iframe);
-  }, [isMobi, mobiContent, fontSize, lineHeight, marginWidth]);
+      // Revoke previous blob URL to prevent memory leaks
+      if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current);
+      blobUrlRef.current = url;
 
-  // Apply setting changes without reloading
+      iframe.src = url;
+      iframe.onload = () => { forwardKeyboard(iframe); };
+    } catch (e: any) {
+      setError('MOBI render failed: ' + e.message);
+    }
+  }, [isMobi, mobiContent, loading]);
+
+  // Cleanup blob URL on unmount
+  useEffect(() => {
+    return () => {
+      if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current);
+    };
+  }, []);
+
+  // Apply setting changes without reloading (EPUB: body styles, MOBI: update <style>)
   useEffect(() => {
     if (isMobi && !mobiContent) return;
     const iframe = iframeRef.current;
-    if (!iframe?.contentDocument?.body) return;
-    const body = iframe.contentDocument.body;
-    body.style.fontSize = `${fontSize}px`;
-    body.style.lineHeight = String(lineHeight);
-    body.style.maxWidth = `${marginWidth}px`;
+    if (!iframe?.contentDocument) return;
+    if (isMobi) {
+      const styleEl = iframe.contentDocument.getElementById('mobi-base-style');
+      if (styleEl) {
+        styleEl.textContent =
+          'body{font-size:' + fontSize + 'px;line-height:' + lineHeight +
+          ';background:#FBF6ED;color:#3E3232;padding:48px 56px;max-width:' + marginWidth +
+          'px;margin:0 auto;font-family:Georgia,"Songti SC","Noto Serif SC","STSong",serif}' +
+          'img{max-width:100%;height:auto;border-radius:4px}';
+      }
+    }
+    if (iframe.contentDocument.body) {
+      const body = iframe.contentDocument.body;
+      body.style.fontSize = String(fontSize) + 'px';
+      body.style.lineHeight = String(lineHeight);
+      body.style.maxWidth = String(marginWidth) + 'px';
+    }
   }, [fontSize, lineHeight, marginWidth, isMobi, mobiContent]);
 
   const goToChapter = useCallback((idx: number) => {
@@ -248,7 +247,7 @@ export default function HtmlEpubReader({
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full w-full">
       <div className="flex-1 overflow-hidden relative">
         <iframe
           ref={iframeRef}

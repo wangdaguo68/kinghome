@@ -177,34 +177,47 @@ def convert_pdf_page_to_image(file_path: str, book_id: int, page_num: int) -> st
 
 
 def convert_mobi_to_text(file_path: str) -> str:
-    """Extract readable text from MOBI file."""
+    """Extract readable HTML from MOBI file by unpacking via mobi package."""
+    import os, shutil, hashlib
     try:
-        from mobi import Mobi
-        book = Mobi(file_path)
-        book.parse()
-        text = ""
-        for record in book:
-            if hasattr(record, 'text') and record.text:
-                text += record.text + "\n\n"
-        if text.strip():
-            return text
-    except ImportError:
-        pass
+        import mobi
+        extract_dir, content_file = mobi.extract(file_path)
+        if extract_dir:
+            # KF8 MOBI files: mobi.extract returns an .epub as content_file.
+            # Always prefer mobi7/book.html which is plain HTML.
+            mobi7_html = os.path.join(extract_dir, 'mobi7', 'book.html')
+            if os.path.exists(mobi7_html):
+                content_file = mobi7_html
+            if os.path.exists(content_file) and not content_file.lower().endswith('.epub'):
+                file_hash = hashlib.md5(file_path.encode()).hexdigest()[:12]
+                images_dir = os.path.join(extract_dir, 'mobi7', 'Images')
+                cache_images_dir = CACHE_DIR / 'mobi_images' / file_hash
+                if os.path.exists(images_dir):
+                    cache_images_dir.mkdir(parents=True, exist_ok=True)
+                    for img_name in os.listdir(images_dir):
+                        src = os.path.join(images_dir, img_name)
+                        dst = cache_images_dir / img_name
+                        if not dst.exists():
+                            shutil.copy2(src, dst)
+                html = open(content_file, 'r', encoding='utf-8', errors='ignore').read()
+                img_base = f'/static/cache/mobi_images/{file_hash}'
+                for img_name in os.listdir(images_dir) if os.path.exists(images_dir) else []:
+                    html = html.replace(f'Images/{img_name}', f'{img_base}/{img_name}')
+                    html = html.replace(f'Images\\{img_name}', f'{img_base}/{img_name}')
+                import re
+                body_match = re.search(r'<body[^>]*>(.*?)</body>', html, re.DOTALL | re.IGNORECASE)
+                if body_match:
+                    html = body_match.group(1)
+                html = html.replace('\x00', '')
+                html = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', html)
+                try:
+                    shutil.rmtree(extract_dir)
+                except Exception:
+                    pass
+                return html
     except Exception:
         pass
-
-    try:
-        with open(file_path, "rb") as f:
-            data = f.read()
-        text = data.decode("utf-8", errors="ignore")
-        import re
-        paragraphs = re.findall(r'[一-鿿　-〿＀-￯\x20-\x7e]{20,}', text)
-        if paragraphs:
-            return "\n\n".join(paragraphs)
-    except Exception:
-        pass
-
-    return "MOBI format: Full text extraction requires the 'mobi' Python package. Install with: pip install mobi"
+    return "<p>无法提取MOBI文本内容。请尝试转换为EPUB格式后重新导入。</p>"
 
 
 def get_book_toc(file_path: str, fmt: str) -> list[dict]:

@@ -1,0 +1,11 @@
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.idea/
+.superpowers/
+.vscode/
+.deploy/
+build/
+.env
+.env.*
+!.env.example

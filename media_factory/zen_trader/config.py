@@ -43,7 +43,7 @@ class PlatformsConfig(BaseModel):
         default_factory=lambda: ["xiaohongshu", "wechat", "xueqiu", "shipinhao", "weibo"]
     )
     xiaohongshu: PlatformParams = Field(default_factory=lambda: PlatformParams(max_chars=1500))
-    wechat: PlatformParams = Field(default_factory=lambda: PlatformParams(max_chars=5000))
+    wechat: PlatformParams = Field(default_factory=lambda: PlatformParams(max_chars=3500))
     xueqiu: PlatformParams = Field(default_factory=lambda: PlatformParams(max_chars=2000))
     shipinhao: PlatformParams = Field(
         default_factory=lambda: PlatformParams(max_chars=200, golden_quote_max_chars=30)

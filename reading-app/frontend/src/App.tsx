@@ -20,7 +20,7 @@ function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--color-bg)' }}>
       <header className="app-header">
-        <div className="flex items-center gap-8">
+        <div className="app-content-width flex items-center gap-8">
           <span className="app-logo">My Study</span>
           <nav className="flex gap-1">
             <NavLink to="/" end className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>书架</NavLink>
@@ -31,7 +31,7 @@ function Layout({ children }: { children: React.ReactNode }) {
           </nav>
         </div>
       </header>
-      <main className="page-enter">{children}</main>
+      <main className="page-enter app-content-width">{children}</main>
     </div>
   );
 }

@@ -121,13 +121,13 @@ artifacts 在各步逐步填充：
 
 ### storyboard
 - 将 news_items + topic 发给 LLM，生成旁白脚本
-- 同时为每段生成 gpt-image-2 的图片生成 prompt
+- 同时为每段生成 image_gen 图片生成 prompt
 - 估算每段旁白对应的大致时长（按字数估算）
 - 输出: `artifacts["segments"]`
 
 ### media_gen
 - 逐段调用 edge-tts 生成 mp3 音频
-- 逐段调用 gpt-image-2 生成配图，下载到 workdir
+- 逐段调用内置 image_gen 生成配图，下载到 workdir
 - 输出: 补全 `segments[].audio_path`, `segments[].image_path`
 
 ### duration_check

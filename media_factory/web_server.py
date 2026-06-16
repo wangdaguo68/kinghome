@@ -12,6 +12,7 @@ from zen_trader.engine import ZenTraderEngine
 from zen_trader.exceptions import ZenTraderError
 from zen_trader.generators import GENERATOR_REGISTRY, get_generator
 from zen_trader.parser import parse_review
+from zen_trader.publishers.wechat import WeChatArticle, WeChatOfficialPublisher
 from zen_trader.visual.image_prompt import ImagePromptGenerator
 from zen_trader.writer import write_content, write_image_prompt
 
@@ -60,6 +61,8 @@ def api_crawl():
         return jsonify({"ok": True, "markdown": md, "date": data.date, "sentiment": data.market_sentiment})
     except ZenTraderError as e:
         return jsonify({"ok": False, "error": str(e)}), 500
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"{type(e).__name__}: {e}"}), 500
 
 
 @app.route("/api/parse", methods=["POST"])
@@ -191,6 +194,34 @@ def api_quotes():
     from mode_wisdom.quote_store import QuoteStore
     store = QuoteStore()
     return jsonify({"ok": True, "quotes": store.all})
+
+
+def _wechat_article_from_request() -> WeChatArticle:
+    body = request.get_json() or {}
+    title = (body.get("title") or "").strip()
+    content = (body.get("body") or "").strip()
+    if not title:
+        title = "禅意复盘"
+    if not content:
+        raise ZenTraderError("公众号正文不能为空，请先生成公众号内容")
+    return WeChatArticle(
+        title=title,
+        body=content,
+        digest=(body.get("digest") or "").strip(),
+        content_source_url=(body.get("content_source_url") or "").strip(),
+    )
+
+
+@app.route("/api/wechat/draft", methods=["POST"])
+def api_wechat_draft():
+    try:
+        article = _wechat_article_from_request()
+        result = WeChatOfficialPublisher().save_draft(article)
+        return jsonify({"ok": True, "action": "draft", **result})
+    except ZenTraderError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"{type(e).__name__}: {e}"}), 500
 
 
 if __name__ == "__main__":

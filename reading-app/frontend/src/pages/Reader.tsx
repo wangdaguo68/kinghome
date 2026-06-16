@@ -5,12 +5,10 @@ import HtmlEpubReader from '../components/HtmlEpubReader';
 import PdfReader from '../components/PdfReader';
 import HighlightsPanel from '../components/HighlightsPanel';
 
-type ReadingMode = 'scroll' | 'page';
-
 const FONT_SIZES = [14, 16, 18, 20, 22, 24];
 const LINE_HEIGHTS = [1.6, 1.8, 2.0, 2.2];
 const MARGINS: { label: string; value: number }[] = [
-  { label: '窄', value: 500 }, { label: '中', value: 750 }, { label: '宽', value: 1000 },
+  { label: '中', value: 800 }, { label: '宽', value: 1000 }, { label: '全宽', value: 1200 },
 ];
 const AUTO_FLIP_SPEEDS = [5, 10, 30, 60, 120];
 const BREAK_INTERVALS = [20, 30, 45, 60];
@@ -30,7 +28,6 @@ const SHORTCUTS = [
   { keys: 'Space', desc: '下一页' },
   { keys: 'F', desc: '全屏' },
   { keys: 'Esc', desc: '退出全屏/关闭' },
-  { keys: 'M', desc: '切换阅读模式' },
   { keys: 'A', desc: '自动翻页' },
   { keys: '+ / -', desc: '放大/缩小字号' },
   { keys: 'B', desc: '添加书签' },
@@ -52,9 +49,8 @@ export default function Reader() {
 
   const [fontSize, setFontSize] = useState(16);
   const [lineHeight, setLineHeight] = useState(1.9);
-  const [marginWidth, setMarginWidth] = useState(750);
+  const [marginWidth, setMarginWidth] = useState(800);
 
-  const [readingMode, setReadingMode] = useState<ReadingMode>('scroll');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [autoFlip, setAutoFlip] = useState({ enabled: false, speed: 10 });
@@ -71,7 +67,6 @@ export default function Reader() {
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const secondsRef = useRef(0);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const breakTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const autoFlipTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [format, setFormat] = useState<string>('');
@@ -138,7 +133,7 @@ export default function Reader() {
 
   // Auto-flip timer
   useEffect(() => {
-    if (autoFlip.enabled && readingMode !== 'scroll') {
+    if (autoFlip.enabled) {
       autoFlipTimerRef.current = setInterval(() => {
         setCurrentPage(p => {
           if (p < totalPages) {
@@ -153,7 +148,7 @@ export default function Reader() {
       if (autoFlipTimerRef.current) clearInterval(autoFlipTimerRef.current);
     }
     return () => { if (autoFlipTimerRef.current) clearInterval(autoFlipTimerRef.current); };
-  }, [autoFlip.enabled, autoFlip.speed, readingMode, totalPages]);
+  }, [autoFlip.enabled, autoFlip.speed, totalPages]);
 
   const handleProgress = useCallback((p: any) => {
     setProgress(p);
@@ -172,42 +167,17 @@ export default function Reader() {
   const isPdf = format === 'pdf';
   const isMobi = format === 'mobi';
 
-  const scrollPage = useCallback((dir: 1 | -1) => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-    if (isEpub) {
-      const iframe = container.querySelector('iframe');
-      if (iframe?.contentWindow) {
-        iframe.contentWindow.scrollBy({ top: dir * iframe.contentWindow.innerHeight * 0.8, behavior: 'smooth' });
-      }
-      return;
-    }
-    if (isPdf) {
-      // PdfReader renders its own .pdf-container inside the outer one — scroll the inner
-      const inner = container.querySelector('.pdf-container') as HTMLElement | null;
-      (inner || container).scrollBy({ top: dir * (inner || container).clientHeight * 0.8, behavior: 'smooth' });
-      return;
-    }
-    container.scrollBy({ top: dir * container.clientHeight * 0.8, behavior: 'smooth' });
-  }, [isEpub, isPdf]);
-
   // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
-      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') {
         e.preventDefault();
-        if (readingMode === 'scroll') { scrollPage(1); }
-        else if (totalPages > 0) { setCurrentPage(p => Math.min(p + 1, totalPages)); }
+        if (totalPages > 0) { setCurrentPage(p => Math.min(p + 1, totalPages)); }
       } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
         e.preventDefault();
-        if (readingMode === 'scroll') { scrollPage(-1); }
-        else if (totalPages > 0) { setCurrentPage(p => Math.max(p - 1, 1)); }
-      } else if (e.key === ' ') {
-        e.preventDefault();
-        if (readingMode === 'scroll') { scrollPage(1); }
-        else if (totalPages > 0) { setCurrentPage(p => Math.min(p + 1, totalPages)); }
+        if (totalPages > 0) { setCurrentPage(p => Math.max(p - 1, 1)); }
       } else if (e.key === 'f' || e.key === 'F') {
         e.preventDefault();
         toggleFullscreen();
@@ -216,8 +186,6 @@ export default function Reader() {
         setShowShortcuts(false); setShowGoToPage(false); setBreakActive(false);
         setFocusMode(false);
         if (document.fullscreenElement) document.exitFullscreen?.();
-      } else if (e.key === 'm' || e.key === 'M') {
-        setReadingMode(m => m === 'scroll' ? 'page' : 'scroll');
       } else if (e.key === 'a' || e.key === 'A') {
         setAutoFlip(f => ({ ...f, enabled: !f.enabled }));
       } else if (e.key === 'b' || e.key === 'B') {
@@ -235,7 +203,7 @@ export default function Reader() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [readingMode, totalPages, bookId, scrollPage]);
+  }, [totalPages, bookId]);
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
@@ -295,20 +263,10 @@ export default function Reader() {
         </button>
         <div className="flex items-center gap-3">
           <span className="text-sm font-medium truncate max-w-[200px] text-(--color-text)">{book?.title}</span>
-          <div className="flex items-center gap-0.5 bg-(--color-bg) rounded-lg p-0.5 border border-(--color-border)">
-            {(['scroll', 'page'] as ReadingMode[]).map(mode => (
-              <button key={mode} onClick={() => setReadingMode(mode)}
-                className={`px-2 py-1 rounded text-xs transition-colors ${readingMode === mode ? 'bg-(--color-card-raised) text-(--color-primary) font-medium border border-(--color-border)' : 'text-(--color-text-secondary) hover:text-(--color-text)'}`}>
-                {mode === 'scroll' ? '滚动' : '单页'}
-              </button>
-            ))}
-          </div>
-          {readingMode !== 'scroll' && (
-            <button onClick={() => setAutoFlip(f => ({ ...f, enabled: !f.enabled }))}
-              className={`text-xs px-2 py-1 rounded transition-colors ${autoFlip.enabled ? 'bg-(--color-primary) text-(--color-bg) font-medium' : 'bg-(--color-bg) text-(--color-text-secondary) border border-(--color-border)'}`}>
-              {autoFlip.enabled ? `自动 ${autoFlip.speed}s` : '自动'}
-            </button>
-          )}
+          <button onClick={() => setAutoFlip(f => ({ ...f, enabled: !f.enabled }))}
+            className={`text-xs px-2 py-1 rounded transition-colors ${autoFlip.enabled ? 'bg-(--color-primary) text-(--color-bg) font-medium' : 'bg-(--color-bg) text-(--color-text-secondary) border border-(--color-border)'}`}>
+            {autoFlip.enabled ? `自动 ${autoFlip.speed}s` : '自动'}
+          </button>
           <button onClick={toggleFullscreen} className="text-sm text-(--color-text-secondary) hover:text-(--color-text) transition-colors" title="全屏 (F)">⛶</button>
           <button onClick={() => setShowHighlights(!showHighlights)} className="text-sm text-(--color-text-secondary) hover:text-(--color-text) transition-colors">笔记</button>
           <button onClick={() => setShowToc(!showToc)} className="text-sm text-(--color-text-secondary) hover:text-(--color-text) transition-colors">目录</button>
@@ -318,7 +276,7 @@ export default function Reader() {
 
       {/* Content area */}
       <div className="flex-1 relative overflow-hidden">
-        {readingMode !== 'scroll' && totalPages > 0 && (
+        {totalPages > 0 && (
           <>
             <button className="absolute left-0 top-0 w-[25%] h-full z-10 cursor-pointer opacity-0 hover:opacity-100 transition-opacity"
               onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} title="上一页 (←)" />
@@ -335,19 +293,17 @@ export default function Reader() {
           </>
         )}
 
-        <div ref={scrollContainerRef}
-          className={readingMode === 'scroll' ? (isEpub ? 'epub-view' : 'pdf-container') : 'reader-page-container'}>
-
+        <div className="reader-page-container">
           {isPdf ? (
             <PdfReader bookId={+bookId!} onProgress={handleProgress}
-              pageMode={readingMode !== 'scroll'} currentPage={currentPage} onPageTotal={setTotalPages}
+              pageMode={true} currentPage={currentPage} onPageTotal={setTotalPages}
               totalPages={content?.total_pages || 0} />
           ) : (
             <HtmlEpubReader bookId={+bookId!} onProgress={handleProgress}
               fontSize={fontSize} lineHeight={lineHeight} marginWidth={marginWidth}
               isMobi={isMobi} mobiContent={isMobi ? content?.content : null}
               chapters={content?.chapters}
-              pageMode={readingMode !== 'scroll'} currentPage={currentPage}
+              pageMode={true} currentPage={currentPage}
               onPageChange={setCurrentPage} onPageTotal={setTotalPages} />
           )}
         </div>
@@ -366,7 +322,7 @@ export default function Reader() {
                   <p className="text-xs font-medium text-(--color-text-secondary) mb-2">书签 ({bookmarks.length})</p>
                   {bookmarks.map((bm: any, i: number) => (
                     <div key={i} className="text-sm py-1.5 cursor-pointer hover:text-(--color-primary) flex items-center gap-2 text-(--color-text)"
-                      onClick={() => { setCurrentPage(bm.page); setReadingMode('page'); setShowToc(false); }}>
+                      onClick={() => { setCurrentPage(bm.page); setShowToc(false); }}>
                       <span>🔖</span>
                       <span>第 {bm.page} 页</span>
                       <span className="text-xs text-(--color-text-secondary)">{new Date(bm.time).toLocaleDateString()}</span>
@@ -399,7 +355,6 @@ export default function Reader() {
                         idx = chs.findIndex((_: any, ci: number) => ci === parseInt(hrefBase) || hrefBase.includes(String(ci)));
                       }
                       if (idx >= 0) {
-                        if (readingMode === 'scroll') setReadingMode('page');
                         setCurrentPage(idx + 1);
                       }
                     }
@@ -423,7 +378,7 @@ export default function Reader() {
 
       {/* Bottom bar */}
       <div className={`reader-bottom-bar ${focusMode ? 'reader-bar-auto' : ''}`}>
-        <span className="mr-4">{readingMode !== 'scroll' ? `${currentPage} / ${totalPages || '?'} 页` : ''}</span>
+        <span className="mr-4">{currentPage} / {totalPages || '?'} 页</span>
         <span className="truncate max-w-[40%]">{progress.chapter || ''}</span>
         <span className="ml-4">{progress.currentPage} / {progress.totalPages} · {Math.round(progress.percent)}%</span>
       </div>
@@ -432,33 +387,18 @@ export default function Reader() {
       {showSettings && (
         <div className="reader-settings-overlay" onClick={() => setShowSettings(false)}>
           <div className="reader-settings-panel" onClick={e => e.stopPropagation()}>
-            {/* Reading mode */}
+            {/* Auto-flip speed */}
             <div className="mb-6">
-              <p className="text-sm font-medium mb-3 text-(--color-text)">阅读模式</p>
+              <p className="text-sm font-medium mb-3 text-(--color-text)">自动翻页速度 (秒/页)</p>
               <div className="flex gap-2">
-                {(['scroll', 'page'] as ReadingMode[]).map(mode => (
-                  <button key={mode} onClick={() => setReadingMode(mode)}
-                    className={`px-4 py-2 rounded-lg text-sm ${readingMode === mode ? 'bg-(--color-primary) text-(--color-bg) font-medium' : 'bg-(--color-bg) text-(--color-text-secondary) border border-(--color-border)'}`}>
-                    {mode === 'scroll' ? '滚动模式' : '单页翻页'}
+                {AUTO_FLIP_SPEEDS.map(s => (
+                  <button key={s} onClick={() => setAutoFlip(f => ({ ...f, speed: s }))}
+                    className={`px-3 py-1 rounded-lg text-sm ${autoFlip.speed === s ? 'bg-(--color-primary) text-(--color-bg) font-medium' : 'bg-(--color-bg) text-(--color-text-secondary) border border-(--color-border)'}`}>
+                    {s}s
                   </button>
                 ))}
               </div>
             </div>
-
-            {/* Auto-flip speed */}
-            {readingMode !== 'scroll' && (
-              <div className="mb-6">
-                <p className="text-sm font-medium mb-3 text-(--color-text)">自动翻页速度 (秒/页)</p>
-                <div className="flex gap-2">
-                  {AUTO_FLIP_SPEEDS.map(s => (
-                    <button key={s} onClick={() => setAutoFlip(f => ({ ...f, speed: s }))}
-                      className={`px-3 py-1 rounded-lg text-sm ${autoFlip.speed === s ? 'bg-(--color-primary) text-(--color-bg) font-medium' : 'bg-(--color-bg) text-(--color-text-secondary) border border-(--color-border)'}`}>
-                      {s}s
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
 
             {/* Font size */}
             <div className="mb-6">

@@ -28,6 +28,7 @@ public partial class MainWindow : Window
             Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
             "保险箱");
         ClearPreviewCache();
+        ShowCreateMode();
     }
 
     // ===== LOGIN EVENTS =====
@@ -44,7 +45,58 @@ public partial class MainWindow : Window
         if (dialog.ShowDialog() == Forms.DialogResult.OK)
         {
             VaultPathBox.Text = dialog.SelectedPath;
+            UpdateLoginUI();
         }
+    }
+
+    private void VaultPathBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        UpdateLoginUI();
+    }
+
+    private void UpdateLoginUI()
+    {
+        try
+        {
+            var path = VaultPathBox.Text.Trim();
+            if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path))
+            {
+                ShowCreateMode();
+                return;
+            }
+
+            var vault = new VaultService(path);
+            if (vault.Exists)
+            {
+                ShowUnlockMode();
+            }
+            else
+            {
+                ShowCreateMode();
+            }
+        }
+        catch
+        {
+            ShowCreateMode();
+        }
+    }
+
+    private void ShowCreateMode()
+    {
+        ConfirmPasswordLabel.Visibility = Visibility.Visible;
+        ConfirmPasswordBox.Visibility = Visibility.Visible;
+        CreateVaultBtn.Visibility = Visibility.Visible;
+        UnlockVaultBtn.Style = (Style)FindResource("PrimaryButton");
+        LoginStatusText.Text = "";
+    }
+
+    private void ShowUnlockMode()
+    {
+        ConfirmPasswordLabel.Visibility = Visibility.Collapsed;
+        ConfirmPasswordBox.Visibility = Visibility.Collapsed;
+        CreateVaultBtn.Visibility = Visibility.Collapsed;
+        UnlockVaultBtn.Style = (Style)FindResource("PrimaryButton");
+        LoginStatusText.Text = "";
     }
 
     private void CreateVault_Click(object sender, RoutedEventArgs e)
@@ -633,8 +685,10 @@ public partial class MainWindow : Window
         PasswordBox.Clear();
         ConfirmPasswordBox.Clear();
         NewPasswordBox.Clear();
+        RecoveryKeyBox.Clear();
         StatusText.Text = "";
         LoginStatusText.Text = "保险箱已锁定。";
+        ShowCreateMode();
     }
 
     private async void OpenFileWithDefaultApp(VaultItem item)

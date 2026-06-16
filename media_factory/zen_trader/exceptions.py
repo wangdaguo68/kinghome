@@ -30,6 +30,10 @@ class AITokenLimitError(AIError):
     """Token 超限"""
 
 
+class AITimeoutError(AIError):
+    """API 调用超时"""
+
+
 class AIServerError(AIError):
     """服务端 5xx 错误"""
 

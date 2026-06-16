@@ -55,7 +55,15 @@
       "Bash(taskkill //f //pid 30596)",
       "Bash(taskkill //f //pid 22164)",
       "Bash(npx localtunnel *)",
-      "Bash(ssh *)"
+      "Bash(ssh *)",
+      "Bash(pip list *)",
+      "Bash(where ebook-convert *)",
+      "Read(//c/Program Files/Calibre2/**)",
+      "Read(//c/Program Files \\(x86\\)/Calibre2/**)",
+      "Bash(grep -oP '\\\\.max-w-\\\\\\\\\\\\[1400px\\\\\\\\\\\\][^{]*\\\\{[^}]*\\\\}' dist/assets/index-Dx61jmat.css)",
+      "Bash(taskkill //F //IM python.exe)",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(git -C \"D:/software/reading-app\" diff HEAD -- backend/app/services/reader_service.py)"
     ]
   }
 }

@@ -42,7 +42,7 @@ async def get_book_content(book_id: int, db: AsyncSession = Depends(get_db)):
         elif fmt == "mobi":
             from ..services.reader_service import convert_mobi_to_text
             text = convert_mobi_to_text(book.file_path)
-            return {"chapters": [{"index": 0, "title": book.title or "MOBI Book"}], "content": f"<pre>{text}</pre>", "format": "text"}
+            return {"chapters": [{"index": 0, "title": book.title or "MOBI Book"}], "content": text, "format": "text"}
         else:
             raise HTTPException(400, f"Unsupported format: {fmt}")
     except HTTPException:

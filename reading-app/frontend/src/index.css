@@ -25,11 +25,30 @@ body {
 
 #root { min-height: 100vh; }
 
+/* ---- 全局内容宽度：左2 中6 右2 ---- */
+.app-content-width {
+  width: 60%;
+  min-width: 720px;
+  max-width: 1200px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+/* 阅读器/聊天等全宽页面：突破 app-content-width 限制 */
+.reader-fullwidth {
+  width: 100vw;
+  position: relative;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 100vw;
+}
+
 /* ---- Header: 深木毛玻璃 ---- */
 .app-header {
   position: sticky; top: 0; z-index: 50;
-  height: 56px; display: flex; align-items: center; justify-content: space-between;
-  padding: 0 28px;
+  height: 56px; display: flex; align-items: center;
   background: rgba(44,31,15,0.94); backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--color-border);
 }
@@ -51,8 +70,9 @@ body {
 /* ---- Book Shelf: 画廊式网格 ---- */
 .book-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 20px 16px; padding: 24px;
+  grid-template-columns: repeat(auto-fill, 156px);
+  gap: 24px 20px;
+  padding: 24px 0;
 }
 
 .book-card {
@@ -94,26 +114,6 @@ body {
 }
 
 /* ---- Reader: 桌面 + 书页 ---- */
-.epub-container { height: calc(100vh - 120px); overflow: hidden; position: relative; }
-
-.epub-view {
-  height: 100%; overflow-y: auto;
-  max-width: 680px; margin: 0 auto; padding: 48px 56px;
-  background: #FBF6ED; color: #3E3232;
-  font-family: Georgia, "Songti SC", "Noto Serif SC", "STSong", serif;
-  font-size: 16px; line-height: 1.9;
-  border-radius: 4px;
-  box-shadow:
-    0 2px 4px rgba(0,0,0,0.15),
-    0 8px 32px rgba(0,0,0,0.35),
-    0 0 0 1px rgba(200,169,110,0.06);
-}
-
-.pdf-container {
-  height: calc(100vh - 120px); overflow-y: auto;
-  background: linear-gradient(180deg, #3C2F1F 0%, #2C1F0F 60%, #1E1408 100%);
-}
-
 .reader-bar {
   height: 52px; display: flex; align-items: center; justify-content: space-between;
   padding: 0 24px;

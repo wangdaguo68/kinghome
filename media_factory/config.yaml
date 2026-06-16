@@ -43,7 +43,7 @@ platforms:
     emoji_density: high
 
   wechat:
-    max_chars: 5000
+    max_chars: 3500
     include_section_numbers: true
 
   xueqiu:

@@ -1,8 +1,9 @@
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
      xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
   <Package Name="保险箱" Manufacturer="SafeBox"
-           Version="1.1.0" UpgradeCode="B9E7F0A1-2C4D-4E8F-A1B2-C3D4E5F6A7B8"
+           Version="1.2.0" UpgradeCode="B9E7F0A1-2C4D-4E8F-A1B2-C3D4E5F6A7B8"
            Language="2052" Codepage="936">
+    <MajorUpgrade DowngradeErrorMessage="已安装的版本更新，无法降级安装。" />
     <MediaTemplate EmbedCab="yes" />
 
     <StandardDirectory Id="ProgramFiles6432Folder">

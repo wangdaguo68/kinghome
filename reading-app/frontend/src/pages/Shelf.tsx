@@ -97,14 +97,14 @@ export default function Shelf() {
   }, []);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6 page-enter">
+    <div className="py-6 page-enter">
       {/* Continue Reading Section */}
       {!filter && continueBooks.length > 0 && (
         <div className="mb-8">
           <h3 className="text-sm font-medium text-(--color-text-secondary) mb-3">继续阅读</h3>
           <div className="flex gap-4 overflow-x-auto pb-2">
             {continueBooks.slice(0, 20).map(book => (
-              <div key={book.id} className="flex-shrink-0 w-[120px] cursor-pointer group" onClick={() => handleBookClick(book)}>
+              <div key={book.id} className="flex-shrink-0 w-[156px] cursor-pointer group" onClick={() => handleBookClick(book)}>
                 <div className="book-cover group-hover:shadow-lg" style={!book.cover_path ? getCoverFallback(book) : undefined}>
                   {book.cover_path
                     ? <img src={getThumbUrl(book.cover_path)} alt={book.title} loading="lazy" data-book-id={book.id}

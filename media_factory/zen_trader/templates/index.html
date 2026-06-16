@@ -189,6 +189,23 @@
     padding: 8px 0;
   }
   .result-body h1, .result-body h2 { font-size: 1.1rem; color: var(--accent); margin: 8px 0; }
+  .publish-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin: 10px 0 14px;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: rgba(13, 17, 23, 0.55);
+  }
+  .publish-status {
+    flex-basis: 100%;
+    color: var(--muted);
+    font-size: 0.8rem;
+    min-height: 18px;
+  }
   .image-prompt-box {
     background: var(--bg);
     border: 1px solid var(--border);
@@ -310,6 +327,10 @@
     <div class="card">
       <h3>📤 生成结果</h3>
       <div class="tabs" id="resultTabs"></div>
+      <div class="publish-actions" id="wechatPublishToolbar">
+        <button class="btn btn-sm btn-primary" id="wechatDraftBtn" onclick="saveWechatDraft()" disabled>保存公众号草稿</button>
+        <div class="publish-status" id="wechatPublishStatus">生成公众号内容后即可保存草稿。</div>
+      </div>
       <div id="resultContent" class="empty-state">👈 选择模式、输入内容、选择平台，点击「开始生成」</div>
     </div>
   </div>
@@ -317,11 +338,7 @@
 
 <script>
 const PLATFORMS = [
-  { id: 'xiaohongshu', name: '📕 小红书', desc: '情绪治愈风' },
   { id: 'wechat', name: '📰 公众号', desc: '深度长文' },
-  { id: 'xueqiu', name: '📊 雪球/东财', desc: '技术哲学' },
-  { id: 'shipinhao', name: '🎬 视频号/抖音', desc: '金句短视频' },
-  { id: 'weibo', name: '🐦 微博', desc: '短金句' },
 ];
 
 let currentMode = 'mixed';
@@ -329,6 +346,7 @@ let currentWisdomSource = 'daily';
 let platformResults = {};
 let activeTab = null;
 let imageResult = null;
+let generateTimeoutId = null;
 
 // Init platform chips
 const chipsEl = document.getElementById('platformChips');
@@ -388,7 +406,7 @@ function switchWisdomSource(source) {
 // Load quotes for selector
 function loadQuotes() {
   fetch('/api/quotes')
-    .then(r => r.json())
+    .then(readJSON)
     .then(data => {
       if (data.ok && data.quotes) {
         const sel = document.getElementById('quoteSelect');
@@ -402,7 +420,7 @@ function loadQuotes() {
 
 function loadExample() {
   fetch('/api/crawl', { method: 'POST' })
-    .then(r => r.json())
+    .then(readJSON)
     .then(data => {
       if (data.ok) document.getElementById('markdownInput').value = data.markdown;
       else alert('示例加载失败: ' + data.error);
@@ -415,7 +433,7 @@ function crawlData() {
   btn.disabled = true;
   btn.textContent = '⏳ 抓取中...';
   fetch('/api/crawl', { method: 'POST' })
-    .then(r => r.json())
+    .then(readJSON)
     .then(data => {
       btn.disabled = false;
       btn.textContent = '🔍 爬取盘面数据';
@@ -445,6 +463,7 @@ function clearResults() {
   document.getElementById('resultContent').innerHTML = '<div class="empty-state">👈 选择模式、输入内容、选择平台，点击「开始生成」</div>';
   document.getElementById('progressArea').style.display = 'none';
   document.getElementById('errorMsg').style.display = 'none';
+  updateWechatPublishToolbar();
 }
 
 function startGenerate() {
@@ -470,6 +489,12 @@ function startGenerate() {
   document.getElementById('generateBtn').disabled = true;
   document.getElementById('progressFill').style.width = '5%';
   document.getElementById('statusText').textContent = `模式: ${currentMode} | 正在启动...`;
+  clearTimeout(generateTimeoutId);
+  generateTimeoutId = setTimeout(() => {
+    document.getElementById('generateBtn').disabled = false;
+    document.getElementById('errorMsg').style.display = 'block';
+    document.getElementById('errorMsg').textContent = 'AI 接口超过 3 分钟仍未返回，建议刷新后重试，或稍后再生成。';
+  }, 180000);
 
   const md = document.getElementById('markdownInput').value.trim();
   const topic = document.getElementById('topicInput').value.trim();
@@ -500,9 +525,10 @@ function generateJSON(body) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
-    .then(r => r.json())
+    .then(readJSON)
     .then(data => {
       document.getElementById('generateBtn').disabled = false;
+      clearTimeout(generateTimeoutId);
       document.getElementById('progressFill').style.width = '100%';
       if (data.ok && data.results) {
         document.getElementById('statusText').textContent = `✅ 完成！模式: ${data.mode}，生成 ${data.results.length} 个平台`;
@@ -510,6 +536,7 @@ function generateJSON(body) {
           platformResults[r.platform] = r;
         });
         renderTabs();
+        updateWechatPublishToolbar();
         if (data.results.length > 0) {
           switchTab(data.results[0].platform);
         }
@@ -520,6 +547,7 @@ function generateJSON(body) {
     })
     .catch(e => {
       document.getElementById('generateBtn').disabled = false;
+      clearTimeout(generateTimeoutId);
       document.getElementById('errorMsg').style.display = 'block';
       document.getElementById('errorMsg').textContent = '连接失败: ' + e.message;
     });
@@ -548,10 +576,12 @@ function generateSSE(body) {
       }
     }
     document.getElementById('generateBtn').disabled = false;
+    clearTimeout(generateTimeoutId);
     document.getElementById('progressFill').style.width = '100%';
     document.getElementById('statusText').textContent = '✅ 生成完毕';
   }).catch(e => {
     document.getElementById('generateBtn').disabled = false;
+    clearTimeout(generateTimeoutId);
     document.getElementById('errorMsg').style.display = 'block';
     document.getElementById('errorMsg').textContent = '连接失败: ' + e.message;
   });
@@ -570,6 +600,7 @@ function handleSSE(msg) {
       platformResults[msg.platform] = msg;
       document.getElementById('progressFill').style.width = (50 + Object.keys(platformResults).length * 8) + '%';
       renderTabs();
+      updateWechatPublishToolbar();
       switchTab(Object.keys(platformResults)[Object.keys(platformResults).length - 1]);
       break;
     case 'image_done':
@@ -584,6 +615,7 @@ function handleSSE(msg) {
       document.getElementById('errorMsg').style.display = 'block';
       document.getElementById('errorMsg').textContent = '❌ ' + msg.message;
       document.getElementById('generateBtn').disabled = false;
+      clearTimeout(generateTimeoutId);
       break;
   }
 }
@@ -625,6 +657,56 @@ function switchTab(id) {
     <h2 style="color:var(--accent);margin-bottom:8px">${escapeHTML(r.title)}</h2>
     <div style="margin-bottom:8px">${tagsHtml}</div>
     <div class="result-body">${escapeHTML(r.body)}</div>`;
+}
+
+function updateWechatPublishToolbar() {
+  const hasContent = !!(platformResults.wechat && platformResults.wechat.body);
+  const draftBtn = document.getElementById('wechatDraftBtn');
+  const status = document.getElementById('wechatPublishStatus');
+  if (draftBtn) draftBtn.disabled = !hasContent;
+  if (status && !hasContent) status.textContent = '生成公众号内容后即可保存草稿。';
+}
+
+function saveWechatDraft() {
+  const r = platformResults.wechat;
+  if (!r) { alert('请先生成公众号内容'); return; }
+
+  const draftBtn = document.getElementById('wechatDraftBtn');
+  const status = document.getElementById('wechatPublishStatus');
+  if (draftBtn) draftBtn.disabled = true;
+  if (status) status.textContent = '正在保存草稿...';
+
+  fetch('/api/wechat/draft', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title: r.title, body: r.body }),
+  })
+    .then(async resp => {
+      const data = await readJSON(resp);
+      if (!resp.ok || !data.ok) throw new Error(data.error || '公众号接口调用失败');
+      return data;
+    })
+    .then(data => {
+      if (status) {
+        status.textContent = `已保存到公众号草稿箱，media_id: ${data.media_id || '-'}`;
+      }
+    })
+    .catch(e => {
+      if (status) status.textContent = '失败：' + e.message;
+      alert('公众号操作失败：' + e.message);
+    })
+    .finally(() => {
+      if (draftBtn) draftBtn.disabled = false;
+    });
+}
+
+async function readJSON(resp) {
+  const text = await resp.text();
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    throw new Error(`接口返回非 JSON（HTTP ${resp.status}）：${text.slice(0, 80)}`);
+  }
 }
 
 function escapeHTML(str) {

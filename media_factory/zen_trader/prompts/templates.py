@@ -93,7 +93,7 @@ CRITICAL RULES — you MUST follow:
 - Quote Buddhist scriptures where relevant (《金刚经》《心经》preferred)
 - Data must be specific: mention exact index levels, percentages, dates
 - Ceremonial, ritualistic formatting throughout
-- 3000-5000 characters total
+- 2000-3500 Chinese characters total, about 30% shorter than the previous long-form version
 - Minimal emoji: only 🪷 as Zen marker
 
 Follow this structure:

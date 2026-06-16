@@ -183,6 +183,48 @@ def fetch_index_spot() -> dict:
     return result
 
 
+def fetch_index_spot_from_kline(days: int = 8) -> dict:
+    """Fallback index snapshot from daily K-line data when Eastmoney spot API is blocked."""
+    symbol_map = {
+        "上证指数": "sh000001",
+        "深证成指": "sz399001",
+        "创业板指": "sz399006",
+        "科创50": "sh000688",
+        "沪深300": "sh000300",
+    }
+    result = {}
+    for name, symbol in symbol_map.items():
+        try:
+            kline = fetch_index_kline(symbol, days=days)
+            close = kline["close"]
+            open_ = kline["open"]
+            high = kline["high"]
+            low = kline["low"]
+            turnover = kline["turnover"]
+            if len(close) == 0:
+                continue
+            prev_close = float(close[-2]) if len(close) >= 2 else float(close[-1])
+            price = float(close[-1])
+            change_pct = ((price - prev_close) / prev_close * 100) if prev_close else 0.0
+            result[name] = {
+                "price": round(price, 2),
+                "change_pct": round(change_pct, 2),
+                "change_amount": round(price - prev_close, 2),
+                "volume": 0,
+                "turnover": float(turnover[-1]) if len(turnover) else 0,
+                "high": round(float(high[-1]), 2) if len(high) else "-",
+                "low": round(float(low[-1]), 2) if len(low) else "-",
+                "open": round(float(open_[-1]), 2) if len(open_) else "-",
+                "prev_close": round(prev_close, 2),
+                "amplitude": round((float(high[-1]) - float(low[-1])) / prev_close * 100, 2) if prev_close and len(high) and len(low) else 0,
+            }
+        except Exception:
+            continue
+    if not result:
+        raise CrawlerError("实时行情接口不可用，K线备用数据也获取失败")
+    return result
+
+
 def fetch_market_breadth() -> dict:
     url = (
         "https://push2.eastmoney.com/api/qt/clist/get"
@@ -358,7 +400,10 @@ def _diag_ma(close, mas):
 # ============================================================
 
 def fetch_market_data() -> CrawlerData:
-    indices = fetch_index_spot()
+    try:
+        indices = fetch_index_spot()
+    except Exception:
+        indices = fetch_index_spot_from_kline()
     kline = fetch_index_kline("sh000001", days=120)
     close = kline["close"]
     high = kline["high"]

@@ -1,11 +1,34 @@
-import { AlertTriangle, Ban, Check, ChevronRight, Clock3, Radio, ShieldAlert, Target, TrendingDown, TrendingUp } from "lucide-react";
+import { AlertTriangle, Ban, Check, ChevronRight, Clock3, Database, Radio, ShieldAlert, Target, TrendingDown, TrendingUp, Zap } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 import type { DashboardData } from "../types";
 import { FlowMap } from "./FlowMap";
 import { ScoreGauge } from "./ScoreGauge";
 
-function Panel({ title, kicker, children, className = "" }: { title: string; kicker?: string; children: ReactNode; className?: string }) {
-  return <section className={`panel ${className}`}><header><div>{kicker ? <span>{kicker}</span> : null}<h2>{title}</h2></div><ChevronRight size={15} /></header>{children}</section>;
+function Panel({ title, kicker, source, children, className = "" }: { title: string; kicker?: string; source?: string; children: ReactNode; className?: string }) {
+  return <section className={`panel ${className}`}><header><div>{kicker ? <span>{kicker}</span> : null}<h2>{title}</h2></div><div className="panel-meta">{source ? <small>{source}</small> : null}<ChevronRight size={15} /></div></header>{children}</section>;
+}
+
+function qualitySource(data: DashboardData, key: string) {
+  return data.data_quality?.[key]?.source ?? data.meta.source;
+}
+
+function CoreGroups({ cores }: { cores: DashboardData["cores"] }) {
+  const kinds = ["连板情绪核心", "趋势容量核心", "创业板20cm弹性核心"];
+  return <div className="core-groups">{kinds.map((kind) => {
+    const items = cores.filter((core) => core.kind === kind);
+    return <details key={kind} open><summary><span>{kind}</span><b>{items.length}</b></summary><div className="core-list">{items.length ? items.map((core, index) => <article key={`${kind}-${core.code}`}><div className="core-rank">{String(index + 1).padStart(2, "0")}</div><div className="core-identity"><strong>{core.name}<small>{core.code}</small></strong><p>{core.evidence}</p></div><div className="core-score"><b>{core.score}</b><em className={core.change >= 0 ? "up" : "down"}>{core.change >= 0 ? "+" : ""}{core.change.toFixed(2)}%</em></div></article>) : <p className="group-empty">当前可信快照暂无符合条件的标的</p>}</div></details>;
+  })}</div>;
+}
+
+function Ladder({ items }: { items: DashboardData["ladder"] }) {
+  const heights = [...new Set(items.map((item) => item.height))].sort((a, b) => b - a);
+  if (!items.length) return <div className="ladder-empty"><Database size={23} /><span>连板查询未通过校验，等待下一次可信快照</span></div>;
+  return <div className="ladder-groups">{heights.map((height) => <section key={height}><header><strong>{height}板</strong><span>{items.filter((item) => item.height === height).length}只</span></header><div className="ladder-list">{items.filter((item) => item.height === height).map((item) => <article key={item.code}>
+    <div className="ladder-stock"><span>{item.factor_type}</span><strong>{item.name}<small>{item.code}</small></strong><em className="up">+{item.change.toFixed(2)}%</em></div>
+    <div className="concept-tags">{item.concepts.map((concept) => <span key={concept}>{concept}</span>)}</div>
+    <div className="primary-factor"><Zap size={14} /><p><b>第一性因素</b>{item.primary_factor}</p><span className={`confidence confidence-${item.confidence}`}>{item.confidence}置信</span></div>
+    <details><summary>证据摘要 · {item.source}</summary><p>{item.evidence}</p></details>
+  </article>)}</div></section>)}</div>;
 }
 
 export function Cockpit({ data }: { data: DashboardData }) {
@@ -23,24 +46,26 @@ export function Cockpit({ data }: { data: DashboardData }) {
       <div className="score-row"><ScoreGauge label="赚钱 M" value={data.state.money} tone="red" /><ScoreGauge label="亏钱 L" value={data.state.loss} tone="green" /><ScoreGauge label="趋势 T" value={data.state.trend} tone="blue" /><ScoreGauge label="投机 S" value={data.state.speculation} tone="amber" /></div>
     </Panel>
 
-    <Panel title="实时风险" kicker="RISK FEED" className="alerts-panel">
-      <div className="alert-stack">{data.alerts.map((alert) => <div className={`alert-item ${alert.level}`} key={alert.title}><AlertTriangle size={15} /><span><strong>{alert.title}</strong><small>{alert.detail}</small></span></div>)}</div>
+    <Panel title="市场广度" kicker="BREADTH · 全A含科创/北交" source={qualitySource(data, "breadth")} className="breadth-panel">
+      <div className="breadth-split"><div className="breadth-visual" style={{ "--up": `${upRatio}%` } as CSSProperties}><span>{upRatio}%</span><small>上涨占比</small></div><div className="breadth-numbers"><div><TrendingUp size={15} /><span>上涨</span><strong>{data.breadth.up}</strong></div><div><TrendingDown size={15} /><span>下跌</span><strong>{data.breadth.down}</strong></div><div><span>平盘</span><strong>{data.breadth.flat}</strong></div><div><span>中位数</span><strong className={data.breadth.median >= 0 ? "up" : "down"}>{data.breadth.median.toFixed(2)}%</strong></div></div></div>
+      <div className="limit-strip"><span>涨停 <b>{data.breadth.limit_up}</b></span><span>跌停 <b>{data.breadth.limit_down}</b></span><span>炸板 <b>{data.breadth.failed_limit}</b></span><span>连板 <b>{data.breadth.continuous}</b></span></div>
     </Panel>
 
     <Panel title="资金迁移图谱" kicker="CAPITAL FLOW" className="flow-panel"><FlowMap data={data} /></Panel>
 
-    <Panel title="市场广度" kicker="BREADTH" className="breadth-panel">
-      <div className="breadth-split"><div className="breadth-visual" style={{ "--up": `${upRatio}%` } as CSSProperties}><span>{upRatio}%</span><small>上涨占比</small></div><div className="breadth-numbers"><div><TrendingUp size={15} /><span>上涨</span><strong>{data.breadth.up}</strong></div><div><TrendingDown size={15} /><span>下跌</span><strong>{data.breadth.down}</strong></div><div><span>中位数</span><strong className="down">{data.breadth.median.toFixed(2)}%</strong></div></div></div>
-      <div className="limit-strip"><span>涨停 <b>{data.breadth.limit_up}</b></span><span>跌停 <b>{data.breadth.limit_down}</b></span><span>炸板 <b>{data.breadth.failed_limit}</b></span><span>连板 <b>{data.breadth.continuous}</b></span></div>
+    <Panel title="板块反馈对照" kicker="POSITIVE / NEGATIVE" className="feedback-panel">
+      <div className="feedback-compare"><section className="positive-zones"><header><div><span>POSITIVE</span><strong>正反馈板块</strong></div><em>{data.mainlines.length}</em></header>{data.mainlines.map((item) => <article key={item.name}><div><b>{item.name}</b><small>{item.role}</small></div><strong>+{item.change.toFixed(2)}%</strong><i style={{ width: `${Math.min(100, Math.abs(item.change) * 14)}%` }} /></article>)}</section>
+      <section className="loss-zones"><header><div><span>NEGATIVE</span><strong>负反馈板块</strong></div><em>{data.negative.length}</em></header>{data.negative.map((item) => <article key={item.name}><div><b>{item.name}</b><small>{item.severity === "high" ? "高风险" : "扩散观察"}</small></div><strong>{item.change.toFixed(2)}%</strong><i style={{ width: `${Math.min(100, Math.abs(item.change) * 14)}%` }} /></article>)}</section></div>
     </Panel>
 
-    <Panel title="核心梯队" kicker="CORE HIERARCHY" className="cores-panel">
-      <div className="core-list">{data.cores.map((core, index) => <article key={core.code}><div className="core-rank">0{index + 1}</div><div className="core-identity"><span>{core.kind}</span><strong>{core.name}<small>{core.code}</small></strong><p>{core.evidence}</p></div><div className="core-score"><b>{core.score}</b><em className={core.change >= 0 ? "up" : "down"}>{core.change >= 0 ? "+" : ""}{core.change.toFixed(2)}%</em></div></article>)}</div>
+    <Panel title="实时风险与容量反馈" kicker="LIVE RISK · NO STATIC COPY" source={data.capacity.source} className="alerts-panel">
+      <div className="capacity-strip"><div><small>成交额样本</small><strong>TOP {data.capacity.sample}</strong></div><div><small>上涨 / 下跌</small><strong><i className="up">{data.capacity.up}</i> / <i className="down">{data.capacity.down}</i></strong></div><div><small>中位涨跌幅</small><strong className={data.capacity.median >= 0 ? "up" : "down"}>{data.capacity.median >= 0 ? "+" : ""}{data.capacity.median.toFixed(2)}%</strong></div><div><small>容量判断</small><strong>{data.capacity.label}</strong></div></div>
+      <div className="alert-stack">{data.alerts.map((alert) => <div className={`alert-item ${alert.level}`} key={alert.title}><AlertTriangle size={15} /><span><strong>{alert.title}</strong><small>{alert.detail}</small></span></div>)}</div>
     </Panel>
 
-    <Panel title="负反馈坐标" kicker="LOSS ZONES" className="negative-panel">
-      <div className="negative-grid">{data.negative.map((item) => <div key={item.name}><span>{item.name}</span><strong>{item.change.toFixed(2)}%</strong><i style={{ width: `${Math.min(100, Math.abs(item.change) * 14)}%` }} /></div>)}</div>
-    </Panel>
+    <Panel title="核心梯队" kicker="ALL QUALIFIED CORES · 排除科创/北交" className="cores-panel"><CoreGroups cores={data.cores} /></Panel>
+
+    <Panel title="当日连板梯队" kicker="LIMIT-UP LADDER · FIRST-PRINCIPLE FACTOR" source={qualitySource(data, "continuous")} className="ladder-panel"><Ladder items={data.ladder} /></Panel>
 
     <Panel title="盘中确认清单" kicker="CHECKPOINTS" className="checkpoints-panel">
       <ol>{data.checkpoints.map((item, index) => <li key={item}><span>{index + 1}</span>{item}</li>)}</ol>

@@ -11,6 +11,8 @@ class Settings(BaseSettings):
     tdx_mcp_url: str = ""
     tdx_mcp_token: str = ""
     tdx_mcp_tool: str = "tdx_screener"
+    tushare_token: str = ""
+    tushare_api_url: str = "https://api.tushare.pro"
     collect_interval_seconds: int = 60
     session_hours: int = 12
 

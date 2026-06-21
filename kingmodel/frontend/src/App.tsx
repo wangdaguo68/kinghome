@@ -77,7 +77,6 @@ export default function App() {
       <div className="sidebar-foot"><div><span className={`status-dot ${data.meta.freshness}`} /><span>数据层</span><strong>{freshnessLabel}</strong></div><button onClick={logout}><LogOut size={16} />退出</button></div>
     </aside>
     <main className="main-shell">
-      <div className="http-warning"><ShieldAlert size={13} />当前为 HTTP 测试环境，请勿复用重要密码。</div>
       <header className="topbar">
         <button className="menu-button" onClick={() => setSidebarOpen(true)}><Menu size={19} /></button>
         <div className="market-title"><span>{nav.find((item) => item.id === workspace)?.label}</span><h1>{data.meta.trade_date}<ChevronDown size={15} /></h1></div>

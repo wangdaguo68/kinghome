@@ -57,6 +57,7 @@ def health() -> dict:
     return {
         "status": "ok",
         "mcp_configured": bool(settings.tdx_mcp_url and settings.tdx_mcp_token),
+        "tushare_configured": bool(settings.tushare_token),
         "mcp_last_success": collector.client.last_success_at,
         "mcp_last_error": collector.last_error,
     }

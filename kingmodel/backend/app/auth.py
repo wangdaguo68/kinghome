@@ -57,6 +57,22 @@ def verify_login(username: str, password: str, client: str) -> bool:
     return ok
 
 
+def change_password(username: str, current_password: str, new_password: str) -> bool:
+    with connect() as conn:
+        row = conn.execute("SELECT password_hash FROM users WHERE username=?", (username,)).fetchone()
+        if not row:
+            return False
+        try:
+            _ph.verify(row["password_hash"], current_password)
+        except VerifyMismatchError:
+            return False
+        conn.execute(
+            "UPDATE users SET password_hash=? WHERE username=?",
+            (_ph.hash(new_password), username),
+        )
+    return True
+
+
 def create_session(username: str) -> str:
     settings = get_settings()
     payload = {"sub": username, "exp": int(time.time()) + settings.session_hours * 3600}

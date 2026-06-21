@@ -3,6 +3,7 @@ import { Activity, Bell, BookOpenCheck, Boxes, ChevronDown, Clock3, Database, Gi
 import { api } from "./api";
 import { Cockpit } from "./components/Cockpit";
 import { LoginPage } from "./components/LoginPage";
+import { SettingsPage } from "./components/SettingsPage";
 import type { DashboardData, Workspace } from "./types";
 
 const nav: Array<{ id: Workspace; label: string; icon: typeof Activity }> = [
@@ -83,7 +84,7 @@ export default function App() {
         <div className="topbar-meta"><span><Clock3 size={14} />{new Date(data.meta.updated_at).toLocaleString("zh-CN", { hour12: false })}</span><span className={`source-badge ${data.meta.freshness}`}>{data.meta.source}</span><button className="icon-button"><Bell size={17} /><i>{data.alerts.length}</i></button><button className="refresh-button" onClick={refresh} disabled={refreshing}><RefreshCw size={15} className={refreshing ? "spinning" : ""} />{refreshing ? "刷新中" : "刷新"}</button></div>
       </header>
       {data.meta.warning ? <div className={`data-warning ${data.meta.freshness}`}><ShieldAlert size={15} />{data.meta.warning}</div> : null}
-      <div className="content-shell">{workspace === "cockpit" ? <Cockpit data={data} /> : <SecondaryWorkspace workspace={workspace} data={data} />}</div>
+      <div className="content-shell">{workspace === "cockpit" ? <Cockpit data={data} /> : workspace === "settings" ? <SettingsPage username={username} /> : <SecondaryWorkspace workspace={workspace} data={data} />}</div>
     </main>
   </div>;
 }

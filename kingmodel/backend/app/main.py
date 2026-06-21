@@ -4,9 +4,9 @@ from typing import Annotated
 
 from fastapi import Cookie, Depends, FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from .auth import COOKIE_NAME, create_session, ensure_admin, parse_session, require_user, verify_login
+from .auth import COOKIE_NAME, change_password, create_session, ensure_admin, parse_session, require_user, verify_login
 from .config import get_settings
 from .db import initialize, snapshot_history
 from .services.collector import Collector
@@ -46,6 +46,11 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class PasswordChangeRequest(BaseModel):
+    current_password: str = Field(min_length=1)
+    new_password: str = Field(min_length=1)
+
+
 @app.get("/api/health")
 def health() -> dict:
     settings = get_settings()
@@ -75,6 +80,13 @@ def logout(response: Response) -> dict:
 @app.get("/api/auth/me")
 def me(username: Annotated[str, Depends(require_user)]) -> dict:
     return {"username": username}
+
+
+@app.post("/api/auth/password")
+def update_password(body: PasswordChangeRequest, username: Annotated[str, Depends(require_user)]) -> dict:
+    if not change_password(username, body.current_password, body.new_password):
+        raise HTTPException(status_code=400, detail="当前密码错误")
+    return {"ok": True}
 
 
 @app.get("/api/dashboard")

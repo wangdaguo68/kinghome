@@ -1,1 +1,11 @@
 .superpowers/
+.env
+data/
+frontend/node_modules/
+frontend/dist/
+frontend/*.tsbuildinfo
+frontend/vite.config.js
+frontend/vite.config.d.ts
+backend/.venv/
+backend/.pytest_cache/
+backend/**/__pycache__/

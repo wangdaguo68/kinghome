@@ -30,6 +30,20 @@ export interface DashboardData {
     }>;
   };
   feature_store_status?: { feature_days: number; outcome_days: number; latest_trade_date: string | null; feature_version: string | null };
+  ml_system?: {
+    stage: "rule_only" | "shadow_learning" | "assisted" | "live_eligible";
+    feature_days: number;
+    outcome_days: number;
+    champion_count: number;
+    challenger_count: number;
+    next_gate: number | null;
+    last_training_run: { version: string; status: string; sample_count: number; finished_at?: string } | null;
+    modules?: Record<string, "active" | "waiting_data" | "champion">;
+  };
+  ml_review?: {
+    summary: Array<{ horizon: number; samples: number; win_rate: number | null; average_return: number | null }>;
+    items: Array<{ trade_date: string; code: string; name: string; rank?: number; horizon: number; tradable: boolean; net_return: number; mfe: number; mae: number; blocked_reason?: string }>;
+  };
   data_quality: Record<string, { source: string; status: string; reason?: string }>;
   sentiment: Array<{ topic: string; heat: number; crowding: string; catalyst: string; validation: string }>;
   checkpoints: string[];

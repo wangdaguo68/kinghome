@@ -22,9 +22,13 @@ from ..db import (
     save_snapshot,
     start_collection_job,
     upsert_daily_pool,
+    outcome_review,
 )
 from ..engine.framework import assess_market, build_feature_snapshots
 from ..engine.rule_selector import FEATURE_VERSION, PLAN_VERSION, build_shadow_top3
+from ..ml.inference import inference_status, regime_probabilities, sector_probability, stock_probability
+from ..ml.outcome_tracker import OutcomeTracker
+from ..ml.training_pipeline import TrainingPipeline
 from .collector import Collector, DEMO_DASHBOARD
 from .free_market import EastMoneyFreeClient, FreeMarketError
 from .market_validation import is_trade_candidate
@@ -39,6 +43,8 @@ class CloseCollector:
         self.settings = get_settings()
         self.free = EastMoneyFreeClient()
         self.tdx = Collector()
+        self.outcomes = OutcomeTracker(self.free)
+        self.training = TrainingPipeline()
         self._lock = asyncio.Lock()
 
     @staticmethod
@@ -55,6 +61,8 @@ class CloseCollector:
             assessment = assess_market(payload)
             payload["ml_shadow"] = build_shadow_top3(payload, assessment)
         payload["feature_store_status"] = feature_store_status()
+        payload["ml_system"] = inference_status()
+        payload["ml_review"] = outcome_review()
         return payload
 
     def bootstrap_shadow(self) -> None:
@@ -67,6 +75,13 @@ class CloseCollector:
             return
         assessment = assess_market(payload)
         shadow = build_shadow_top3(payload, assessment)
+        shadow["regime"] = regime_probabilities(assessment)
+        for sector in payload.get("mainlines", []):
+            sector["model_prediction"] = sector_probability(sector)
+        ladder_by_code = {str(item.get("code", "")): item for item in payload.get("ladder", [])}
+        cores_by_code = {str(item.get("code", "")): item for item in payload.get("cores", [])}
+        for plan in shadow["plans"]:
+            plan["model_prediction"] = stock_probability(cores_by_code.get(plan["code"], {}), assessment, ladder_by_code.get(plan["code"]))
         now = datetime.now(SHANGHAI).isoformat(timespec="seconds")
         save_feature_snapshots(trade_date, FEATURE_VERSION, build_feature_snapshots(payload, assessment), now)
         save_shadow_plans(trade_date, PLAN_VERSION, shadow["plans"], now)
@@ -205,12 +220,30 @@ class CloseCollector:
                     negative_names=[str(item.get("name", "")) for item in payload.get("negative", [])],
                 )
                 payload["ml_shadow"] = build_shadow_top3(payload, assessment)
+                payload["ml_regime"] = regime_probabilities(assessment)
+                payload["ml_shadow"]["regime"] = payload["ml_regime"]
+                for sector in payload.get("mainlines", []):
+                    sector["model_prediction"] = sector_probability(sector)
+                ladder_by_code = {str(item.get("code", "")): item for item in ladder}
+                for plan in payload["ml_shadow"]["plans"]:
+                    core = next((item for item in cores if str(item.get("code", "")) == plan["code"]), {})
+                    plan["model_prediction"] = stock_probability(core, assessment, ladder_by_code.get(plan["code"]))
                 created_at = now.isoformat(timespec="seconds")
                 save_feature_snapshots(
                     trade_date, FEATURE_VERSION, build_feature_snapshots(payload, assessment), created_at
                 )
                 save_shadow_plans(trade_date, PLAN_VERSION, payload["ml_shadow"]["plans"], created_at)
+                try:
+                    payload["outcome_backfill"] = await self.outcomes.backfill(trade_date)
+                except Exception as exc:
+                    payload["outcome_backfill"] = {"error": str(exc)[:160]}
+                if now.weekday() == 4:
+                    try:
+                        payload["training_run"] = self.training.train(now.strftime("ml-%Y%m%d"))
+                    except Exception as exc:
+                        payload["training_run"] = {"status": "failed", "error": str(exc)[:160]}
                 payload["feature_store_status"] = feature_store_status()
+                payload["ml_system"] = inference_status()
                 payload.setdefault("data_quality", {})["continuous"] = {
                     "source": "东方财富免费涨停池 + 本地交易日缓存", "status": "validated",
                 }

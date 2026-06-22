@@ -28,6 +28,13 @@ function SecondaryWorkspace({ workspace, data }: { workspace: Workspace; data: D
   if (workspace === "sentiment") {
     return <div className="workspace-page"><div className="page-heading"><span>OVERNIGHT EXPECTATION</span><h1>{item.label}</h1><p>把舆情转换成次日待验证条件，不把传播热度当成真实资金。</p></div><div className="sentiment-board">{data.sentiment.map((entry) => <article key={entry.topic}><div className="heat">{entry.heat}</div><div><span>拥挤度 {entry.crowding}</span><h2>{entry.topic}</h2><p>{entry.catalyst}</p><footer>次日验证：{entry.validation}</footer></div></article>)}</div></div>;
   }
+  if (workspace === "review") {
+    const review = data.ml_review;
+    return <div className="workspace-page"><div className="page-heading"><span>MODEL OUTCOMES</span><h1>{item.label}</h1><p>统一按次日开盘可成交价格，跟踪1、3、5、10日净收益、最大有利波动和最大不利波动。</p></div>
+      <div className="review-summary">{(review?.summary ?? []).map((entry) => <article key={entry.horizon}><span>{entry.horizon}D</span><div><small>样本</small><strong>{entry.samples}</strong></div><div><small>胜率</small><strong>{entry.win_rate === null ? "—" : `${(entry.win_rate * 100).toFixed(1)}%`}</strong></div><div><small>平均净收益</small><strong className={(entry.average_return ?? 0) >= 0 ? "up" : "down"}>{entry.average_return === null ? "—" : `${entry.average_return >= 0 ? "+" : ""}${(entry.average_return * 100).toFixed(2)}%`}</strong></div></article>)}</div>
+      {review?.items.length ? <div className="review-table"><header><span>日期 / 标的</span><span>周期</span><span>净收益</span><span>MFE</span><span>MAE</span><span>可成交</span></header>{review.items.slice(0, 40).map((entry) => <div key={`${entry.trade_date}-${entry.code}-${entry.horizon}`}><span><b>{entry.name}</b><small>{entry.trade_date} · {entry.code}</small></span><span>{entry.horizon}日</span><span className={entry.net_return >= 0 ? "up" : "down"}>{entry.tradable ? `${entry.net_return >= 0 ? "+" : ""}${(entry.net_return * 100).toFixed(2)}%` : "—"}</span><span className="up">+{(entry.mfe * 100).toFixed(2)}%</span><span className="down">{(entry.mae * 100).toFixed(2)}%</span><span>{entry.tradable ? "是" : entry.blocked_reason ?? "否"}</span></div>)}</div> : <div className="empty-workspace"><Database size={34} /><h2>等待未来收益标签</h2><p>首批影子计划将在后续交易日自动回填，不调用通达信。</p></div>}
+    </div>;
+  }
   return <div className="workspace-page"><div className="page-heading"><span>WORKSPACE</span><h1>{item.label}</h1><p>该工作区已连接统一快照和认证结构，后续数据将随采集任务持续沉淀。</p></div><div className="empty-workspace"><Database size={34} /><h2>等待实时数据沉淀</h2><p>当前模式：{data.meta.freshness} · 来源：{data.meta.source}</p></div></div>;
 }
 
@@ -83,7 +90,7 @@ export default function App() {
         <div className="topbar-meta"><span><Clock3 size={14} />{new Date(data.meta.updated_at).toLocaleString("zh-CN", { hour12: false })}</span><span className={`source-badge ${data.meta.freshness}`}>{data.meta.source}</span><button className="icon-button"><Bell size={17} /><i>{data.alerts.length}</i></button><button className="refresh-button" onClick={refresh} disabled={refreshing} title="只调用免费接口与本地缓存，不消耗通达信 Token"><RefreshCw size={15} className={refreshing ? "spinning" : ""} />{refreshing ? "刷新中" : "零Token刷新"}</button></div>
       </header>
       {data.meta.warning ? <div className={`data-warning ${data.meta.freshness}`}><ShieldAlert size={15} />{data.meta.warning}</div> : null}
-      <div className="content-shell">{workspace === "cockpit" ? <Cockpit data={data} /> : workspace === "settings" ? <SettingsPage username={username} collection={data.collection_status} /> : <SecondaryWorkspace workspace={workspace} data={data} />}</div>
+      <div className="content-shell">{workspace === "cockpit" ? <Cockpit data={data} /> : workspace === "settings" ? <SettingsPage username={username} collection={data.collection_status} mlSystem={data.ml_system} /> : <SecondaryWorkspace workspace={workspace} data={data} />}</div>
     </main>
   </div>;
 }

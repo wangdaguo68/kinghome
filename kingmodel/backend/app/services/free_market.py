@@ -95,3 +95,27 @@ class EastMoneyFreeClient:
         if len(selected) < count:
             raise FreeMarketError(f"最近21日仅取得{len(selected)}个有效涨停池")
         return selected, pools
+
+    async def stock_bars(self, code: str, limit: int = 30) -> list[dict[str, Any]]:
+        market = "1" if code.startswith(("5", "6", "9")) else "0"
+        payload = await self._get_json(self.KLINE_URL, {
+            "secid": f"{market}.{code}", "klt": "101", "fqt": "0", "lmt": str(limit),
+            "end": "20500101", "iscca": "1", "fields1": "f1,f2,f3,f4,f5,f6,f7,f8",
+            "fields2": "f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61",
+        })
+        klines = (payload.get("data") or {}).get("klines") or []
+        rows: list[dict[str, Any]] = []
+        for item in klines:
+            fields = str(item).split(",")
+            if len(fields) < 10:
+                continue
+            try:
+                close = float(fields[2])
+                rows.append({
+                    "trade_date": fields[0].replace("-", ""), "open": float(fields[1]),
+                    "close": close, "high": float(fields[3]), "low": float(fields[4]),
+                    "volume": float(fields[5]), "amount": float(fields[6]), "pre_close": close - float(fields[9]),
+                })
+            except ValueError:
+                continue
+        return rows

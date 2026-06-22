@@ -1,9 +1,11 @@
 import { FormEvent, useState } from "react";
-import { CheckCircle2, DatabaseZap, KeyRound, LockKeyhole, ShieldCheck } from "lucide-react";
+import { BrainCircuit, CheckCircle2, DatabaseZap, KeyRound, LockKeyhole, ShieldCheck } from "lucide-react";
 import { api } from "../api";
 import type { DashboardData } from "../types";
 
-export function SettingsPage({ username, collection }: { username: string; collection: DashboardData["collection_status"] }) {
+const STAGE_LABEL = { rule_only: "规则主导", shadow_learning: "影子学习", assisted: "模型辅助", live_eligible: "具备实盘评审资格" } as const;
+
+export function SettingsPage({ username, collection, mlSystem }: { username: string; collection: DashboardData["collection_status"]; mlSystem?: DashboardData["ml_system"] }) {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
@@ -48,6 +50,19 @@ export function SettingsPage({ username, collection }: { username: string; colle
         <div><ShieldCheck size={18} /><span><b>手动刷新零消耗</b>页面刷新只调用免费接口与本地缓存，不触发通达信逐股分析。</span></div>
         <dl><div><dt>预算交易日</dt><dd>{collection.trade_date}</dd></div><div><dt>收盘任务</dt><dd>{collection.job?.status ?? "未执行"}</dd></div><div><dt>免费采集尝试</dt><dd>{collection.job?.free_attempts ?? 0}</dd></div></dl>
         {collection.tdx_calls.length ? <ul>{collection.tdx_calls.map((item) => <li key={`${item.code}-${item.called_at}`}><code>{item.code}</code><span>{item.called_at}</span><b>{item.status}</b></li>)}</ul> : <p>今日尚未调用通达信逐股补查。</p>}
+      </div>
+    </section>
+    <section className="model-card">
+      <header><div className="model-icon"><BrainCircuit size={21} /></div><div><span>MODEL LIFECYCLE</span><h2>机器学习引擎</h2></div><strong>{mlSystem ? STAGE_LABEL[mlSystem.stage] : "等待状态"}</strong></header>
+      <div className="model-body">
+        <div className="model-gates">
+          {[{ day: 20, label: "开始训练" }, { day: 60, label: "辅助评分" }, { day: 120, label: "实盘评审" }].map((gate) => {
+            const current = mlSystem?.outcome_days ?? 0;
+            return <article key={gate.day} className={current >= gate.day ? "reached" : ""}><span>{gate.day}<i>日</i></span><strong>{gate.label}</strong><div><i style={{ width: `${Math.min(100, current / gate.day * 100)}%` }} /></div><small>{Math.min(current, gate.day)} / {gate.day}</small></article>;
+          })}
+        </div>
+        <dl><div><dt>特征交易日</dt><dd>{mlSystem?.feature_days ?? 0}</dd></div><div><dt>结果交易日</dt><dd>{mlSystem?.outcome_days ?? 0}</dd></div><div><dt>Champion</dt><dd>{mlSystem?.champion_count ?? 0}</dd></div><div><dt>Challenger</dt><dd>{mlSystem?.challenger_count ?? 0}</dd></div></dl>
+        <p><ShieldCheck size={15} />未满120个结果交易日，或正期望、盈亏比、回撤、校准任一不达标，模型都不会改变正式计划。</p>
       </div>
     </section>
     <section className="security-card">

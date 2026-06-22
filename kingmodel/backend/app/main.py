@@ -9,7 +9,8 @@ from pydantic import BaseModel, Field
 
 from .auth import COOKIE_NAME, change_password, create_session, ensure_admin, parse_session, require_user, verify_login
 from .config import get_settings
-from .db import initialize, snapshot_history
+from .db import initialize, model_system_status, snapshot_history
+from .ml.training_pipeline import TrainingPipeline
 from .services.close_collector import CloseCollector, SHANGHAI
 
 
@@ -114,6 +115,16 @@ async def refresh(_: Annotated[str, Depends(require_user)]) -> dict:
 @app.get("/api/history")
 def history(_: Annotated[str, Depends(require_user)]) -> dict:
     return {"items": snapshot_history()}
+
+
+@app.get("/api/ml/status")
+def ml_status(_: Annotated[str, Depends(require_user)]) -> dict:
+    return model_system_status()
+
+
+@app.post("/api/ml/train")
+def train_models(_: Annotated[str, Depends(require_user)]) -> dict:
+    return TrainingPipeline().train()
 
 
 @app.get("/api/sentiment")

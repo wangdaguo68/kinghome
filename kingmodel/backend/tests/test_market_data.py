@@ -4,7 +4,7 @@ import pytest
 
 from app.services.market_validation import InvalidMarketData, is_trade_candidate, validate_breadth_totals, validate_result
 from app.services.collector import _factor_type
-from app.services.ladder import calculate_ladder_metrics
+from app.services.ladder import calculate_ladder_metrics, trade_dates_from_tdx_kline
 from app.services.planning import build_planned_targets
 from app.services.tushare_fallback import TushareFallback
 
@@ -59,6 +59,18 @@ def test_ladder_rejects_interval_board_as_consecutive() -> None:
     )
     assert metrics.consecutive == 1
     assert metrics.recent_limit_count == 3
+
+
+def test_tdx_kline_dates_ignore_future_or_zero_volume_bar() -> None:
+    payload = {
+        "ListHead": {"ItemHead": ["Data", "Open", "Volume"]},
+        "ListItem": [
+            {"Item": ["20260617", "4074", "100"]},
+            {"Item": ["20260618", "4094", "100"]},
+            {"Item": ["20260622", "4090", "0"]},
+        ],
+    }
+    assert trade_dates_from_tdx_kline(payload, "2026.06.18", 15) == ["20260618", "20260617"]
 
 
 def test_planned_targets_are_ranked_deduplicated_and_exclude_unsupported_markets() -> None:

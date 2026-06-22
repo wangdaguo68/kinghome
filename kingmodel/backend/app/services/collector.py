@@ -23,7 +23,7 @@ from .market_validation import (
     validate_breadth_totals,
     validate_result,
 )
-from .ladder import calculate_ladder_metrics
+from .ladder import calculate_ladder_metrics, trade_dates_from_tdx_kline
 from .planning import build_planned_targets
 from .tdx_mcp import TdxMcpClient, TdxMcpError
 from .tushare_fallback import TushareError, TushareFallback
@@ -242,6 +242,27 @@ class Collector:
             and "ST" not in str(row.get("sec_name", "")).upper()
         ]
 
+    async def _recent_trade_dates(self, target_date: str, count: int = 15) -> tuple[list[str], str, str]:
+        tdx_error = ""
+        try:
+            result = await self.client.call_tool(
+                "tdx_kline",
+                {
+                    "code": "000001",
+                    "setcode": "1",
+                    "target": "0",
+                    "period": "4",
+                    "wantNum": str(max(30, count * 2)),
+                    "startxh": "0",
+                    "tqFlag": "0",
+                },
+            )
+            return trade_dates_from_tdx_kline(result, target_date, count), "通达信指数日线", ""
+        except (TdxMcpError, httpx.HTTPError, ValueError, KeyError) as exc:
+            tdx_error = str(exc)[:120]
+        dates = await self.tushare.recent_trade_dates(target_date, count)
+        return dates, "Tushare交易日历", f"通达信交易日序列失败：{tdx_error}"
+
     async def refresh(self) -> dict[str, Any]:
         current = deepcopy(self.current())
         results: dict[str, dict[str, Any]] = {}
@@ -345,7 +366,7 @@ class Collector:
         ladder: list[dict[str, Any]] = []
         if "continuous" in results:
             try:
-                trade_dates = await self.tushare.recent_trade_dates(analysis_date, 15)
+                trade_dates, calendar_source, calendar_reason = await self._recent_trade_dates(analysis_date, 15)
                 causes = await asyncio.gather(*(
                     self._cause(str(row.get("sec_code", "")), analysis_date, fallback_concept)
                     for row in continuous_rows
@@ -368,7 +389,11 @@ class Collector:
                     })
                 ladder.sort(key=lambda item: (-item["height"], -item["change"], item["code"]))
                 payload["breadth"]["continuous"] = len(ladder)
-                quality["continuous"] = {"source": "通达信涨停分析 + Tushare交易日历", "status": "validated"}
+                quality["continuous"] = {
+                    "source": f"通达信涨停分析 + {calendar_source}",
+                    "status": "validated" if calendar_source.startswith("通达信") else "fallback",
+                    **({"reason": calendar_reason} if calendar_reason else {}),
+                }
             except (TushareError, httpx.HTTPError, ValueError, KeyError) as exc:
                 quality["continuous"] = {"source": "最近可信快照", "status": "stale", "reason": str(exc)[:120]}
             else:
@@ -385,7 +410,7 @@ class Collector:
             },
         ]
 
-        if quality.get("continuous", {}).get("status") == "validated":
+        if quality.get("continuous", {}).get("status") in {"validated", "fallback"}:
             payload["ladder"] = ladder
 
         cores: list[dict[str, Any]] = []

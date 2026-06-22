@@ -1,0 +1,199 @@
+from __future__ import annotations
+
+import asyncio
+from copy import deepcopy
+from datetime import datetime, timedelta, timezone
+from typing import Any
+
+from ..config import get_settings
+from ..db import (
+    collection_status,
+    complete_tdx_call,
+    finish_collection_job,
+    get_cause_cache,
+    latest_snapshot,
+    latest_trusted_snapshot,
+    load_daily_pools,
+    reserve_tdx_call,
+    save_cause_cache,
+    save_snapshot,
+    start_collection_job,
+    upsert_daily_pool,
+)
+from .collector import Collector, DEMO_DASHBOARD
+from .free_market import EastMoneyFreeClient, FreeMarketError
+from .market_validation import is_trade_candidate
+from .planning import build_planned_targets
+
+
+SHANGHAI = timezone(timedelta(hours=8), "Asia/Shanghai")
+
+
+class CloseCollector:
+    def __init__(self) -> None:
+        self.settings = get_settings()
+        self.free = EastMoneyFreeClient()
+        self.tdx = Collector()
+        self._lock = asyncio.Lock()
+
+    @staticmethod
+    def _compact_date(value: str) -> str:
+        return value.replace(".", "").replace("-", "")
+
+    def current(self) -> dict[str, Any]:
+        payload = deepcopy(latest_trusted_snapshot() or latest_snapshot() or DEMO_DASHBOARD)
+        trade_date = self._compact_date(str(payload.get("meta", {}).get("trade_date", "")))
+        today = datetime.now(SHANGHAI).strftime("%Y%m%d")
+        payload.setdefault("meta", {})["version_label"] = "今日收盘版" if trade_date == today else "上一可信收盘版"
+        payload["collection_status"] = collection_status(today, self.settings.tdx_daily_call_limit)
+        return payload
+
+    @staticmethod
+    def _free_cause(row: dict[str, Any]) -> dict[str, Any]:
+        industry = str(row.get("industry") or "市场热点")
+        return {
+            "concepts": [industry],
+            "primary_factor": f"{industry}方向形成涨停资金共振，具体催化等待公告与公开资讯交叉确认",
+            "factor_type": "板块共振",
+            "confidence": "中",
+            "evidence": f"东方财富涨停池所属行业：{industry}；首次封板时间：{row.get('first_limit_time') or '未提供'}",
+            "source": "东方财富免费涨停池",
+        }
+
+    async def _enrich_causes(self, trade_date: str, ladder: list[dict[str, Any]]) -> None:
+        if not self.settings.tdx_close_enrichment_enabled:
+            return
+        for item in ladder:
+            if item["confidence"] == "高":
+                continue
+            now = datetime.now(SHANGHAI).isoformat(timespec="seconds")
+            if not reserve_tdx_call(trade_date, item["code"], "limit_up_cause", now, self.settings.tdx_daily_call_limit):
+                continue
+            cause = await self.tdx._cause(item["code"], trade_date, item["concepts"][0])
+            valid = bool(cause.get("analysis_valid"))
+            complete_tdx_call(trade_date, item["code"], "limit_up_cause", "success" if valid else "failed")
+            if not valid:
+                continue
+            cleaned = {key: value for key, value in cause.items() if key not in {"limit_dates", "analysis_valid"}}
+            save_cause_cache(trade_date, item["code"], cleaned, True, now)
+            item.update(cleaned)
+
+    async def refresh(self, *, allow_tdx: bool = False) -> dict[str, Any]:
+        now = datetime.now(SHANGHAI)
+        close_ready = (now.hour, now.minute) >= (self.settings.close_collection_hour, self.settings.close_collection_minute)
+        if not close_ready:
+            payload = self.current()
+            payload["meta"]["warning"] = "盘中继续展示上一可信收盘版；15:10 后生成今日收盘版。"
+            return payload
+
+        async with self._lock:
+            today = now.strftime("%Y%m%d")
+            existing_job = collection_status(today, self.settings.tdx_daily_call_limit).get("job") or {}
+            if existing_job.get("status") == "published":
+                return self.current()
+            try:
+                trade_dates, fetched = await self.free.recent_pools(6)
+            except Exception as exc:
+                payload = self.current()
+                payload["meta"]["warning"] = f"免费收盘数据获取失败，继续展示上一可信版本：{str(exc)[:120]}"
+                return payload
+
+            trade_date = trade_dates[0]
+            if not start_collection_job(trade_date, now.isoformat(timespec="seconds")):
+                return self.current()
+
+            try:
+                for date, rows in fetched.items():
+                    upsert_daily_pool(date, rows)
+                pools = load_daily_pools(trade_dates)
+                today_rows = pools[trade_date]
+                if len(today_rows) < 5:
+                    raise FreeMarketError("当日免费涨停池未通过完整性校验")
+
+                code_sets = {date: {str(row["code"]) for row in rows} for date, rows in pools.items()}
+                ladder: list[dict[str, Any]] = []
+                for row in today_rows:
+                    code = str(row["code"])
+                    if not is_trade_candidate(code):
+                        continue
+                    consecutive = 0
+                    for date in trade_dates:
+                        if code not in code_sets[date]:
+                            break
+                        consecutive += 1
+                    if consecutive < 2:
+                        continue
+                    cached = get_cause_cache(trade_date, code)
+                    cause = cached or self._free_cause(row)
+                    if not cached:
+                        save_cause_cache(trade_date, code, cause, False, now.isoformat(timespec="seconds"))
+                    ladder.append({
+                        "name": row["name"], "code": code, "height": consecutive,
+                        "recent_limit_count": sum(code in code_sets[date] for date in trade_dates[:5]),
+                        "recent_window_days": min(5, len(trade_dates)), "change": float(row["change"]), **cause,
+                    })
+                ladder.sort(key=lambda item: (-item["height"], -item["change"], item["code"]))
+
+                if allow_tdx:
+                    await self._enrich_causes(trade_date, ladder)
+
+                diagnostic = latest_snapshot()
+                published = latest_trusted_snapshot()
+                base = diagnostic if diagnostic and self._compact_date(str(diagnostic["meta"]["trade_date"])) == trade_date else published
+                payload = deepcopy(base or DEMO_DASHBOARD)
+                payload["ladder"] = ladder
+                same_day_breadth = bool(diagnostic and self._compact_date(str(diagnostic["meta"]["trade_date"])) == trade_date)
+                if not same_day_breadth:
+                    payload["breadth"]["limit_up"] = len(today_rows)
+                payload["breadth"]["continuous"] = len(ladder)
+
+                cores: list[dict[str, Any]] = [
+                    {
+                        "name": item["name"], "code": item["code"], "kind": "连板情绪核心",
+                        "score": min(98, 80 + item["height"] * 3), "change": item["change"],
+                        "evidence": f"连续{item['height']}板、近5日{item['recent_limit_count']}板；{item['primary_factor']}",
+                        "source": item["source"], "confidence": item["confidence"],
+                    }
+                    for item in ladder
+                ]
+                ladder_codes = {item["code"] for item in ladder}
+                for row in today_rows:
+                    code = str(row["code"])
+                    if code.startswith(("300", "301")) and float(row["change"]) >= 15 and code not in ladder_codes:
+                        cores.append({
+                            "name": row["name"], "code": code, "kind": "创业板20cm弹性核心",
+                            "score": min(96, round(72 + float(row["change"]))), "change": float(row["change"]),
+                            "evidence": "创业板高弹性涨停，观察板块扩散与次日溢价",
+                            "source": "东方财富免费涨停池", "confidence": "中",
+                        })
+                payload["cores"] = cores
+                payload["planned_targets"] = build_planned_targets(
+                    cores, ladder, cycle=str(payload["state"].get("cycle", "高波动分歧")),
+                    loss_score=float(payload["state"].get("loss", 50)), freshness="live",
+                    negative_names=[str(item.get("name", "")) for item in payload.get("negative", [])],
+                )
+                payload.setdefault("data_quality", {})["continuous"] = {
+                    "source": "东方财富免费涨停池 + 本地交易日缓存", "status": "validated",
+                }
+                payload["alerts"] = [
+                    item for item in payload.get("alerts", []) if item.get("title") != "涨停承接"
+                ] + [{
+                    "level": "low", "title": "涨停承接",
+                    "detail": f"免费涨停池{len(today_rows)}只、可交易真实连板{len(ladder)}只；逐股原因使用持久化缓存",
+                }]
+                payload["meta"].update({
+                    "trade_date": f"{trade_date[:4]}.{trade_date[4:6]}.{trade_date[6:]}",
+                    "updated_at": now.isoformat(timespec="seconds"),
+                    "source": "东方财富免费涨停池 + 本地持久化缓存",
+                    "freshness": "live", "version_label": "今日收盘版",
+                    "warning": "手动刷新不调用通达信 MCP；涨停与连板为今日免费收盘数据。",
+                })
+                payload["collection_status"] = collection_status(trade_date, self.settings.tdx_daily_call_limit)
+                save_snapshot(payload, official=True)
+                finish_collection_job(trade_date, "published", now.isoformat(timespec="seconds"))
+                return self.current()
+            except Exception as exc:
+                finish_collection_job(trade_date, "failed", datetime.now(SHANGHAI).isoformat(timespec="seconds"), str(exc)[:300])
+                payload = self.current()
+                payload["meta"]["warning"] = f"今日收盘版生成失败，继续展示上一可信版本：{str(exc)[:120]}"
+                return payload

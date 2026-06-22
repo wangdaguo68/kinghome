@@ -1,7 +1,7 @@
 export type Freshness = "live" | "stale" | "sample";
 
 export interface DashboardData {
-  meta: { trade_date: string; updated_at: string; source: string; freshness: Freshness; warning?: string };
+  meta: { trade_date: string; updated_at: string; source: string; freshness: Freshness; warning?: string; version_label?: string };
   permission: { label: string; position_limit: number; allowed: string; forbidden: string };
   state: { cycle: string; structure: string; money: number; loss: number; trend: number; speculation: number };
   breadth: { eligible: number; up: number; down: number; flat: number; median: number; limit_up: number; limit_down: number; failed_limit: number; continuous: number };
@@ -15,6 +15,13 @@ export interface DashboardData {
   data_quality: Record<string, { source: string; status: string; reason?: string }>;
   sentiment: Array<{ topic: string; heat: number; crowding: string; catalyst: string; validation: string }>;
   checkpoints: string[];
+  collection_status: {
+    trade_date: string;
+    job: { status: string; started_at: string; finished_at?: string; free_attempts: number; error?: string } | null;
+    tdx_calls_used: number;
+    tdx_daily_limit: number;
+    tdx_calls: Array<{ code: string; called_at: string; status: string }>;
+  };
 }
 
 export type Workspace = "cockpit" | "map" | "sectors" | "cores" | "sentiment" | "review" | "history" | "settings";

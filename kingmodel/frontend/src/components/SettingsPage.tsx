@@ -1,8 +1,9 @@
 import { FormEvent, useState } from "react";
-import { CheckCircle2, KeyRound, LockKeyhole } from "lucide-react";
+import { CheckCircle2, DatabaseZap, KeyRound, LockKeyhole, ShieldCheck } from "lucide-react";
 import { api } from "../api";
+import type { DashboardData } from "../types";
 
-export function SettingsPage({ username }: { username: string }) {
+export function SettingsPage({ username, collection }: { username: string; collection: DashboardData["collection_status"] }) {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
@@ -39,8 +40,16 @@ export function SettingsPage({ username }: { username: string }) {
     <div className="page-heading">
       <span>SYSTEM / ACCOUNT SECURITY</span>
       <h1>系统设置</h1>
-      <p>管理当前单用户账户的登录密码。</p>
+      <p>管理账户密码、免费收盘任务和通达信每日硬预算。</p>
     </div>
+    <section className="budget-card">
+      <header><div className="security-icon"><DatabaseZap size={20} /></div><div><span>DATA BUDGET</span><h2>通达信 Token 防护</h2></div><strong>{collection.tdx_calls_used}<small> / {collection.tdx_daily_limit}</small></strong></header>
+      <div className="budget-body">
+        <div><ShieldCheck size={18} /><span><b>手动刷新零消耗</b>页面刷新只调用免费接口与本地缓存，不触发通达信逐股分析。</span></div>
+        <dl><div><dt>预算交易日</dt><dd>{collection.trade_date}</dd></div><div><dt>收盘任务</dt><dd>{collection.job?.status ?? "未执行"}</dd></div><div><dt>免费采集尝试</dt><dd>{collection.job?.free_attempts ?? 0}</dd></div></dl>
+        {collection.tdx_calls.length ? <ul>{collection.tdx_calls.map((item) => <li key={`${item.code}-${item.called_at}`}><code>{item.code}</code><span>{item.called_at}</span><b>{item.status}</b></li>)}</ul> : <p>今日尚未调用通达信逐股补查。</p>}
+      </div>
+    </section>
     <section className="security-card">
       <header>
         <div className="security-icon"><LockKeyhole size={20} /></div>

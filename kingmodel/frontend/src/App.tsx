@@ -79,11 +79,11 @@ export default function App() {
     <main className="main-shell">
       <header className="topbar">
         <button className="menu-button" onClick={() => setSidebarOpen(true)}><Menu size={19} /></button>
-        <div className="market-title"><span>{nav.find((item) => item.id === workspace)?.label}</span><h1>{data.meta.trade_date}<ChevronDown size={15} /></h1></div>
-        <div className="topbar-meta"><span><Clock3 size={14} />{new Date(data.meta.updated_at).toLocaleString("zh-CN", { hour12: false })}</span><span className={`source-badge ${data.meta.freshness}`}>{data.meta.source}</span><button className="icon-button"><Bell size={17} /><i>{data.alerts.length}</i></button><button className="refresh-button" onClick={refresh} disabled={refreshing}><RefreshCw size={15} className={refreshing ? "spinning" : ""} />{refreshing ? "刷新中" : "刷新"}</button></div>
+        <div className="market-title"><span>{nav.find((item) => item.id === workspace)?.label}</span><h1>{data.meta.trade_date}<em>{data.meta.version_label ?? "可信快照"}</em><ChevronDown size={15} /></h1></div>
+        <div className="topbar-meta"><span><Clock3 size={14} />{new Date(data.meta.updated_at).toLocaleString("zh-CN", { hour12: false })}</span><span className={`source-badge ${data.meta.freshness}`}>{data.meta.source}</span><button className="icon-button"><Bell size={17} /><i>{data.alerts.length}</i></button><button className="refresh-button" onClick={refresh} disabled={refreshing} title="只调用免费接口与本地缓存，不消耗通达信 Token"><RefreshCw size={15} className={refreshing ? "spinning" : ""} />{refreshing ? "刷新中" : "零Token刷新"}</button></div>
       </header>
       {data.meta.warning ? <div className={`data-warning ${data.meta.freshness}`}><ShieldAlert size={15} />{data.meta.warning}</div> : null}
-      <div className="content-shell">{workspace === "cockpit" ? <Cockpit data={data} /> : workspace === "settings" ? <SettingsPage username={username} /> : <SecondaryWorkspace workspace={workspace} data={data} />}</div>
+      <div className="content-shell">{workspace === "cockpit" ? <Cockpit data={data} /> : workspace === "settings" ? <SettingsPage username={username} collection={data.collection_status} /> : <SecondaryWorkspace workspace={workspace} data={data} />}</div>
     </main>
   </div>;
 }

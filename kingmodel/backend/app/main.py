@@ -1,5 +1,6 @@
 import asyncio
 from contextlib import asynccontextmanager
+from datetime import datetime
 from typing import Annotated
 
 from fastapi import Cookie, Depends, FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
@@ -9,17 +10,24 @@ from pydantic import BaseModel, Field
 from .auth import COOKIE_NAME, change_password, create_session, ensure_admin, parse_session, require_user, verify_login
 from .config import get_settings
 from .db import initialize, snapshot_history
-from .services.collector import Collector
+from .services.close_collector import CloseCollector, SHANGHAI
 
 
-collector = Collector()
+collector = CloseCollector()
 
 
 async def collection_loop() -> None:
-    interval = max(30, get_settings().collect_interval_seconds)
     while True:
-        await asyncio.sleep(interval)
-        await collector.refresh()
+        now = datetime.now(SHANGHAI)
+        status = collector.current().get("collection_status", {})
+        job = status.get("job") or {}
+        ready = (now.hour, now.minute) >= (get_settings().close_collection_hour, get_settings().close_collection_minute)
+        retry_window = now.hour == 15 and now.minute <= 30
+        if now.weekday() < 5 and ready and retry_window and job.get("status") != "published" and int(job.get("free_attempts") or 0) < 3:
+            await collector.refresh(allow_tdx=True)
+            await asyncio.sleep(600)
+        else:
+            await asyncio.sleep(60)
 
 
 @asynccontextmanager
@@ -54,12 +62,14 @@ class PasswordChangeRequest(BaseModel):
 @app.get("/api/health")
 def health() -> dict:
     settings = get_settings()
+    status = collector.current().get("collection_status", {})
     return {
         "status": "ok",
         "mcp_configured": bool(settings.tdx_mcp_url and settings.tdx_mcp_token),
         "tushare_configured": bool(settings.tushare_token),
-        "mcp_last_success": collector.client.last_success_at,
-        "mcp_last_error": collector.last_error,
+        "tdx_close_enrichment_enabled": settings.tdx_close_enrichment_enabled,
+        "tdx_calls_used": status.get("tdx_calls_used", 0),
+        "tdx_daily_limit": status.get("tdx_daily_limit", settings.tdx_daily_call_limit),
     }
 
 
@@ -97,7 +107,7 @@ def dashboard(_: Annotated[str, Depends(require_user)]) -> dict:
 
 @app.post("/api/refresh")
 async def refresh(_: Annotated[str, Depends(require_user)]) -> dict:
-    return await collector.refresh()
+    return await collector.refresh(allow_tdx=False)
 
 
 @app.get("/api/history")

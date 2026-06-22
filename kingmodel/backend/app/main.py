@@ -34,6 +34,7 @@ async def collection_loop() -> None:
 async def lifespan(_: FastAPI):
     initialize()
     ensure_admin()
+    collector.bootstrap_shadow()
     task = asyncio.create_task(collection_loop())
     yield
     task.cancel()

@@ -10,16 +10,21 @@ from ..db import (
     collection_status,
     complete_tdx_call,
     finish_collection_job,
+    feature_store_status,
     get_cause_cache,
     latest_snapshot,
     latest_trusted_snapshot,
     load_daily_pools,
     reserve_tdx_call,
     save_cause_cache,
+    save_feature_snapshots,
+    save_shadow_plans,
     save_snapshot,
     start_collection_job,
     upsert_daily_pool,
 )
+from ..engine.framework import assess_market, build_feature_snapshots
+from ..engine.rule_selector import FEATURE_VERSION, PLAN_VERSION, build_shadow_top3
 from .collector import Collector, DEMO_DASHBOARD
 from .free_market import EastMoneyFreeClient, FreeMarketError
 from .market_validation import is_trade_candidate
@@ -46,7 +51,28 @@ class CloseCollector:
         today = datetime.now(SHANGHAI).strftime("%Y%m%d")
         payload.setdefault("meta", {})["version_label"] = "今日收盘版" if trade_date == today else "上一可信收盘版"
         payload["collection_status"] = collection_status(today, self.settings.tdx_daily_call_limit)
+        if "ml_shadow" not in payload:
+            assessment = assess_market(payload)
+            payload["ml_shadow"] = build_shadow_top3(payload, assessment)
+        payload["feature_store_status"] = feature_store_status()
         return payload
+
+    def bootstrap_shadow(self) -> None:
+        """Backfill the latest trusted snapshot locally; this never calls a market-data service."""
+        payload = deepcopy(latest_trusted_snapshot() or latest_snapshot())
+        if not payload:
+            return
+        trade_date = self._compact_date(str(payload.get("meta", {}).get("trade_date", "")))
+        if len(trade_date) != 8:
+            return
+        assessment = assess_market(payload)
+        shadow = build_shadow_top3(payload, assessment)
+        now = datetime.now(SHANGHAI).isoformat(timespec="seconds")
+        save_feature_snapshots(trade_date, FEATURE_VERSION, build_feature_snapshots(payload, assessment), now)
+        save_shadow_plans(trade_date, PLAN_VERSION, shadow["plans"], now)
+        if payload.get("ml_shadow") != shadow:
+            payload["ml_shadow"] = shadow
+            save_snapshot(payload, official=True)
 
     @staticmethod
     def _free_cause(row: dict[str, Any]) -> dict[str, Any]:
@@ -167,11 +193,24 @@ class CloseCollector:
                             "source": "东方财富免费涨停池", "confidence": "中",
                         })
                 payload["cores"] = cores
+                assessment = assess_market(payload)
+                payload.setdefault("state", {}).update({
+                    "money": assessment["money"], "loss": assessment["loss"],
+                    "trend": assessment["trend"], "speculation": assessment["speculation"],
+                    "cycle": assessment["cycle"], "structure": assessment["style"],
+                })
                 payload["planned_targets"] = build_planned_targets(
                     cores, ladder, cycle=str(payload["state"].get("cycle", "高波动分歧")),
                     loss_score=float(payload["state"].get("loss", 50)), freshness="live",
                     negative_names=[str(item.get("name", "")) for item in payload.get("negative", [])],
                 )
+                payload["ml_shadow"] = build_shadow_top3(payload, assessment)
+                created_at = now.isoformat(timespec="seconds")
+                save_feature_snapshots(
+                    trade_date, FEATURE_VERSION, build_feature_snapshots(payload, assessment), created_at
+                )
+                save_shadow_plans(trade_date, PLAN_VERSION, payload["ml_shadow"]["plans"], created_at)
+                payload["feature_store_status"] = feature_store_status()
                 payload.setdefault("data_quality", {})["continuous"] = {
                     "source": "东方财富免费涨停池 + 本地交易日缓存", "status": "validated",
                 }

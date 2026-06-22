@@ -1,4 +1,4 @@
-import { AlertTriangle, Ban, Check, ChevronRight, CircleX, Clock3, Database, Eye, Radio, ShieldAlert, Target, TrendingDown, TrendingUp, Zap } from "lucide-react";
+import { AlertTriangle, Ban, BrainCircuit, Check, ChevronRight, CircleX, Clock3, Database, Eye, Radio, ShieldAlert, Target, TrendingDown, TrendingUp, Zap } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 import type { DashboardData } from "../types";
 import { FlowMap } from "./FlowMap";
@@ -42,6 +42,23 @@ function PlannedTargets({ items }: { items: DashboardData["planned_targets"] }) 
   </article>)}</div>;
 }
 
+const SHADOW_METRICS = [
+  ["calibrated_probability", "概率"], ["expectancy_payoff", "期望"], ["mainline_core", "主线"],
+  ["style_cycle_match", "适配"], ["tradeability", "交易"], ["data_model_reliability", "可靠"],
+] as const;
+
+function ShadowTop3({ shadow, featureDays = 0 }: { shadow: DashboardData["ml_shadow"]; featureDays?: number }) {
+  if (!shadow) return null;
+  return <Panel title="模型影子 Top3" kicker="SHADOW RANKING · 暂不执行" className="shadow-panel">
+    <div className="shadow-status"><BrainCircuit size={17} /><div><strong>规则基线正在积累走步样本</strong><span>{shadow.reason}</span></div><em>{featureDays} 个特征日</em></div>
+    {shadow.plans.length ? <div className="shadow-grid">{shadow.plans.map((item) => <article key={item.code}>
+      <header><span>#{item.rank}</span><div><small>{item.kind}</small><strong>{item.name}<b>{item.code}</b></strong></div><em>{item.score}<i>分</i></em></header>
+      <div className="shadow-metrics">{SHADOW_METRICS.map(([key, label]) => <div key={key}><span>{label}</span><b>{item.score_breakdown[key]}</b></div>)}<div className="risk"><span>扣分</span><b>-{item.score_breakdown.risk_penalty}</b></div></div>
+      <p>{item.blocked_reason}</p><footer><span>{item.holding_period}</span><small>仅记录结果，不进入正式计划</small></footer>
+    </article>)}</div> : <div className="shadow-empty"><ShieldAlert size={20} /><span>{shadow.reason}</span></div>}
+  </Panel>;
+}
+
 export function Cockpit({ data }: { data: DashboardData }) {
   const upRatio = Math.round(data.breadth.up / Math.max(1, data.breadth.eligible) * 100);
   return <div className="cockpit-grid">
@@ -75,6 +92,8 @@ export function Cockpit({ data }: { data: DashboardData }) {
     </Panel>
 
     <Panel title="明日计划标的" kicker="EXECUTION WATCHLIST · 只列达标核心" className="plans-panel"><PlannedTargets items={data.planned_targets} /></Panel>
+
+    <ShadowTop3 shadow={data.ml_shadow} featureDays={data.feature_store_status?.feature_days} />
 
     <Panel title="核心梯队" kicker="ALL QUALIFIED CORES · 排除科创/北交" className="cores-panel"><CoreGroups cores={data.cores} /></Panel>
 

@@ -1,0 +1,88 @@
+from app.config import get_settings
+from app.db import feature_store_status, initialize, save_feature_snapshots, save_shadow_plans
+from app.engine.framework import assess_market, build_feature_snapshots
+from app.engine.rule_selector import (
+    FEATURE_VERSION,
+    PLAN_VERSION,
+    build_shadow_top3,
+    expected_value,
+    passes_expectancy_gate,
+    required_payoff_ratio,
+)
+
+
+def sample_payload() -> dict:
+    return {
+        "breadth": {
+            "eligible": 5200, "up": 3400, "median": 0.8, "limit_up": 85,
+            "limit_down": 5, "failed_limit": 12,
+        },
+        "capacity": {"sample": 100, "up": 68, "median": 1.2},
+        "mainlines": [{"name": "算力", "score": 88}],
+        "negative": [{"name": "地产", "score": 72}],
+        "ladder": [
+            {"code": "600001", "height": 5, "confidence": "高"},
+            {"code": "600002", "height": 3, "confidence": "中"},
+        ],
+        "cores": [
+            {"code": "600001", "name": "甲", "kind": "连板情绪核心", "score": 96, "change": 10, "confidence": "高"},
+            {"code": "600002", "name": "乙", "kind": "趋势容量核心", "score": 91, "change": 4, "confidence": "中"},
+            {"code": "300001", "name": "丙", "kind": "创业板20cm弹性核心", "score": 87, "change": 20, "confidence": "中"},
+            {"code": "600003", "name": "丁", "kind": "趋势容量核心", "score": 70, "change": 2, "confidence": "低"},
+        ],
+    }
+
+
+def test_market_assessment_has_explicit_style_cycle_and_scores() -> None:
+    result = assess_market(sample_payload())
+    assert result["style"] in {"趋势投机共振", "趋势风格", "投机连板风格", "混合轮动"}
+    assert result["cycle"] in {"主升", "高位震荡", "退潮防守", "试错修复", "混沌轮动"}
+    assert all(0 <= result[key] <= 100 for key in ("money", "loss", "trend", "speculation"))
+
+
+def test_shadow_top3_is_strictly_ranked_but_never_live_before_validation() -> None:
+    payload = sample_payload()
+    shadow = build_shadow_top3(payload, assess_market(payload))
+    plans = shadow["plans"]
+    assert len(plans) == 3
+    assert [item["rank"] for item in plans] == [1, 2, 3]
+    assert all(left["score"] > right["score"] for left, right in zip(plans, plans[1:]))
+    assert all(0 <= item["score"] <= 100 for item in plans)
+    assert all(item["score_breakdown"]["expectancy_payoff"] == 0 for item in plans)
+    assert all(item["eligible_for_live"] is False for item in plans)
+
+
+def test_retreat_cycle_returns_empty_plan() -> None:
+    result = build_shadow_top3(sample_payload(), {"style": "混合轮动", "cycle": "退潮防守", "loss": 85})
+    assert result["plans"] == []
+    assert result["status"] == "empty"
+
+
+def test_payoff_gate_requires_positive_expectancy_and_safety_margin() -> None:
+    assert expected_value(0.40, 2.2, 1.0) > 0
+    assert required_payoff_ratio(0.40) == 2.2
+    assert passes_expectancy_gate(0.40, 2.2, 1.0)
+    assert required_payoff_ratio(0.30) >= 3.0
+    assert passes_expectancy_gate(0.30, 3.0, 1.0)
+    assert not passes_expectancy_gate(0.70, 0.2, 1.0)
+
+
+def test_feature_store_is_versioned_and_idempotent(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "features.db"))
+    get_settings.cache_clear()
+    initialize()
+    payload = sample_payload()
+    assessment = assess_market(payload)
+    features = build_feature_snapshots(payload, assessment)
+    save_feature_snapshots("20260622", FEATURE_VERSION, features, "2026-06-22T15:10:00+08:00")
+    save_feature_snapshots("20260622", FEATURE_VERSION, features, "2026-06-22T15:11:00+08:00")
+    shadow = build_shadow_top3(payload, assessment)
+    save_shadow_plans("20260622", PLAN_VERSION, shadow["plans"], "2026-06-22T15:11:00+08:00")
+    status = feature_store_status()
+    assert status == {
+        "feature_days": 1,
+        "outcome_days": 0,
+        "latest_trade_date": "20260622",
+        "feature_version": FEATURE_VERSION,
+    }
+    get_settings.cache_clear()

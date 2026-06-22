@@ -12,6 +12,24 @@ export interface DashboardData {
   alerts: Array<{ level: string; title: string; detail: string }>;
   ladder: Array<{ name: string; code: string; height: number; recent_limit_count?: number; recent_window_days?: number; change: number; concepts: string[]; primary_factor: string; factor_type: string; confidence: string; evidence: string; source: string }>;
   planned_targets: Array<{ name: string; code: string; kind: string; priority: string; score: number; logic: string; observation: string; invalidation: string; holding_period: string; source: string; confidence: string }>;
+  ml_shadow?: {
+    mode: "shadow";
+    status: string;
+    reason: string;
+    feature_version?: string;
+    plan_version?: string;
+    market_style?: string;
+    cycle?: string;
+    plans: Array<{
+      rank: number; name: string; code: string; kind: string; score: number; holding_period: string;
+      eligible_for_live: boolean; blocked_reason: string; evidence: string;
+      score_breakdown: {
+        calibrated_probability: number; expectancy_payoff: number; mainline_core: number;
+        style_cycle_match: number; tradeability: number; data_model_reliability: number; risk_penalty: number;
+      };
+    }>;
+  };
+  feature_store_status?: { feature_days: number; outcome_days: number; latest_trade_date: string | null; feature_version: string | null };
   data_quality: Record<string, { source: string; status: string; reason?: string }>;
   sentiment: Array<{ topic: string; heat: number; crowding: string; catalyst: string; validation: string }>;
   checkpoints: string[];

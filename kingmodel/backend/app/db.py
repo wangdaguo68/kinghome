@@ -74,6 +74,33 @@ CREATE TABLE IF NOT EXISTS tdx_call_audit (
   UNIQUE (trade_date, code, purpose)
 );
 CREATE INDEX IF NOT EXISTS idx_tdx_call_audit_date ON tdx_call_audit(trade_date);
+CREATE TABLE IF NOT EXISTS feature_snapshots (
+  trade_date TEXT NOT NULL,
+  feature_version TEXT NOT NULL,
+  scope TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  payload TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (trade_date, feature_version, scope, entity_id)
+);
+CREATE TABLE IF NOT EXISTS shadow_plans (
+  trade_date TEXT NOT NULL,
+  plan_version TEXT NOT NULL,
+  rank INTEGER NOT NULL,
+  code TEXT NOT NULL,
+  payload TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (trade_date, plan_version, code)
+);
+CREATE TABLE IF NOT EXISTS plan_outcomes (
+  trade_date TEXT NOT NULL,
+  plan_version TEXT NOT NULL,
+  code TEXT NOT NULL,
+  horizon INTEGER NOT NULL,
+  payload TEXT NOT NULL,
+  completed_at TEXT NOT NULL,
+  PRIMARY KEY (trade_date, plan_version, code, horizon)
+);
 """
 
 
@@ -238,6 +265,48 @@ def save_cause_cache(trade_date: str, code: str, payload: dict[str, Any], tdx_us
             "ON CONFLICT(trade_date,code) DO UPDATE SET payload=excluded.payload,tdx_used=excluded.tdx_used,created_at=excluded.created_at",
             (trade_date, code, json.dumps(payload, ensure_ascii=False), int(tdx_used), created_at),
         )
+
+
+def save_feature_snapshots(
+    trade_date: str,
+    feature_version: str,
+    snapshots: list[tuple[str, str, dict[str, Any]]],
+    created_at: str,
+) -> None:
+    with connect() as conn:
+        conn.executemany(
+            "INSERT INTO feature_snapshots(trade_date,feature_version,scope,entity_id,payload,created_at) VALUES(?,?,?,?,?,?) "
+            "ON CONFLICT(trade_date,feature_version,scope,entity_id) DO UPDATE SET payload=excluded.payload,created_at=excluded.created_at",
+            [
+                (trade_date, feature_version, scope, entity_id, json.dumps(payload, ensure_ascii=False), created_at)
+                for scope, entity_id, payload in snapshots
+            ],
+        )
+
+
+def save_shadow_plans(trade_date: str, plan_version: str, plans: list[dict[str, Any]], created_at: str) -> None:
+    with connect() as conn:
+        conn.execute("DELETE FROM shadow_plans WHERE trade_date=? AND plan_version=?", (trade_date, plan_version))
+        conn.executemany(
+            "INSERT INTO shadow_plans(trade_date,plan_version,rank,code,payload,created_at) VALUES(?,?,?,?,?,?)",
+            [
+                (trade_date, plan_version, index + 1, str(plan["code"]), json.dumps(plan, ensure_ascii=False), created_at)
+                for index, plan in enumerate(plans)
+            ],
+        )
+
+
+def feature_store_status() -> dict[str, Any]:
+    with connect() as conn:
+        feature_days = conn.execute("SELECT COUNT(DISTINCT trade_date) AS count FROM feature_snapshots").fetchone()["count"]
+        outcome_days = conn.execute("SELECT COUNT(DISTINCT trade_date) AS count FROM plan_outcomes").fetchone()["count"]
+        latest = conn.execute("SELECT trade_date,feature_version FROM feature_snapshots ORDER BY trade_date DESC LIMIT 1").fetchone()
+    return {
+        "feature_days": feature_days,
+        "outcome_days": outcome_days,
+        "latest_trade_date": latest["trade_date"] if latest else None,
+        "feature_version": latest["feature_version"] if latest else None,
+    }
 
 
 def snapshot_history(limit: int = 30) -> list[dict[str, Any]]:

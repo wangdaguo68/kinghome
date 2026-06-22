@@ -1,4 +1,4 @@
-import { AlertTriangle, Ban, Check, ChevronRight, Clock3, Database, Radio, ShieldAlert, Target, TrendingDown, TrendingUp, Zap } from "lucide-react";
+import { AlertTriangle, Ban, Check, ChevronRight, CircleX, Clock3, Database, Eye, Radio, ShieldAlert, Target, TrendingDown, TrendingUp, Zap } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 import type { DashboardData } from "../types";
 import { FlowMap } from "./FlowMap";
@@ -24,11 +24,22 @@ function Ladder({ items }: { items: DashboardData["ladder"] }) {
   const heights = [...new Set(items.map((item) => item.height))].sort((a, b) => b - a);
   if (!items.length) return <div className="ladder-empty"><Database size={23} /><span>连板查询未通过校验，等待下一次可信快照</span></div>;
   return <div className="ladder-groups">{heights.map((height) => <section key={height}><header><strong>{height}板</strong><span>{items.filter((item) => item.height === height).length}只</span></header><div className="ladder-list">{items.filter((item) => item.height === height).map((item) => <article key={item.code}>
-    <div className="ladder-stock"><span>{item.factor_type}</span><strong>{item.name}<small>{item.code}</small></strong><em className="up">+{item.change.toFixed(2)}%</em></div>
+    <div className="ladder-stock"><span>{item.factor_type}</span><strong>{item.name}<small>{item.code}</small></strong><div className="ladder-counts"><b>连续{item.height}板</b><small>近{item.recent_window_days ?? 5}日 {item.recent_limit_count ?? item.height}板</small></div><em className="up">+{item.change.toFixed(2)}%</em></div>
     <div className="concept-tags">{item.concepts.map((concept) => <span key={concept}>{concept}</span>)}</div>
     <div className="primary-factor"><Zap size={14} /><p><b>第一性因素</b>{item.primary_factor}</p><span className={`confidence confidence-${item.confidence}`}>{item.confidence}置信</span></div>
     <details><summary>证据摘要 · {item.source}</summary><p>{item.evidence}</p></details>
   </article>)}</div></section>)}</div>;
+}
+
+function PlannedTargets({ items }: { items: DashboardData["planned_targets"] }) {
+  if (!items.length) return <div className="plan-empty"><Target size={24} /><div><strong>当前没有达到执行门槛的计划标的</strong><span>系统不会用弱标的补足数量，等待市场许可与核心评分改善。</span></div></div>;
+  return <div className="plan-grid">{items.map((item, index) => <article key={item.code}>
+    <header><span className={`plan-priority priority-${item.priority}`}>{item.priority}</span><div><small>{String(index + 1).padStart(2, "0")} · {item.kind}</small><strong>{item.name}<b>{item.code}</b></strong></div><em>{item.score.toFixed(1)}</em></header>
+    <p className="plan-logic">{item.logic}</p>
+    <div className="plan-condition observe"><Eye size={15} /><span><b>次日观察</b>{item.observation}</span></div>
+    <div className="plan-condition invalid"><CircleX size={15} /><span><b>失效条件</b>{item.invalidation}</span></div>
+    <footer><span>{item.holding_period}</span><small>{item.source} · {item.confidence}置信</small></footer>
+  </article>)}</div>;
 }
 
 export function Cockpit({ data }: { data: DashboardData }) {
@@ -48,7 +59,7 @@ export function Cockpit({ data }: { data: DashboardData }) {
 
     <Panel title="市场广度" kicker="BREADTH · 全A含科创/北交" source={qualitySource(data, "breadth")} className="breadth-panel">
       <div className="breadth-split"><div className="breadth-visual" style={{ "--up": `${upRatio}%` } as CSSProperties}><span>{upRatio}%</span><small>上涨占比</small></div><div className="breadth-numbers"><div><TrendingUp size={15} /><span>上涨</span><strong>{data.breadth.up}</strong></div><div><TrendingDown size={15} /><span>下跌</span><strong>{data.breadth.down}</strong></div><div><span>平盘</span><strong>{data.breadth.flat}</strong></div><div><span>中位数</span><strong className={data.breadth.median >= 0 ? "up" : "down"}>{data.breadth.median.toFixed(2)}%</strong></div></div></div>
-      <div className="limit-strip"><span>涨停 <b>{data.breadth.limit_up}</b></span><span>跌停 <b>{data.breadth.limit_down}</b></span><span>炸板 <b>{data.breadth.failed_limit}</b></span><span>连板 <b>{data.breadth.continuous}</b></span></div>
+      <div className="limit-strip"><span>涨停 <b>{data.breadth.limit_up}</b></span><span>跌停 <b>{data.breadth.limit_down}</b></span><span>炸板 <b>{data.breadth.failed_limit}</b></span><span>可交易连板 <b>{data.breadth.continuous}</b></span></div>
     </Panel>
 
     <Panel title="资金迁移图谱" kicker="CAPITAL FLOW" className="flow-panel"><FlowMap data={data} /></Panel>
@@ -62,6 +73,8 @@ export function Cockpit({ data }: { data: DashboardData }) {
       <div className="capacity-strip"><div><small>成交额样本</small><strong>TOP {data.capacity.sample}</strong></div><div><small>上涨 / 下跌</small><strong><i className="up">{data.capacity.up}</i> / <i className="down">{data.capacity.down}</i></strong></div><div><small>中位涨跌幅</small><strong className={data.capacity.median >= 0 ? "up" : "down"}>{data.capacity.median >= 0 ? "+" : ""}{data.capacity.median.toFixed(2)}%</strong></div><div><small>容量判断</small><strong>{data.capacity.label}</strong></div></div>
       <div className="alert-stack">{data.alerts.map((alert) => <div className={`alert-item ${alert.level}`} key={alert.title}><AlertTriangle size={15} /><span><strong>{alert.title}</strong><small>{alert.detail}</small></span></div>)}</div>
     </Panel>
+
+    <Panel title="明日计划标的" kicker="EXECUTION WATCHLIST · 只列达标核心" className="plans-panel"><PlannedTargets items={data.planned_targets} /></Panel>
 
     <Panel title="核心梯队" kicker="ALL QUALIFIED CORES · 排除科创/北交" className="cores-panel"><CoreGroups cores={data.cores} /></Panel>
 

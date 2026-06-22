@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import re
 from copy import deepcopy
 from datetime import datetime, timezone
@@ -22,6 +23,8 @@ from .market_validation import (
     validate_breadth_totals,
     validate_result,
 )
+from .ladder import calculate_ladder_metrics
+from .planning import build_planned_targets
 from .tdx_mcp import TdxMcpClient, TdxMcpError
 from .tushare_fallback import TushareError, TushareFallback
 
@@ -43,7 +46,7 @@ DEMO_DASHBOARD: dict[str, Any] = {
         {"name": "新材料/稀有金属", "score": 69, "role": "强支线", "change": 2.66, "flow": "材料内部扩散", "tags": ["稀有金属", "非金属材料"]},
     ],
     "cores": [
-        {"name": "旭光电子", "code": "600353", "kind": "连板情绪核心", "score": 92, "change": 10.0, "evidence": "5板，情绪高度领先"},
+        {"name": "旭光电子", "code": "600353", "kind": "连板情绪核心", "score": 92, "change": 10.0, "evidence": "4连板，情绪高度领先"},
         {"name": "工业富联", "code": "601138", "kind": "趋势容量核心", "score": 88, "change": 7.49, "evidence": "成交330.63亿元，容量与主动性突出"},
     ],
     "negative": [
@@ -55,6 +58,7 @@ DEMO_DASHBOARD: dict[str, Any] = {
         {"level": "medium", "title": "强势股承接待验证", "detail": "连板晋级和炸板数据等待下一次可信快照"},
     ],
     "ladder": [],
+    "planned_targets": [],
     "data_quality": {},
     "sentiment": [
         {"topic": "AI硬件", "heat": 82, "crowding": "高", "catalyst": "产业链与涨价信息集中发酵", "validation": "竞价溢价与中军承接"},
@@ -151,7 +155,7 @@ class Collector:
 
     def current(self) -> dict[str, Any]:
         payload = latest_snapshot() or deepcopy(DEMO_DASHBOARD)
-        for key in ("capacity", "ladder", "data_quality"):
+        for key in ("capacity", "ladder", "planned_targets", "data_quality"):
             payload.setdefault(key, deepcopy(DEMO_DASHBOARD[key]))
         legacy_kinds = {"情绪龙头": "连板情绪核心", "趋势中军": "趋势容量核心", "弹性先锋": "创业板20cm弹性核心"}
         for core in payload.get("cores", []):
@@ -197,6 +201,10 @@ class Collector:
             row = row or next((item for item in rows if item.get("类型") == "涨停"), None)
             if not row:
                 raise InvalidMarketData("涨停分析没有有效记录")
+            limit_dates = sorted(
+                {str(item.get("日期", "")) for item in rows if item.get("类型") == "涨停" and item.get("日期")},
+                reverse=True,
+            )
             theme = str(row.get("涨停主题") or fallback_concept or "板块共振")
             reason = str(row.get("原因揭秘") or "")
             primary = reason.split("|", 1)[0].strip() if reason else f"{theme}方向形成资金共振"
@@ -208,6 +216,8 @@ class Collector:
                 "confidence": "高" if exact_date and reason else "中" if reason else "低",
                 "evidence": reason[:220] or f"涨停主题：{theme}",
                 "source": "通达信涨停分析",
+                "limit_dates": limit_dates,
+                "analysis_valid": True,
             }
         except (TdxMcpError, httpx.HTTPError, InvalidMarketData, ValueError, KeyError) as exc:
             concept = fallback_concept or "市场热点"
@@ -218,6 +228,8 @@ class Collector:
                 "confidence": "低",
                 "evidence": f"结构化涨停分析暂不可用：{str(exc)[:100]}",
                 "source": "模型推断",
+                "limit_dates": [],
+                "analysis_valid": False,
             }
         self._cause_cache[cache_key] = cause
         return cause
@@ -292,12 +304,6 @@ class Collector:
             payload["breadth"]["median"] = fallback["breadth"]["median"]
             quality["median"] = {"source": "Tushare备用", "status": "validated"}
 
-        if "continuous" in results:
-            payload["breadth"]["continuous"] = result_total(results["continuous"])
-            quality["continuous"] = {"source": "通达信官方 MCP", "status": "validated"}
-        else:
-            quality["continuous"] = {"source": "最近可信快照", "status": "stale", "reason": errors.get("continuous", "")[:120]}
-
         if "amount_top" in results:
             capacity = _capacity(result_rows(results["amount_top"]))
             capacity["source"] = "通达信官方 MCP"
@@ -309,15 +315,6 @@ class Collector:
             capacity["source"] = "最近可信快照"
         capacity["label"] = _capacity_label(capacity)
         payload["capacity"] = capacity
-        payload["alerts"] = [
-            _capacity_alert(capacity),
-            {
-                "level": "medium" if payload["breadth"]["failed_limit"] > 30 else "low",
-                "title": "涨停承接",
-                "detail": f"涨停{payload['breadth']['limit_up']}只、炸板{payload['breadth']['failed_limit']}只、连板{payload['breadth']['continuous']}只",
-            },
-        ]
-
         top_sectors = []
         if "sector_top" in results:
             top_sectors = [row for row in result_rows(results["sector_top"]) if str(row.get("sec_code", "")).startswith(("880", "881"))][:6]
@@ -343,35 +340,68 @@ class Collector:
         continuous_rows = self._trade_rows(results["continuous"]) if "continuous" in results else []
         amount_rows = self._trade_rows(results["amount_top"]) if "amount_top" in results else []
         fallback_concept = payload["mainlines"][0]["name"] if payload.get("mainlines") else "市场热点"
+        analysis_date = target_date or (fallback["trade_date"] if fallback else str(payload["meta"]["trade_date"]))
 
         ladder: list[dict[str, Any]] = []
-        for row in sorted(continuous_rows, key=lambda item: number(field_value(item, "几板", "连板", default=2)), reverse=True):
-            code = str(row.get("sec_code", ""))
-            cause = await self._cause(code, target_date or payload["meta"]["trade_date"], fallback_concept)
-            ladder.append({
-                "name": row.get("sec_name", code),
-                "code": code,
-                "height": max(2, int(number(field_value(row, "几板", "连板", default=2)))),
-                "change": row_change(row),
-                **cause,
-            })
-        if ladder:
+        if "continuous" in results:
+            try:
+                trade_dates = await self.tushare.recent_trade_dates(analysis_date, 15)
+                causes = await asyncio.gather(*(
+                    self._cause(str(row.get("sec_code", "")), analysis_date, fallback_concept)
+                    for row in continuous_rows
+                ))
+                for row, cause in zip(continuous_rows, causes, strict=False):
+                    if not cause.get("analysis_valid"):
+                        continue
+                    metrics = calculate_ladder_metrics(cause.get("limit_dates", []), trade_dates, analysis_date)
+                    if metrics.consecutive < 2:
+                        continue
+                    code = str(row.get("sec_code", ""))
+                    ladder.append({
+                        "name": row.get("sec_name", code),
+                        "code": code,
+                        "height": metrics.consecutive,
+                        "recent_limit_count": metrics.recent_limit_count,
+                        "recent_window_days": metrics.recent_window_days,
+                        "change": row_change(row),
+                        **{key: value for key, value in cause.items() if key not in {"limit_dates", "analysis_valid"}},
+                    })
+                ladder.sort(key=lambda item: (-item["height"], -item["change"], item["code"]))
+                payload["breadth"]["continuous"] = len(ladder)
+                quality["continuous"] = {"source": "通达信涨停分析 + Tushare交易日历", "status": "validated"}
+            except (TushareError, httpx.HTTPError, ValueError, KeyError) as exc:
+                quality["continuous"] = {"source": "最近可信快照", "status": "stale", "reason": str(exc)[:120]}
+            else:
+                payload["ladder"] = ladder
+        else:
+            quality["continuous"] = {"source": "最近可信快照", "status": "stale", "reason": errors.get("continuous", "")[:120]}
+
+        payload["alerts"] = [
+            _capacity_alert(capacity),
+            {
+                "level": "medium" if payload["breadth"]["failed_limit"] > 30 else "low",
+                "title": "涨停承接",
+                "detail": f"涨停{payload['breadth']['limit_up']}只、炸板{payload['breadth']['failed_limit']}只、可交易真实连板{payload['breadth']['continuous']}只",
+            },
+        ]
+
+        if quality.get("continuous", {}).get("status") == "validated":
             payload["ladder"] = ladder
 
         cores: list[dict[str, Any]] = []
         for item in ladder:
-            cores.append({"name": item["name"], "code": item["code"], "kind": "连板情绪核心", "score": min(98, 80 + item["height"] * 3), "change": item["change"], "evidence": f"{item['height']}板；{item['primary_factor']}"})
+            cores.append({"name": item["name"], "code": item["code"], "kind": "连板情绪核心", "score": min(98, 80 + item["height"] * 3), "change": item["change"], "evidence": f"连续{item['height']}板、近{item['recent_window_days']}日{item['recent_limit_count']}板；{item['primary_factor']}", "source": item["source"], "confidence": item["confidence"]})
         for row in amount_rows:
             code = str(row.get("sec_code", ""))
             amount = number(field_value(row, "成交额", default=0))
             change = row_change(row)
             if amount >= 10_000_000_000 and change > 0:
-                cores.append({"name": row.get("sec_name", code), "code": code, "kind": "趋势容量核心", "score": min(95, round(78 + min(change, 10))), "change": change, "evidence": f"成交额约{amount / 100_000_000:.1f}亿元，容量与主动性共振"})
+                cores.append({"name": row.get("sec_name", code), "code": code, "kind": "趋势容量核心", "score": min(95, round(78 + min(change, 10))), "change": change, "evidence": f"成交额约{amount / 100_000_000:.1f}亿元，容量与主动性共振", "source": "通达信官方 MCP", "confidence": "中"})
         for row in limit_rows:
             code = str(row.get("sec_code", ""))
             change = row_change(row)
             if code.startswith(("300", "301")) and change >= 15:
-                cores.append({"name": row.get("sec_name", code), "code": code, "kind": "创业板20cm弹性核心", "score": min(96, round(72 + change)), "change": change, "evidence": "创业板高弹性涨停，观察板块扩散与次日溢价"})
+                cores.append({"name": row.get("sec_name", code), "code": code, "kind": "创业板20cm弹性核心", "score": min(96, round(72 + change)), "change": change, "evidence": "创业板高弹性涨停，观察板块扩散与次日溢价", "source": "通达信官方 MCP", "confidence": "中"})
         if cores:
             payload["cores"] = cores
 
@@ -404,6 +434,14 @@ class Collector:
             "freshness": "live" if "最近可信快照" not in used_sources else "stale",
             "warning": "市场广度为全 A（含科创板、北交所）；交易候选排除科创板和北交所。" + (f" {len(errors)}项通达信结果已降级。" if errors else ""),
         })
+        payload["planned_targets"] = build_planned_targets(
+            payload.get("cores", []),
+            payload.get("ladder", []),
+            cycle=cycle,
+            loss_score=scores["loss"],
+            freshness=payload["meta"]["freshness"],
+            negative_names=[str(item.get("name", "")) for item in payload.get("negative", [])],
+        )
         quality["breadth"] = {"source": breadth_source, "status": "validated" if breadth_source != "最近可信快照" else "stale"}
         quality["capacity"] = {"source": capacity["source"], "status": "validated" if capacity["source"] != "最近可信快照" else "stale"}
         payload["data_quality"] = quality

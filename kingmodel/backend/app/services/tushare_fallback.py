@@ -18,6 +18,7 @@ class TushareFallback:
         self.api_url = api_url
         self.timeout = timeout
         self._basic_cache: dict[str, dict[str, str]] | None = None
+        self._trade_calendar_cache: dict[tuple[str, int], list[str]] = {}
 
     @property
     def configured(self) -> bool:
@@ -51,6 +52,27 @@ class TushareFallback:
         if not dates:
             raise TushareError("最近两周没有可用交易日")
         return max(dates)
+
+    async def recent_trade_dates(self, end_date: str, count: int = 15) -> list[str]:
+        target = end_date.replace("-", "").replace(".", "")
+        cache_key = (target, count)
+        if cache_key in self._trade_calendar_cache:
+            return self._trade_calendar_cache[cache_key]
+        target_date = date(int(target[:4]), int(target[4:6]), int(target[6:8]))
+        start = target_date - timedelta(days=max(35, count * 3))
+        rows = await self._query(
+            "trade_cal",
+            {"exchange": "SSE", "start_date": start.strftime("%Y%m%d"), "end_date": target},
+            ["cal_date", "is_open"],
+        )
+        dates = sorted(
+            {str(row["cal_date"]) for row in rows if int(row.get("is_open", 0)) == 1 and str(row["cal_date"]) <= target},
+            reverse=True,
+        )[:count]
+        if not dates or dates[0] != target:
+            raise TushareError(f"{target} 交易日历不可用")
+        self._trade_calendar_cache[cache_key] = dates
+        return dates
 
     async def _basic(self) -> dict[str, dict[str, str]]:
         if self._basic_cache is None:

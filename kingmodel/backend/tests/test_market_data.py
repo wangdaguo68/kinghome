@@ -4,6 +4,8 @@ import pytest
 
 from app.services.market_validation import InvalidMarketData, is_trade_candidate, validate_breadth_totals, validate_result
 from app.services.collector import _factor_type
+from app.services.ladder import calculate_ladder_metrics
+from app.services.planning import build_planned_targets
 from app.services.tushare_fallback import TushareFallback
 
 
@@ -32,6 +34,61 @@ def test_trade_candidate_excludes_star_and_beijing() -> None:
 
 def test_factor_type_prioritizes_primary_catalyst() -> None:
     assert _factor_type("可控核聚变+定增受理", "工信部：加强高端器件研发|公司拥有相关产能") == "政策"
+
+
+@pytest.mark.parametrize(
+    ("limit_dates", "expected_height", "expected_recent"),
+    [
+        (["2026-06-18", "2026-06-17", "2026-06-16", "2026-06-15", "2026-06-11"], 4, 4),
+        (["2026-06-18", "2026-06-17", "2026-06-15", "2026-06-09"], 2, 3),
+    ],
+)
+def test_ladder_uses_true_consecutive_trading_days(limit_dates: list[str], expected_height: int, expected_recent: int) -> None:
+    trade_dates = ["20260618", "20260617", "20260616", "20260615", "20260612", "20260611"]
+    metrics = calculate_ladder_metrics(limit_dates, trade_dates, "2026.06.18")
+    assert metrics.consecutive == expected_height
+    assert metrics.recent_limit_count == expected_recent
+    assert metrics.recent_window_days == 5
+
+
+def test_ladder_rejects_interval_board_as_consecutive() -> None:
+    metrics = calculate_ladder_metrics(
+        ["2026-06-18", "2026-06-16", "2026-06-15"],
+        ["20260618", "20260617", "20260616", "20260615", "20260612"],
+        "20260618",
+    )
+    assert metrics.consecutive == 1
+    assert metrics.recent_limit_count == 3
+
+
+def test_planned_targets_are_ranked_deduplicated_and_exclude_unsupported_markets() -> None:
+    cores = [
+        {"name": "旭光电子", "code": "600353", "kind": "连板情绪核心", "score": 92, "evidence": "连续4板"},
+        {"name": "旭光电子", "code": "600353", "kind": "趋势容量核心", "score": 85, "evidence": "容量重复"},
+        {"name": "趋势样本", "code": "601138", "kind": "趋势容量核心", "score": 88, "evidence": "容量主动"},
+        {"name": "弹性样本", "code": "300001", "kind": "创业板20cm弹性核心", "score": 89, "evidence": "20cm弹性"},
+        {"name": "科创样本", "code": "688001", "kind": "趋势容量核心", "score": 99, "evidence": "排除"},
+        {"name": "北交样本", "code": "920001", "kind": "趋势容量核心", "score": 99, "evidence": "排除"},
+        {"name": "弱样本", "code": "600001", "kind": "趋势容量核心", "score": 79, "evidence": "不补足"},
+    ]
+    ladder = [{"code": "600353", "height": 4, "confidence": "高", "source": "通达信涨停分析", "concepts": ["可控核聚变"]}]
+    targets = build_planned_targets(cores, ladder, cycle="主升", loss_score=30, freshness="live")
+    assert [item["code"] for item in targets] == ["600353", "300001", "601138"]
+    assert targets[0]["holding_period"] == "隔日观察"
+    assert targets[1]["holding_period"] == "1–3日"
+    assert targets[2]["holding_period"] == "3–10日"
+    assert len({item["code"] for item in targets}) == len(targets)
+
+
+def test_planned_targets_do_not_fill_below_threshold() -> None:
+    targets = build_planned_targets(
+        [{"name": "弱样本", "code": "600001", "kind": "趋势容量核心", "score": 79, "evidence": "不足"}],
+        [],
+        cycle="高波动分歧",
+        loss_score=60,
+        freshness="live",
+    )
+    assert targets == []
 
 
 def test_tushare_snapshot_computes_capacity(monkeypatch) -> None:

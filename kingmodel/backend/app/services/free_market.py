@@ -24,14 +24,13 @@ class EastMoneyFreeClient:
     def __init__(self, timeout: float = 20.0) -> None:
         self.timeout = timeout
 
-    async def _get_json(self, url: str, params: dict[str, str]) -> dict[str, Any]:
+    async def _get_json_with_client(
+        self, client: httpx.AsyncClient, url: str, params: dict[str, str], *, attempts: int = 4
+    ) -> dict[str, Any]:
         last_error: Exception | None = None
-        for attempt in range(3):
+        for attempt in range(attempts):
             try:
-                async with httpx.AsyncClient(
-                    timeout=self.timeout, headers=self.HEADERS, follow_redirects=True, trust_env=False
-                ) as client:
-                    response = await client.get(url, params=params)
+                response = await client.get(url, params=params)
                 response.raise_for_status()
                 payload = response.json()
                 if not isinstance(payload, dict):
@@ -39,9 +38,15 @@ class EastMoneyFreeClient:
                 return payload
             except (httpx.HTTPError, ValueError, FreeMarketError) as exc:
                 last_error = exc
-                if attempt < 2:
-                    await asyncio.sleep(0.8 * (attempt + 1))
+                if attempt < attempts - 1:
+                    await asyncio.sleep(0.6 * (attempt + 1))
         raise FreeMarketError(f"免费接口连续失败：{last_error}") from last_error
+
+    async def _get_json(self, url: str, params: dict[str, str]) -> dict[str, Any]:
+        async with httpx.AsyncClient(
+            timeout=self.timeout, headers=self.HEADERS, follow_redirects=True, trust_env=False
+        ) as client:
+            return await self._get_json_with_client(client, url, params)
 
     @staticmethod
     def _is_hs_code(code: str) -> bool:
@@ -71,22 +76,25 @@ class EastMoneyFreeClient:
         rows: list[dict[str, Any]] = []
         total = 0
         fields = "f2,f3,f6,f12,f13,f14,f15,f16,f17,f18,f20,f21,f26,f152"
-        for page in range(1, 80):
-            payload = await self._get_json(self.CLIST_URL, {
-                "pn": str(page), "pz": "100", "po": "1", "np": "1",
-                "ut": "bd1d9ddb04089700cf9c27f6f7426281", "fltt": "2", "invt": "2",
-                "fid": "f3", "fs": self.HS_A_FS, "fields": fields,
-            })
-            data = payload.get("data") or {}
-            if page == 1:
-                total = int(data.get("total") or 0)
-            diff = data.get("diff") or []
-            if not isinstance(diff, list) or not diff:
-                break
-            rows.extend(diff)
-            if len(rows) >= total or len(diff) < 100:
-                break
-            await asyncio.sleep(0.03)
+        async with httpx.AsyncClient(
+            timeout=self.timeout, headers=self.HEADERS, follow_redirects=True, trust_env=False
+        ) as client:
+            for page in range(1, 80):
+                payload = await self._get_json_with_client(client, self.CLIST_URL, {
+                    "pn": str(page), "pz": "100", "po": "1", "np": "1",
+                    "ut": "bd1d9ddb04089700cf9c27f6f7426281", "fltt": "2", "invt": "2",
+                    "fid": "f3", "fs": self.HS_A_FS, "fields": fields,
+                })
+                data = payload.get("data") or {}
+                if page == 1:
+                    total = int(data.get("total") or 0)
+                diff = data.get("diff") or []
+                if not isinstance(diff, list) or not diff:
+                    break
+                rows.extend(diff)
+                if len(rows) >= total or len(diff) < 100:
+                    break
+                await asyncio.sleep(0.08)
 
         valid = [
             row for row in rows

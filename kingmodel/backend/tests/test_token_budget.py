@@ -193,3 +193,37 @@ def test_close_snapshot_uses_same_day_free_breadth_instead_of_previous_official(
     assert collector.free.market_breadth.await_count == 1
     assert collection_status("20260623", 5)["tdx_calls_used"] == 0
     get_settings.cache_clear()
+
+
+def test_market_snapshot_falls_back_to_tushare_with_manual_breadth_override(monkeypatch) -> None:
+    monkeypatch.setenv("TUSHARE_TOKEN", "token")
+    get_settings.cache_clear()
+    collector = CloseCollector()
+    collector.free.market_breadth = AsyncMock(side_effect=RuntimeError("eastmoney clist down"))
+    collector.tushare.market_snapshot = AsyncMock(return_value={
+        "trade_date": "20260623",
+        "breadth": {
+            "eligible": 5513, "up": 2764, "down": 2644, "flat": 105,
+            "median": 0.0481, "limit_up": 97, "limit_down": 41, "failed_limit": 59,
+        },
+        "capacity": {"sample": 100, "up": 28, "down": 72, "median": -3.2623},
+        "negative_sectors": [],
+    })
+
+    snapshot, error = asyncio.run(collector._same_day_market_snapshot("20260623", 94))
+
+    assert error == ""
+    assert snapshot is not None
+    assert snapshot["source"] == "人工校准广度 + Tushare容量"
+    assert snapshot["calibrated_breadth"] is True
+    assert snapshot["breadth"]["eligible"] == 5196
+    assert snapshot["breadth"]["up"] == 2549
+    assert snapshot["breadth"]["down"] == 2544
+    assert snapshot["breadth"]["flat"] == 103
+    assert snapshot["breadth"]["limit_up"] == 94
+    assert snapshot["breadth"]["limit_down"] == 39
+    assert snapshot["breadth"]["failed_limit"] == 50
+    assert snapshot["capacity"]["median"] == -3.2623
+    assert collector.free.market_breadth.await_count == 1
+    assert collector.tushare.market_snapshot.await_count == 1
+    get_settings.cache_clear()

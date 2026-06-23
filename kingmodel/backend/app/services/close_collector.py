@@ -34,9 +34,26 @@ from .collector import Collector, DEMO_DASHBOARD, _capacity_label
 from .free_market import EastMoneyFreeClient, FreeMarketError
 from .market_validation import is_trade_candidate
 from .planning import build_planned_targets
+from .tushare_fallback import TushareFallback
 
 
 SHANGHAI = timezone(timedelta(hours=8), "Asia/Shanghai")
+
+MANUAL_BREADTH_OVERRIDES: dict[str, dict[str, Any]] = {
+    # 2026-06-23: user-verified market breadth after excluding Beijing Stock Exchange
+    # from EastMoney limit-up pool. Keep this explicit and auditable instead of
+    # publishing zeros or carrying a stale previous-day breadth snapshot when the
+    # EastMoney full-market list endpoint disconnects.
+    "20260623": {
+        "eligible": 5196,
+        "up": 2549,
+        "down": 2544,
+        "flat": 103,
+        "limit_up": 94,
+        "limit_down": 39,
+        "failed_limit": 50,
+    },
+}
 
 
 class CloseCollector:
@@ -44,6 +61,7 @@ class CloseCollector:
         self.settings = get_settings()
         self.free = EastMoneyFreeClient()
         self.tdx = Collector()
+        self.tushare = TushareFallback(self.settings.tushare_token, self.settings.tushare_api_url)
         self.outcomes = OutcomeTracker(self.free)
         self.training = TrainingPipeline()
         self._lock = asyncio.Lock()
@@ -153,9 +171,22 @@ class CloseCollector:
         try:
             snapshot = await self.free.market_breadth(trade_date, limit_up_count=limit_up_count)
         except Exception as exc:
-            return None, str(exc)[:180]
+            if not self.tushare.configured:
+                return None, str(exc)[:180]
+            try:
+                snapshot = await self.tushare.market_snapshot(trade_date)
+            except Exception as fallback_exc:
+                return None, f"{str(exc)[:120]}；Tushare备用失败：{str(fallback_exc)[:120]}"
+            override = MANUAL_BREADTH_OVERRIDES.get(trade_date)
+            if override:
+                snapshot.setdefault("breadth", {}).update(override)
+                snapshot["source"] = "人工校准广度 + Tushare容量"
+                snapshot["calibrated_breadth"] = True
+            else:
+                snapshot["source"] = "Tushare备用日线"
         if str(snapshot.get("trade_date")) != trade_date:
             return None, f"东方财富返回日期 {snapshot.get('trade_date')} 与发布日期 {trade_date} 不一致"
+        snapshot.setdefault("source", "东方财富沪深A行情列表")
         return snapshot, ""
 
     async def _enrich_causes(self, trade_date: str, ladder: list[dict[str, Any]]) -> None:
@@ -244,9 +275,11 @@ class CloseCollector:
                 market_snapshot, market_error = await self._same_day_market_snapshot(trade_date, len(today_rows))
                 payload.setdefault("data_quality", {})
                 if market_snapshot:
+                    market_source = str(market_snapshot.get("source") or "东方财富沪深A行情列表")
+                    breadth_status = "calibrated" if market_snapshot.get("calibrated_breadth") else "validated"
                     payload["breadth"].update(market_snapshot["breadth"])
                     capacity = dict(market_snapshot["capacity"])
-                    capacity["source"] = "东方财富沪深A行情列表"
+                    capacity["source"] = market_source
                     capacity["label"] = _capacity_label(capacity)
                     payload["capacity"] = capacity
                     negative = market_snapshot.get("negative_sectors") or []
@@ -256,17 +289,17 @@ class CloseCollector:
                                 "name": "容量前100负反馈",
                                 "change": capacity["median"],
                                 "severity": "high" if capacity["median"] <= -3 else "medium",
-                                "source": "东方财富沪深A容量聚合",
+                                "source": market_source,
                             }
                         ]
                     payload["negative"] = negative
                     payload["data_quality"].update({
-                        "breadth": {"source": "东方财富沪深A行情列表", "status": "validated", "scope": "沪深A股，不含北交所"},
-                        "capacity": {"source": "东方财富沪深A行情列表", "status": "validated"},
-                        "median": {"source": "东方财富沪深A行情列表", "status": "validated"},
-                        "limit_down": {"source": "东方财富跌停池", "status": "validated"},
-                        "failed_limit": {"source": "东方财富炸板池", "status": "validated"},
-                        "negative": {"source": "东方财富容量聚合", "status": "validated" if negative else "empty"},
+                        "breadth": {"source": market_source, "status": breadth_status, "scope": "沪深A股，不含北交所"},
+                        "capacity": {"source": market_source, "status": "validated"},
+                        "median": {"source": market_source, "status": "validated"},
+                        "limit_down": {"source": market_source if market_snapshot.get("calibrated_breadth") else "东方财富跌停池", "status": breadth_status},
+                        "failed_limit": {"source": market_source if market_snapshot.get("calibrated_breadth") else "东方财富炸板池", "status": breadth_status},
+                        "negative": {"source": market_source, "status": "validated" if negative else "empty"},
                     })
                 else:
                     missing_breadth, missing_capacity, missing_negative = self._same_day_market_missing_payload(market_error)
@@ -356,10 +389,10 @@ class CloseCollector:
                 payload["meta"].update({
                     "trade_date": f"{trade_date[:4]}.{trade_date[4:6]}.{trade_date[6:]}",
                     "updated_at": now.isoformat(timespec="seconds"),
-                    "source": "东方财富沪深A行情列表 + 东方财富涨跌停池 + 本地持久化缓存" if market_snapshot else "东方财富免费涨停池 + 同日广度缺失",
+                    "source": f"{market_source} + 东方财富涨停池 + 本地持久化缓存" if market_snapshot else "东方财富免费涨停池 + 同日广度缺失",
                     "freshness": "live", "version_label": "今日收盘版",
                     "warning": (
-                        "手动刷新不调用通达信 MCP；广度为沪深A股口径，不含北交所；涨跌停来自东方财富免费池。"
+                        f"手动刷新不调用通达信 MCP；广度为沪深A股口径，不含北交所；市场广度来源：{market_source}。"
                         if market_snapshot else
                         f"手动刷新不调用通达信 MCP；今日广度/容量缺失，已禁止沿用旧日数据：{market_error}"
                     ),

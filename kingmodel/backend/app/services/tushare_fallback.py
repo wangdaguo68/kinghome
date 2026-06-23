@@ -76,7 +76,11 @@ class TushareFallback:
 
     async def _basic(self) -> dict[str, dict[str, str]]:
         if self._basic_cache is None:
-            rows = await self._query("stock_basic", {"exchange": "", "list_status": "L"}, ["ts_code", "name", "list_date"])
+            rows = await self._query(
+                "stock_basic",
+                {"exchange": "", "list_status": "L"},
+                ["ts_code", "name", "industry", "list_date"],
+            )
             self._basic_cache = {str(row["ts_code"]): row for row in rows}
         return self._basic_cache
 
@@ -108,6 +112,7 @@ class TushareFallback:
                 row[field] = float(row.get(field) or 0)
             info = basic.get(str(row["ts_code"]), {})
             row["name"] = str(info.get("name", ""))
+            row["industry"] = str(info.get("industry", ""))
             row["list_date"] = str(info.get("list_date", ""))
         changes = [row["pct_chg"] for row in rows]
         amount_top = sorted(rows, key=lambda row: row["amount"], reverse=True)[:100]
@@ -146,4 +151,30 @@ class TushareFallback:
                 "down": sum(row["pct_chg"] < 0 for row in amount_top),
                 "median": round(float(median(row["pct_chg"] for row in amount_top)), 4),
             },
+            "negative_sectors": self._negative_sectors(rows),
         }
+
+    @staticmethod
+    def _negative_sectors(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        grouped: dict[str, list[float]] = {}
+        for row in rows:
+            industry = str(row.get("industry") or "").strip()
+            if not industry:
+                continue
+            grouped.setdefault(industry, []).append(float(row.get("pct_chg") or 0))
+        sectors: list[dict[str, Any]] = []
+        for industry, changes in grouped.items():
+            if len(changes) < 3:
+                continue
+            value = round(float(median(changes)), 2)
+            if value >= 0:
+                continue
+            sectors.append(
+                {
+                    "name": industry,
+                    "change": value,
+                    "severity": "high" if value <= -3 else "medium",
+                    "source": "Tushare行业聚合",
+                }
+            )
+        return sorted(sectors, key=lambda item: item["change"])[:6]

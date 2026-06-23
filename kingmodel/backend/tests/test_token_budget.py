@@ -97,3 +97,92 @@ def test_one_hundred_manual_refreshes_never_call_tdx(monkeypatch, tmp_path) -> N
     assert collector.free.recent_pools.await_count == 1
     assert collection_status("20260622", 5)["tdx_calls_used"] == 0
     get_settings.cache_clear()
+
+
+def test_close_snapshot_uses_same_day_tushare_breadth_instead_of_previous_official(monkeypatch, tmp_path) -> None:
+    configure_database(monkeypatch, tmp_path)
+    monkeypatch.setenv("TUSHARE_TOKEN", "token")
+    get_settings.cache_clear()
+
+    previous = {
+        "meta": {
+            "updated_at": "2026-06-22T15:10:00+08:00",
+            "trade_date": "2026.06.22",
+            "source": "previous",
+            "freshness": "live",
+        },
+        "permission": {"label": "旧", "position_limit": 40, "allowed": "", "forbidden": ""},
+        "state": {"cycle": "主升", "structure": "旧结构", "money": 70, "loss": 20, "trend": 70, "speculation": 70},
+        "breadth": {
+            "eligible": 5510, "up": 2916, "down": 2468, "flat": 126,
+            "median": 0.2427, "limit_up": 137, "limit_down": 3, "failed_limit": 33, "continuous": 10,
+        },
+        "capacity": {"sample": 100, "up": 78, "down": 22, "median": 4.2988, "source": "Tushare上一日", "label": "容量正反馈"},
+        "mainlines": [{"name": "昨日主线", "score": 88, "role": "主线", "change": 8.0, "flow": "", "tags": []}],
+        "negative": [{"name": "昨日负反馈", "change": -1.0, "severity": "medium"}],
+        "alerts": [],
+        "ladder": [{"name": "旧票", "code": "600000", "height": 2, "change": 10.0, "concepts": ["旧"], "primary_factor": "旧", "factor_type": "旧", "confidence": "中", "evidence": "旧", "source": "旧"}],
+        "cores": [],
+        "planned_targets": [],
+        "data_quality": {},
+        "sentiment": [],
+        "checkpoints": [],
+    }
+    save_snapshot(previous, official=True)
+
+    class FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 6, 23, 16, 0, tzinfo=tz or timezone(timedelta(hours=8)))
+
+    dates = ["20260623", "20260622", "20260618", "20260617", "20260616", "20260615"]
+    pools = {
+        "20260623": [
+            {"code": "600397", "name": "江钨装备", "change": 9.99, "industry": "专用设备", "amount": 4_000_000_000, "first_limit_time": "092502"},
+            {"code": "002167", "name": "东方锆业", "change": 9.98, "industry": "小金属", "amount": 1_900_000_000, "first_limit_time": "092500"},
+            {"code": "002674", "name": "兴业科技", "change": 10.0, "industry": "纺织制造", "amount": 19_000_000, "first_limit_time": "092500"},
+            {"code": "300085", "name": "银之杰", "change": 20.0, "industry": "软件开发", "amount": 4_600_000_000, "first_limit_time": "093415"},
+            {"code": "600172", "name": "黄河旋风", "change": 9.99, "industry": "通用设备", "amount": 5_400_000_000, "first_limit_time": "093342"},
+            {"code": "601869", "name": "长飞光纤", "change": 10.0, "industry": "通信设备", "amount": 12_900_000_000, "first_limit_time": "102625"},
+            {"code": "000070", "name": "特发信息", "change": 10.0, "industry": "通信设备", "amount": 1_200_000_000, "first_limit_time": "093257"},
+        ],
+        "20260622": [
+            {"code": "600397", "name": "江钨装备", "change": 10.0, "industry": "专用设备", "amount": 2_000_000_000, "first_limit_time": "093000"},
+            {"code": "002167", "name": "东方锆业", "change": 10.0, "industry": "小金属", "amount": 1_000_000_000, "first_limit_time": "093000"},
+            {"code": "002674", "name": "兴业科技", "change": 10.0, "industry": "纺织制造", "amount": 18_000_000, "first_limit_time": "093000"},
+        ],
+    }
+    for date in dates[2:]:
+        pools[date] = []
+
+    monkeypatch.setattr(close_module, "datetime", FixedDateTime)
+    collector = CloseCollector()
+    collector.free.recent_pools = AsyncMock(return_value=(dates, pools))
+    collector.tdx._cause = AsyncMock(side_effect=AssertionError("manual refresh must not call TDX"))
+    collector.tdx.tushare.market_snapshot = AsyncMock(return_value={
+        "trade_date": "20260623",
+        "breadth": {
+            "eligible": 5513, "up": 2764, "down": 2644, "flat": 105,
+            "median": 0.0481, "limit_up": 96, "limit_down": 41, "failed_limit": 58,
+        },
+        "capacity": {"sample": 100, "up": 28, "down": 72, "median": -3.2623},
+        "negative_sectors": [{"name": "电机制造", "change": -2.41, "severity": "medium", "source": "Tushare行业聚合"}],
+    })
+
+    result = asyncio.run(collector.refresh(allow_tdx=False))
+
+    assert result["meta"]["trade_date"] == "2026.06.23"
+    assert result["breadth"]["up"] == 2764
+    assert result["breadth"]["down"] == 2644
+    assert result["breadth"]["limit_down"] == 41
+    assert result["breadth"]["failed_limit"] == 58
+    assert result["breadth"]["limit_up"] == 7
+    assert result["capacity"]["up"] == 28
+    assert result["capacity"]["median"] == -3.2623
+    assert result["capacity"]["label"] == "容量负反馈"
+    assert result["negative"][0]["name"] == "电机制造"
+    assert result["mainlines"][0]["source"] == "东方财富免费涨停池行业聚合"
+    assert result["data_quality"]["breadth"]["source"] == "Tushare同日收盘"
+    assert collector.tdx._cause.await_count == 0
+    assert collection_status("20260623", 5)["tdx_calls_used"] == 0
+    get_settings.cache_clear()

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
+from statistics import median
 from typing import Any
 
 from ..config import get_settings
@@ -29,7 +30,7 @@ from ..engine.rule_selector import FEATURE_VERSION, PLAN_VERSION, build_shadow_t
 from ..ml.inference import inference_status, regime_probabilities, sector_probability, stock_probability
 from ..ml.outcome_tracker import OutcomeTracker
 from ..ml.training_pipeline import TrainingPipeline
-from .collector import Collector, DEMO_DASHBOARD
+from .collector import Collector, DEMO_DASHBOARD, _capacity_label
 from .free_market import EastMoneyFreeClient, FreeMarketError
 from .market_validation import is_trade_candidate
 from .planning import build_planned_targets
@@ -100,6 +101,60 @@ class CloseCollector:
             "evidence": f"东方财富涨停池所属行业：{industry}；首次封板时间：{row.get('first_limit_time') or '未提供'}",
             "source": "东方财富免费涨停池",
         }
+
+    @staticmethod
+    def _mainlines_from_limit_pool(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        grouped: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            industry = str(row.get("industry") or "").strip()
+            if not industry:
+                continue
+            bucket = grouped.setdefault(industry, {"count": 0, "amount": 0.0, "changes": []})
+            bucket["count"] += 1
+            bucket["amount"] += float(row.get("amount") or 0)
+            bucket["changes"].append(float(row.get("change") or 0))
+        ranked: list[dict[str, Any]] = []
+        for industry, bucket in grouped.items():
+            count = int(bucket["count"])
+            if count < 2:
+                continue
+            amount = float(bucket["amount"])
+            changes = [float(value) for value in bucket["changes"]]
+            score = min(92, round(58 + count * 4 + min(amount / 1_000_000_000, 12) + max(changes) * 0.5))
+            ranked.append(
+                {
+                    "name": industry,
+                    "score": score,
+                    "role": "主线候选" if len(ranked) == 0 else "强支线",
+                    "change": round(float(median(changes)), 2),
+                    "flow": f"当日涨停池{count}只，成交额约{amount / 100_000_000:.1f}亿元",
+                    "tags": ["东方财富涨停池", "同日行业热度"],
+                    "source": "东方财富免费涨停池行业聚合",
+                }
+            )
+        ranked.sort(key=lambda item: (-item["score"], -item["change"], item["name"]))
+        for index, item in enumerate(ranked[:4]):
+            item["role"] = "主线候选" if index == 0 else "强支线"
+        return ranked[:4]
+
+    @staticmethod
+    def _same_day_market_missing_payload(reason: str) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, Any]]]:
+        return (
+            {"eligible": 0, "up": 0, "down": 0, "flat": 0, "median": 0, "limit_down": 0, "failed_limit": 0},
+            {"sample": 0, "up": 0, "down": 0, "median": 0, "source": "同日Tushare缺失", "label": "容量数据缺失"},
+            [{"name": "同日负反馈缺失", "change": 0, "severity": "medium", "source": reason[:120]}],
+        )
+
+    async def _same_day_market_snapshot(self, trade_date: str) -> tuple[dict[str, Any] | None, str]:
+        if not self.tdx.tushare.configured:
+            return None, "Tushare Token 未配置，无法生成同日全市场广度"
+        try:
+            snapshot = await self.tdx.tushare.market_snapshot(trade_date)
+        except Exception as exc:
+            return None, str(exc)[:180]
+        if str(snapshot.get("trade_date")) != trade_date:
+            return None, f"Tushare 返回日期 {snapshot.get('trade_date')} 与发布日期 {trade_date} 不一致"
+        return snapshot, ""
 
     async def _enrich_causes(self, trade_date: str, ladder: list[dict[str, Any]]) -> None:
         if not self.settings.tdx_close_enrichment_enabled:
@@ -183,10 +238,48 @@ class CloseCollector:
                 base = diagnostic if diagnostic and self._compact_date(str(diagnostic["meta"]["trade_date"])) == trade_date else published
                 payload = deepcopy(base or DEMO_DASHBOARD)
                 payload["ladder"] = ladder
-                same_day_breadth = bool(diagnostic and self._compact_date(str(diagnostic["meta"]["trade_date"])) == trade_date)
-                if not same_day_breadth:
-                    payload["breadth"]["limit_up"] = len(today_rows)
+
+                market_snapshot, market_error = await self._same_day_market_snapshot(trade_date)
+                payload.setdefault("data_quality", {})
+                if market_snapshot:
+                    payload["breadth"].update(market_snapshot["breadth"])
+                    capacity = dict(market_snapshot["capacity"])
+                    capacity["source"] = "Tushare同日收盘"
+                    capacity["label"] = _capacity_label(capacity)
+                    payload["capacity"] = capacity
+                    negative = market_snapshot.get("negative_sectors") or []
+                    if not negative and capacity["median"] < 0:
+                        negative = [
+                            {
+                                "name": "容量前100负反馈",
+                                "change": capacity["median"],
+                                "severity": "high" if capacity["median"] <= -3 else "medium",
+                                "source": "Tushare同日容量聚合",
+                            }
+                        ]
+                    payload["negative"] = negative
+                    payload["data_quality"].update({
+                        "breadth": {"source": "Tushare同日收盘", "status": "validated"},
+                        "capacity": {"source": "Tushare同日收盘", "status": "validated"},
+                        "median": {"source": "Tushare同日收盘", "status": "validated"},
+                        "limit_down": {"source": "Tushare同日收盘", "status": "validated"},
+                        "failed_limit": {"source": "Tushare同日收盘", "status": "validated"},
+                        "negative": {"source": "Tushare行业聚合", "status": "validated" if negative else "empty"},
+                    })
+                else:
+                    missing_breadth, missing_capacity, missing_negative = self._same_day_market_missing_payload(market_error)
+                    payload["breadth"].update(missing_breadth)
+                    payload["capacity"] = missing_capacity
+                    payload["negative"] = missing_negative
+                    payload["data_quality"].update({
+                        "breadth": {"source": "Tushare同日收盘", "status": "missing", "reason": market_error},
+                        "capacity": {"source": "Tushare同日收盘", "status": "missing", "reason": market_error},
+                        "median": {"source": "Tushare同日收盘", "status": "missing", "reason": market_error},
+                        "negative": {"source": "Tushare行业聚合", "status": "missing", "reason": market_error},
+                    })
+                payload["breadth"]["limit_up"] = len(today_rows)
                 payload["breadth"]["continuous"] = len(ladder)
+                payload["data_quality"]["limit_up"] = {"source": "东方财富免费涨停池", "status": "validated"}
 
                 cores: list[dict[str, Any]] = [
                     {
@@ -208,6 +301,10 @@ class CloseCollector:
                             "source": "东方财富免费涨停池", "confidence": "中",
                         })
                 payload["cores"] = cores
+                mainlines = self._mainlines_from_limit_pool(today_rows)
+                if mainlines:
+                    payload["mainlines"] = mainlines
+                    payload["data_quality"]["mainlines"] = {"source": "东方财富免费涨停池行业聚合", "status": "validated"}
                 assessment = assess_market(payload)
                 payload.setdefault("state", {}).update({
                     "money": assessment["money"], "loss": assessment["loss"],
@@ -256,9 +353,13 @@ class CloseCollector:
                 payload["meta"].update({
                     "trade_date": f"{trade_date[:4]}.{trade_date[4:6]}.{trade_date[6:]}",
                     "updated_at": now.isoformat(timespec="seconds"),
-                    "source": "东方财富免费涨停池 + 本地持久化缓存",
+                    "source": "东方财富免费涨停池 + Tushare同日收盘 + 本地持久化缓存" if market_snapshot else "东方财富免费涨停池 + 同日广度缺失",
                     "freshness": "live", "version_label": "今日收盘版",
-                    "warning": "手动刷新不调用通达信 MCP；涨停与连板为今日免费收盘数据。",
+                    "warning": (
+                        "手动刷新不调用通达信 MCP；涨停/连板来自今日免费收盘数据，广度/容量来自同日 Tushare。"
+                        if market_snapshot else
+                        f"手动刷新不调用通达信 MCP；今日广度/容量缺失，已禁止沿用旧日数据：{market_error}"
+                    ),
                 })
                 payload["collection_status"] = collection_status(trade_date, self.settings.tdx_daily_call_limit)
                 save_snapshot(payload, official=True)

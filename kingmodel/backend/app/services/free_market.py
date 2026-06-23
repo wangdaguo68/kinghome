@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timedelta, timezone
+from statistics import median
 from typing import Any
 
 import httpx
@@ -13,8 +14,12 @@ class FreeMarketError(RuntimeError):
 
 class EastMoneyFreeClient:
     POOL_URL = "https://push2ex.eastmoney.com/getTopicZTPool"
+    DOWN_POOL_URL = "https://push2ex.eastmoney.com/getTopicDTPool"
+    FAILED_POOL_URL = "https://push2ex.eastmoney.com/getTopicZBPool"
+    CLIST_URL = "https://push2.eastmoney.com/api/qt/clist/get"
     KLINE_URL = "https://push2his.eastmoney.com/api/qt/stock/kline/get"
     HEADERS = {"User-Agent": "Mozilla/5.0", "Referer": "https://quote.eastmoney.com/"}
+    HS_A_FS = "m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23"
 
     def __init__(self, timeout: float = 20.0) -> None:
         self.timeout = timeout
@@ -23,7 +28,9 @@ class EastMoneyFreeClient:
         last_error: Exception | None = None
         for attempt in range(3):
             try:
-                async with httpx.AsyncClient(timeout=self.timeout, headers=self.HEADERS, follow_redirects=True) as client:
+                async with httpx.AsyncClient(
+                    timeout=self.timeout, headers=self.HEADERS, follow_redirects=True, trust_env=False
+                ) as client:
                     response = await client.get(url, params=params)
                 response.raise_for_status()
                 payload = response.json()
@@ -35,6 +42,89 @@ class EastMoneyFreeClient:
                 if attempt < 2:
                     await asyncio.sleep(0.8 * (attempt + 1))
         raise FreeMarketError(f"免费接口连续失败：{last_error}") from last_error
+
+    @staticmethod
+    def _is_hs_code(code: str) -> bool:
+        return code.startswith(("000", "001", "002", "003", "300", "301", "600", "601", "603", "605", "688"))
+
+    @staticmethod
+    def _value(value: Any) -> float | None:
+        if value in ("-", None):
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    async def _pool_count(self, url: str, trade_date: str) -> int:
+        payload = await self._get_json(url, {
+            "ut": "7eea3edcaed734bea9cbfc24409ed989", "dpt": "wz.ztzt", "Pageindex": "0",
+            "pagesize": "10000", "sort": "fbt:asc", "date": trade_date,
+        })
+        data = payload.get("data") or {}
+        if "tc" in data:
+            return int(data.get("tc") or 0)
+        pool = data.get("pool")
+        return len(pool) if isinstance(pool, list) else 0
+
+    async def market_breadth(self, trade_date: str, *, limit_up_count: int | None = None) -> dict[str, Any]:
+        rows: list[dict[str, Any]] = []
+        total = 0
+        fields = "f2,f3,f6,f12,f13,f14,f15,f16,f17,f18,f20,f21,f26,f152"
+        for page in range(1, 80):
+            payload = await self._get_json(self.CLIST_URL, {
+                "pn": str(page), "pz": "100", "po": "1", "np": "1",
+                "ut": "bd1d9ddb04089700cf9c27f6f7426281", "fltt": "2", "invt": "2",
+                "fid": "f3", "fs": self.HS_A_FS, "fields": fields,
+            })
+            data = payload.get("data") or {}
+            if page == 1:
+                total = int(data.get("total") or 0)
+            diff = data.get("diff") or []
+            if not isinstance(diff, list) or not diff:
+                break
+            rows.extend(diff)
+            if len(rows) >= total or len(diff) < 100:
+                break
+            await asyncio.sleep(0.03)
+
+        valid = [
+            row for row in rows
+            if self._value(row.get("f3")) is not None
+            and self._value(row.get("f2")) is not None
+            and self._is_hs_code(str(row.get("f12") or ""))
+        ]
+        if len(valid) < 4_000:
+            raise FreeMarketError(f"{trade_date} 东方财富沪深A行情列表不完整：{len(valid)}")
+
+        changes = [float(self._value(row.get("f3")) or 0) for row in valid]
+        amount_top = sorted(valid, key=lambda row: float(self._value(row.get("f6")) or 0), reverse=True)[:100]
+        capacity_changes = [float(self._value(row.get("f3")) or 0) for row in amount_top]
+        failed_count = await self._pool_count(self.FAILED_POOL_URL, trade_date)
+        down_count = await self._pool_count(self.DOWN_POOL_URL, trade_date)
+        if limit_up_count is None:
+            limit_up_count = await self._pool_count(self.POOL_URL, trade_date)
+
+        return {
+            "trade_date": trade_date,
+            "breadth": {
+                "eligible": len(valid),
+                "up": sum(value > 0 for value in changes),
+                "down": sum(value < 0 for value in changes),
+                "flat": sum(value == 0 for value in changes),
+                "median": round(float(median(changes)), 4),
+                "limit_up": int(limit_up_count),
+                "limit_down": int(down_count),
+                "failed_limit": int(failed_count),
+            },
+            "capacity": {
+                "sample": len(capacity_changes),
+                "up": sum(value > 0 for value in capacity_changes),
+                "down": sum(value < 0 for value in capacity_changes),
+                "median": round(float(median(capacity_changes)), 4) if capacity_changes else 0,
+            },
+            "source": "东方财富沪深A行情列表",
+        }
 
     async def trade_dates(self, count: int = 10) -> list[str]:
         params = {
@@ -75,7 +165,7 @@ class EastMoneyFreeClient:
                 "vendor_ladder": int(row.get("lbc") or 1),
             }
             for row in raw_rows
-            if str(row.get("c", "")).isdigit()
+            if str(row.get("c", "")).isdigit() and self._is_hs_code(str(row.get("c", "")))
         ]
 
     async def recent_pools(self, count: int = 6) -> tuple[list[str], dict[str, list[dict[str, Any]]]]:

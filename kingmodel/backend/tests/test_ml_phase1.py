@@ -49,6 +49,31 @@ def test_market_permission_hard_caps_high_loss_feedback() -> None:
     assert "追涨" in permission["forbidden"]
 
 
+def test_speculation_score_is_capped_by_limit_down_feedback() -> None:
+    payload = sample_payload()
+    payload["breadth"].update({
+        "eligible": 5196,
+        "up": 2549,
+        "down": 2544,
+        "flat": 103,
+        "median": 0.0,
+        "limit_up": 94,
+        "limit_down": 39,
+        "failed_limit": 50,
+    })
+    payload["capacity"] = {"sample": 100, "up": 28, "down": 72, "median": -3.2623}
+    payload["ladder"] = [{"code": f"600{i:03d}", "height": 5 if i == 0 else 2, "confidence": "中"} for i in range(20)]
+    payload["cores"] = [
+        {"code": f"300{i:03d}", "name": f"弹性{i}", "kind": "创业板20cm弹性核心", "score": 92, "change": 20, "confidence": "中"}
+        for i in range(7)
+    ]
+    result = assess_market(payload)
+    assert result["speculation"] <= 65
+    assert result["inputs"]["spec_hard_cap"] == 65
+    assert result["inputs"]["spec_activity"] > result["inputs"]["spec_quality"]
+    assert result["inputs"]["spec_risk"] >= 50
+
+
 def test_market_permission_allows_attack_only_when_loss_is_low() -> None:
     permission = build_market_permission(
         {"cycle": "主升", "money": 75, "loss": 35, "trend": 72, "speculation": 80}

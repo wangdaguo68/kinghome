@@ -86,6 +86,11 @@ def test_one_hundred_manual_refreshes_never_call_tdx(monkeypatch, tmp_path) -> N
     monkeypatch.setattr(close_module, "datetime", FixedDateTime)
     collector = CloseCollector()
     collector.free.recent_pools = AsyncMock(return_value=(dates, pools))
+    collector.free.market_breadth = AsyncMock(return_value={
+        "trade_date": "20260622",
+        "breadth": {"eligible": 5200, "up": 2600, "down": 2500, "flat": 100, "median": 0, "limit_up": 5, "limit_down": 5, "failed_limit": 10},
+        "capacity": {"sample": 100, "up": 50, "down": 50, "median": 0},
+    })
     collector.tdx._cause = AsyncMock(side_effect=AssertionError("manual refresh must not call TDX"))
 
     async def run_refreshes() -> None:
@@ -99,7 +104,7 @@ def test_one_hundred_manual_refreshes_never_call_tdx(monkeypatch, tmp_path) -> N
     get_settings.cache_clear()
 
 
-def test_close_snapshot_uses_same_day_tushare_breadth_instead_of_previous_official(monkeypatch, tmp_path) -> None:
+def test_close_snapshot_uses_same_day_free_breadth_instead_of_previous_official(monkeypatch, tmp_path) -> None:
     configure_database(monkeypatch, tmp_path)
     monkeypatch.setenv("TUSHARE_TOKEN", "token")
     get_settings.cache_clear()
@@ -158,33 +163,33 @@ def test_close_snapshot_uses_same_day_tushare_breadth_instead_of_previous_offici
     monkeypatch.setattr(close_module, "datetime", FixedDateTime)
     collector = CloseCollector()
     collector.free.recent_pools = AsyncMock(return_value=(dates, pools))
-    collector.tdx._cause = AsyncMock(side_effect=AssertionError("manual refresh must not call TDX"))
-    collector.tdx.tushare.market_snapshot = AsyncMock(return_value={
+    collector.free.market_breadth = AsyncMock(return_value={
         "trade_date": "20260623",
         "breadth": {
-            "eligible": 5513, "up": 2764, "down": 2644, "flat": 105,
-            "median": 0.0481, "limit_up": 96, "limit_down": 41, "failed_limit": 58,
+            "eligible": 5196, "up": 2549, "down": 2544, "flat": 103,
+            "median": 0.0, "limit_up": 7, "limit_down": 39, "failed_limit": 50,
         },
         "capacity": {"sample": 100, "up": 28, "down": 72, "median": -3.2623},
-        "negative_sectors": [{"name": "电机制造", "change": -2.41, "severity": "medium", "source": "Tushare行业聚合"}],
     })
+    collector.tdx._cause = AsyncMock(side_effect=AssertionError("manual refresh must not call TDX"))
 
     result = asyncio.run(collector.refresh(allow_tdx=False))
 
     assert result["meta"]["trade_date"] == "2026.06.23"
-    assert result["breadth"]["up"] == 2764
-    assert result["breadth"]["down"] == 2644
-    assert result["breadth"]["limit_down"] == 41
-    assert result["breadth"]["failed_limit"] == 58
+    assert result["breadth"]["up"] == 2549
+    assert result["breadth"]["down"] == 2544
+    assert result["breadth"]["limit_down"] == 39
+    assert result["breadth"]["failed_limit"] == 50
     assert result["breadth"]["limit_up"] == 7
     assert result["capacity"]["up"] == 28
     assert result["capacity"]["median"] == -3.2623
     assert result["capacity"]["label"] == "容量负反馈"
     assert result["permission"]["label"] == "防守观察"
     assert result["permission"]["position_limit"] == 20
-    assert result["negative"][0]["name"] == "电机制造"
+    assert result["negative"][0]["name"] == "容量前100负反馈"
     assert result["mainlines"][0]["source"] == "东方财富免费涨停池行业聚合"
-    assert result["data_quality"]["breadth"]["source"] == "Tushare同日收盘"
+    assert result["data_quality"]["breadth"]["source"] == "东方财富沪深A行情列表"
     assert collector.tdx._cause.await_count == 0
+    assert collector.free.market_breadth.await_count == 1
     assert collection_status("20260623", 5)["tdx_calls_used"] == 0
     get_settings.cache_clear()

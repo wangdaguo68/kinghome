@@ -7,6 +7,64 @@ def _clamp(value: float) -> int:
     return max(0, min(100, round(value)))
 
 
+def _score_0_100(value: float) -> float:
+    return max(0.0, min(100.0, value))
+
+
+def _risk_adjusted_speculation_score(
+    *,
+    limit_up: int,
+    limit_down: int,
+    failed: int,
+    ladder_count: int,
+    max_height: int,
+    elasticity_count: int,
+    capacity_median: float,
+    down_ratio: float,
+) -> tuple[int, dict[str, float]]:
+    first_boards = max(0, limit_up - ladder_count)
+    failed_rate = failed / max(1, limit_up + failed)
+    continuation_ratio = ladder_count / max(1, limit_up)
+
+    activity = (
+        0.35 * _score_0_100(limit_up / 100 * 100)
+        + 0.25 * _score_0_100(ladder_count / 25 * 100)
+        + 0.20 * _score_0_100(max_height / 7 * 100)
+        + 0.10 * _score_0_100(elasticity_count / 20 * 100)
+        + 0.10 * _score_0_100(first_boards / 80 * 100)
+    )
+    quality = (
+        0.35 * _score_0_100(continuation_ratio / 0.25 * 100)
+        + 0.25 * _score_0_100((1 - failed_rate) * 100)
+        + 0.20 * _score_0_100(max_height / 7 * 100)
+        + 0.20 * _score_0_100((capacity_median + 3) / 6 * 100)
+    )
+    risk = (
+        0.30 * _score_0_100((limit_down - 5) / 45 * 100)
+        + 0.25 * _score_0_100((failed_rate - 0.15) / 0.35 * 100)
+        + 0.20 * _score_0_100((-capacity_median) / 4 * 100)
+        + 0.15 * _score_0_100((down_ratio - 45) / 20 * 100)
+        + 0.10 * _score_0_100((max_height - 6) / 4 * 100)
+    )
+    raw_score = 0.50 * activity + 0.30 * quality + 0.20 * (100 - risk)
+    cap = 100
+    if limit_down >= 50:
+        cap = 45
+    elif limit_down >= 30:
+        cap = 65
+    elif limit_down >= 15:
+        cap = 80
+    score = min(_clamp(raw_score), cap)
+    return score, {
+        "spec_activity": round(activity, 2),
+        "spec_quality": round(quality, 2),
+        "spec_risk": round(risk, 2),
+        "spec_failed_rate": round(failed_rate * 100, 2),
+        "spec_continuation_ratio": round(continuation_ratio * 100, 2),
+        "spec_hard_cap": cap,
+    }
+
+
 def assess_market(payload: dict[str, Any]) -> dict[str, Any]:
     breadth = payload.get("breadth", {})
     capacity = payload.get("capacity", {})
@@ -18,6 +76,7 @@ def assess_market(payload: dict[str, Any]) -> dict[str, Any]:
     limit_up = int(breadth.get("limit_up", 0))
     limit_down = int(breadth.get("limit_down", 0))
     failed = int(breadth.get("failed_limit", 0))
+    down_ratio = 100 * float(breadth.get("down", 0)) / eligible
     max_height = max((int(item.get("height", 0)) for item in ladder), default=0)
     capacity_ratio = 100 * float(capacity.get("up", 0)) / max(1, int(capacity.get("sample", 0) or 1))
     capacity_median = float(capacity.get("median", 0))
@@ -33,7 +92,16 @@ def assess_market(payload: dict[str, Any]) -> dict[str, Any]:
         + min(failed, 80) * 0.3 + max(0, -capacity_median) * 5
     )
     trend = _clamp(25 + capacity_ratio * 0.45 + max(0, capacity_median) * 6 + min(trend_cores, 15) * 2)
-    speculation = _clamp(20 + min(limit_up, 120) * 0.3 + min(len(ladder), 30) * 1.2 + max_height * 4 + elasticity)
+    speculation, speculation_detail = _risk_adjusted_speculation_score(
+        limit_up=limit_up,
+        limit_down=limit_down,
+        failed=failed,
+        ladder_count=len(ladder),
+        max_height=max_height,
+        elasticity_count=elasticity,
+        capacity_median=capacity_median,
+        down_ratio=down_ratio,
+    )
 
     if trend >= 65 and speculation >= 65:
         style = "趋势投机共振"
@@ -62,6 +130,7 @@ def assess_market(payload: dict[str, Any]) -> dict[str, Any]:
             "up_ratio": round(up_ratio, 2), "median": median, "limit_up": limit_up,
             "limit_down": limit_down, "failed_limit": failed, "capacity_up_ratio": round(capacity_ratio, 2),
             "capacity_median": capacity_median, "ladder_count": len(ladder), "max_height": max_height,
+            **speculation_detail,
         },
     }
 

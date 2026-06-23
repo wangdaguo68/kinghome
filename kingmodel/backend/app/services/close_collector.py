@@ -149,15 +149,13 @@ class CloseCollector:
             [{"name": "同日负反馈缺失", "change": 0, "severity": "medium", "source": reason[:120]}],
         )
 
-    async def _same_day_market_snapshot(self, trade_date: str) -> tuple[dict[str, Any] | None, str]:
-        if not self.tdx.tushare.configured:
-            return None, "Tushare Token 未配置，无法生成同日全市场广度"
+    async def _same_day_market_snapshot(self, trade_date: str, limit_up_count: int) -> tuple[dict[str, Any] | None, str]:
         try:
-            snapshot = await self.tdx.tushare.market_snapshot(trade_date)
+            snapshot = await self.free.market_breadth(trade_date, limit_up_count=limit_up_count)
         except Exception as exc:
             return None, str(exc)[:180]
         if str(snapshot.get("trade_date")) != trade_date:
-            return None, f"Tushare 返回日期 {snapshot.get('trade_date')} 与发布日期 {trade_date} 不一致"
+            return None, f"东方财富返回日期 {snapshot.get('trade_date')} 与发布日期 {trade_date} 不一致"
         return snapshot, ""
 
     async def _enrich_causes(self, trade_date: str, ladder: list[dict[str, Any]]) -> None:
@@ -243,12 +241,12 @@ class CloseCollector:
                 payload = deepcopy(base or DEMO_DASHBOARD)
                 payload["ladder"] = ladder
 
-                market_snapshot, market_error = await self._same_day_market_snapshot(trade_date)
+                market_snapshot, market_error = await self._same_day_market_snapshot(trade_date, len(today_rows))
                 payload.setdefault("data_quality", {})
                 if market_snapshot:
                     payload["breadth"].update(market_snapshot["breadth"])
                     capacity = dict(market_snapshot["capacity"])
-                    capacity["source"] = "Tushare同日收盘"
+                    capacity["source"] = "东方财富沪深A行情列表"
                     capacity["label"] = _capacity_label(capacity)
                     payload["capacity"] = capacity
                     negative = market_snapshot.get("negative_sectors") or []
@@ -258,17 +256,17 @@ class CloseCollector:
                                 "name": "容量前100负反馈",
                                 "change": capacity["median"],
                                 "severity": "high" if capacity["median"] <= -3 else "medium",
-                                "source": "Tushare同日容量聚合",
+                                "source": "东方财富沪深A容量聚合",
                             }
                         ]
                     payload["negative"] = negative
                     payload["data_quality"].update({
-                        "breadth": {"source": "Tushare同日收盘", "status": "validated"},
-                        "capacity": {"source": "Tushare同日收盘", "status": "validated"},
-                        "median": {"source": "Tushare同日收盘", "status": "validated"},
-                        "limit_down": {"source": "Tushare同日收盘", "status": "validated"},
-                        "failed_limit": {"source": "Tushare同日收盘", "status": "validated"},
-                        "negative": {"source": "Tushare行业聚合", "status": "validated" if negative else "empty"},
+                        "breadth": {"source": "东方财富沪深A行情列表", "status": "validated", "scope": "沪深A股，不含北交所"},
+                        "capacity": {"source": "东方财富沪深A行情列表", "status": "validated"},
+                        "median": {"source": "东方财富沪深A行情列表", "status": "validated"},
+                        "limit_down": {"source": "东方财富跌停池", "status": "validated"},
+                        "failed_limit": {"source": "东方财富炸板池", "status": "validated"},
+                        "negative": {"source": "东方财富容量聚合", "status": "validated" if negative else "empty"},
                     })
                 else:
                     missing_breadth, missing_capacity, missing_negative = self._same_day_market_missing_payload(market_error)
@@ -276,10 +274,10 @@ class CloseCollector:
                     payload["capacity"] = missing_capacity
                     payload["negative"] = missing_negative
                     payload["data_quality"].update({
-                        "breadth": {"source": "Tushare同日收盘", "status": "missing", "reason": market_error},
-                        "capacity": {"source": "Tushare同日收盘", "status": "missing", "reason": market_error},
-                        "median": {"source": "Tushare同日收盘", "status": "missing", "reason": market_error},
-                        "negative": {"source": "Tushare行业聚合", "status": "missing", "reason": market_error},
+                        "breadth": {"source": "东方财富沪深A行情列表", "status": "missing", "reason": market_error},
+                        "capacity": {"source": "东方财富沪深A行情列表", "status": "missing", "reason": market_error},
+                        "median": {"source": "东方财富沪深A行情列表", "status": "missing", "reason": market_error},
+                        "negative": {"source": "东方财富容量聚合", "status": "missing", "reason": market_error},
                     })
                 payload["breadth"]["limit_up"] = len(today_rows)
                 payload["breadth"]["continuous"] = len(ladder)
@@ -358,10 +356,10 @@ class CloseCollector:
                 payload["meta"].update({
                     "trade_date": f"{trade_date[:4]}.{trade_date[4:6]}.{trade_date[6:]}",
                     "updated_at": now.isoformat(timespec="seconds"),
-                    "source": "东方财富免费涨停池 + Tushare同日收盘 + 本地持久化缓存" if market_snapshot else "东方财富免费涨停池 + 同日广度缺失",
+                    "source": "东方财富沪深A行情列表 + 东方财富涨跌停池 + 本地持久化缓存" if market_snapshot else "东方财富免费涨停池 + 同日广度缺失",
                     "freshness": "live", "version_label": "今日收盘版",
                     "warning": (
-                        "手动刷新不调用通达信 MCP；涨停/连板来自今日免费收盘数据，广度/容量来自同日 Tushare。"
+                        "手动刷新不调用通达信 MCP；广度为沪深A股口径，不含北交所；涨跌停来自东方财富免费池。"
                         if market_snapshot else
                         f"手动刷新不调用通达信 MCP；今日广度/容量缺失，已禁止沿用旧日数据：{market_error}"
                     ),

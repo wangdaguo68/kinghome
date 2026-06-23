@@ -25,7 +25,7 @@ from ..db import (
     upsert_daily_pool,
     outcome_review,
 )
-from ..engine.framework import assess_market, build_feature_snapshots
+from ..engine.framework import assess_market, build_feature_snapshots, build_market_permission
 from ..engine.rule_selector import FEATURE_VERSION, PLAN_VERSION, build_shadow_top3
 from ..ml.inference import inference_status, regime_probabilities, sector_probability, stock_probability
 from ..ml.outcome_tracker import OutcomeTracker
@@ -60,7 +60,10 @@ class CloseCollector:
         payload["collection_status"] = collection_status(today, self.settings.tdx_daily_call_limit)
         if "ml_shadow" not in payload:
             assessment = assess_market(payload)
+            payload["permission"] = build_market_permission(assessment)
             payload["ml_shadow"] = build_shadow_top3(payload, assessment)
+        else:
+            payload["permission"] = build_market_permission(assess_market(payload))
         payload["feature_store_status"] = feature_store_status()
         payload["ml_system"] = inference_status()
         payload["ml_review"] = outcome_review()
@@ -75,6 +78,7 @@ class CloseCollector:
         if len(trade_date) != 8:
             return
         assessment = assess_market(payload)
+        payload["permission"] = build_market_permission(assessment)
         shadow = build_shadow_top3(payload, assessment)
         shadow["regime"] = regime_probabilities(assessment)
         for sector in payload.get("mainlines", []):
@@ -311,6 +315,7 @@ class CloseCollector:
                     "trend": assessment["trend"], "speculation": assessment["speculation"],
                     "cycle": assessment["cycle"], "structure": assessment["style"],
                 })
+                payload["permission"] = build_market_permission(assessment)
                 payload["planned_targets"] = build_planned_targets(
                     cores, ladder, cycle=str(payload["state"].get("cycle", "高波动分歧")),
                     loss_score=float(payload["state"].get("loss", 50)), freshness="live",

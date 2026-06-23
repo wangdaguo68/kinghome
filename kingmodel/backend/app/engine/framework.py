@@ -66,6 +66,65 @@ def assess_market(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def build_market_permission(assessment: dict[str, Any]) -> dict[str, Any]:
+    """Translate market state into executable risk permission.
+
+    The loss score is a hard risk gate: strong speculation can identify where
+    opportunities are, but it cannot override broad loss feedback.
+    """
+    cycle = str(assessment.get("cycle") or "")
+    loss = int(assessment.get("loss") or 0)
+
+    if loss >= 80:
+        return {
+            "label": "防守观察",
+            "position_limit": 20,
+            "allowed": "仅主线核心分歧小仓试错",
+            "forbidden": "高潮追涨、中后排、容量趋势硬接",
+        }
+    if loss >= 70:
+        return {
+            "label": "谨慎试错",
+            "position_limit": 30,
+            "allowed": "主线核心分歧承接",
+            "forbidden": "非主线轮动追涨、弱转强缩量秒板",
+        }
+    if cycle == "主升":
+        return {
+            "label": "顺风进攻",
+            "position_limit": 75,
+            "allowed": "主线核心分歧回踩",
+            "forbidden": "非主线轮动高潮追涨",
+        }
+    if cycle == "高位震荡":
+        return {
+            "label": "谨慎进攻",
+            "position_limit": 40,
+            "allowed": "主线核心分歧低吸",
+            "forbidden": "高潮追涨与后排补涨",
+        }
+    if cycle == "试错修复":
+        return {
+            "label": "小仓试错",
+            "position_limit": 35,
+            "allowed": "低位新主线试错",
+            "forbidden": "老周期反抽追涨",
+        }
+    if cycle == "混沌轮动":
+        return {
+            "label": "防守观察",
+            "position_limit": 25,
+            "allowed": "低频等待确认",
+            "forbidden": "频繁切换与非核心追涨",
+        }
+    return {
+        "label": "防守观察",
+        "position_limit": 10,
+        "allowed": "空仓等待",
+        "forbidden": "逆势开仓",
+    }
+
+
 def build_feature_snapshots(payload: dict[str, Any], assessment: dict[str, Any]) -> list[tuple[str, str, dict[str, Any]]]:
     snapshots: list[tuple[str, str, dict[str, Any]]] = [("market", "ALL", assessment)]
     for sector in payload.get("mainlines", []):

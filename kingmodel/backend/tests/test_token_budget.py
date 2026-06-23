@@ -111,7 +111,7 @@ def test_close_snapshot_uses_same_day_tushare_breadth_instead_of_previous_offici
             "source": "previous",
             "freshness": "live",
         },
-        "permission": {"label": "旧", "position_limit": 40, "allowed": "", "forbidden": ""},
+        "permission": {"label": "顺风进攻", "position_limit": 75, "allowed": "旧许可", "forbidden": "旧禁止"},
         "state": {"cycle": "主升", "structure": "旧结构", "money": 70, "loss": 20, "trend": 70, "speculation": 70},
         "breadth": {
             "eligible": 5510, "up": 2916, "down": 2468, "flat": 126,
@@ -180,6 +180,8 @@ def test_close_snapshot_uses_same_day_tushare_breadth_instead_of_previous_offici
     assert result["capacity"]["up"] == 28
     assert result["capacity"]["median"] == -3.2623
     assert result["capacity"]["label"] == "容量负反馈"
+    assert result["permission"]["label"] == "防守观察"
+    assert result["permission"]["position_limit"] == 20
     assert result["negative"][0]["name"] == "电机制造"
     assert result["mainlines"][0]["source"] == "东方财富免费涨停池行业聚合"
     assert result["data_quality"]["breadth"]["source"] == "Tushare同日收盘"

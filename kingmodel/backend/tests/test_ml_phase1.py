@@ -1,6 +1,6 @@
 from app.config import get_settings
 from app.db import feature_store_status, initialize, save_feature_snapshots, save_shadow_plans
-from app.engine.framework import assess_market, build_feature_snapshots
+from app.engine.framework import assess_market, build_feature_snapshots, build_market_permission
 from app.engine.rule_selector import (
     FEATURE_VERSION,
     PLAN_VERSION,
@@ -38,6 +38,23 @@ def test_market_assessment_has_explicit_style_cycle_and_scores() -> None:
     assert result["style"] in {"趋势投机共振", "趋势风格", "投机连板风格", "混合轮动"}
     assert result["cycle"] in {"主升", "高位震荡", "退潮防守", "试错修复", "混沌轮动"}
     assert all(0 <= result[key] <= 100 for key in ("money", "loss", "trend", "speculation"))
+
+
+def test_market_permission_hard_caps_high_loss_feedback() -> None:
+    permission = build_market_permission(
+        {"cycle": "高位震荡", "money": 67, "loss": 88, "trend": 38, "speculation": 99}
+    )
+    assert permission["label"] == "防守观察"
+    assert permission["position_limit"] == 20
+    assert "追涨" in permission["forbidden"]
+
+
+def test_market_permission_allows_attack_only_when_loss_is_low() -> None:
+    permission = build_market_permission(
+        {"cycle": "主升", "money": 75, "loss": 35, "trend": 72, "speculation": 80}
+    )
+    assert permission["label"] == "顺风进攻"
+    assert permission["position_limit"] == 75
 
 
 def test_shadow_top3_is_strictly_ranked_but_never_live_before_validation() -> None:

@@ -31,6 +31,11 @@ function Ladder({ items }: { items: DashboardData["ladder"] }) {
   </article>)}</div></section>)}</div>;
 }
 
+function PlanBullets({ title, items, tone = "observe" }: { title: string; items?: string[]; tone?: "observe" | "invalid" }) {
+  if (!items?.length) return null;
+  return <div className={`plan-condition ${tone}`}><ChevronRight size={15} /><span><b>{title}</b><ul>{items.map((item) => <li key={item}>{item}</li>)}</ul></span></div>;
+}
+
 function PlannedTargets({ items }: { items: DashboardData["planned_targets"] }) {
   if (!items.length) return <div className="plan-empty"><Target size={24} /><div><strong>当前没有达到执行门槛的计划标的</strong><span>系统不会用弱标的补足数量，等待市场许可与核心评分改善。</span></div></div>;
   return <div className="plan-grid">{items.map((item, index) => <article key={item.code}>
@@ -38,6 +43,13 @@ function PlannedTargets({ items }: { items: DashboardData["planned_targets"] }) 
     <p className="plan-logic">{item.logic}</p>
     {item.setup ? <div className="plan-condition observe"><Target size={15} /><span><b>买点类型</b>{item.setup}</span></div> : null}
     {item.payoff ? <div className="plan-condition observe"><TrendingUp size={15} /><span><b>盈亏比/胜率</b>{item.payoff}</span></div> : null}
+    <PlanBullets title="买入前提" items={item.entry_preconditions} />
+    <PlanBullets title="触发买点" items={item.entry_trigger} />
+    <PlanBullets title="禁买条件" items={item.no_buy_conditions} tone="invalid" />
+    {item.position_plan ? <div className="plan-condition observe"><ShieldAlert size={15} /><span><b>仓位计划</b>{item.position_plan}</span></div> : null}
+    <PlanBullets title="止损计划" items={item.stop_loss} tone="invalid" />
+    <PlanBullets title="止盈计划" items={item.take_profit} />
+    <PlanBullets title="卖出/持有" items={item.sell_plan} />
     <div className="plan-condition observe"><Eye size={15} /><span><b>次日观察</b>{item.observation}</span></div>
     <div className="plan-condition invalid"><CircleX size={15} /><span><b>失效条件</b>{item.invalidation}</span></div>
     {item.risk_note ? <div className="plan-condition invalid"><ShieldAlert size={15} /><span><b>风险约束</b>{item.risk_note}</span></div> : null}

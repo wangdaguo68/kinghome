@@ -60,6 +60,115 @@ def _setup(kind: str, height: int, is_max_height: bool) -> str:
     return "低位主线补涨试错"
 
 
+def _execution_plan(kind: str, setup: str, *, hard_risk: bool) -> dict[str, list[str] | str]:
+    common_preconditions = [
+        "大盘/短线情绪没有开盘快速恶化，跌停和炸板没有明显扩散。",
+        "所属板块至少有1个以上同方向标的维持正反馈，不能是孤立个股表现。",
+        "个股不能是一字板、秒板或缩量加速；必须有可观察的换手和承接。",
+    ]
+    common_no_buy = [
+        "高开过多且缩量，开盘直接一致加速，不追。",
+        "开盘10分钟内放量跌破分时均价线，且反抽站不回，不买。",
+        "同题材前排或板块核心先杀跌，不买。",
+    ]
+    if kind == "趋势容量核心":
+        return {
+            "entry_preconditions": [
+                *common_preconditions,
+                "成交额保持活跃，回踩时缩量，修复时放量。",
+            ],
+            "entry_trigger": [
+                "回踩5日线、10日线或分时均价线附近止跌，重新放量站回均价线时低吸。",
+                "若高开，必须先回落换手，二次上穿均价线再考虑。",
+            ],
+            "no_buy_conditions": [
+                *common_no_buy,
+                "放量跌破最近趋势支撑，不买。",
+            ],
+            "stop_loss": [
+                "买入后跌破触发买点的承接位，先卖出。",
+                "收盘跌破5日线且板块无修复，趋势计划失效。",
+                "单笔浮亏达到-4%附近仍无资金回流，执行止损。",
+            ],
+            "take_profit": [
+                "达到2R先锁定部分利润。",
+                "趋势未破且板块继续加强，可保留底仓观察3–10日。",
+                "放量冲高后回落跌破分时均价线，至少减仓。",
+            ],
+            "sell_plan": [
+                "趋势票不以隔日冲高为唯一卖点，核心看趋势结构是否破坏。",
+                "买入理由消失时，即使没到硬止损也退出。",
+            ],
+        }
+    if kind == "创业板20cm弹性核心":
+        return {
+            "entry_preconditions": [
+                *common_preconditions,
+                "20cm方向有板块扩散或同方向首板/趋势票助攻。",
+            ],
+            "entry_trigger": [
+                "竞价高开0%–6%且量能温和，开盘后换手不破均价线，再放量上穿时介入。",
+                "分歧回落后不破开盘低点，板块同步回流时介入。",
+            ],
+            "no_buy_conditions": [
+                *common_no_buy,
+                "高开超过8%且没有换手承接，不追。",
+                "直接冲20cm但板块没有扩散，不排队。",
+            ],
+            "stop_loss": [
+                "跌破开盘低点或买点承接位，先卖。",
+                "跌破分时均价线后10分钟内收不回，卖。",
+                "单笔浮亏达到-5%附近仍无修复，执行止损。",
+            ],
+            "take_profit": [
+                "冲高8%–15%但不继续加强，优先兑现一半以上。",
+                "若封20cm且板块继续扩散，可保留小仓观察次日溢价。",
+                "出现放量长上影或板块回落，兑现为主。",
+            ],
+            "sell_plan": [
+                "弹性票以隔日或1–3日为主，不做无条件格局。",
+                "买入理由消失时，即使没到硬止损也退出。",
+            ],
+        }
+    return {
+        "entry_preconditions": [
+            *common_preconditions,
+            "只能做低位补涨或分歧转强，不能做高位一致追涨。",
+        ],
+        "entry_trigger": [
+            "竞价高开0%–5%，量能温和，开盘5–15分钟不破均价线，再放量上穿时介入。",
+            "盘中分歧回落后不破关键承接位，重新放量回封时小仓确认。",
+        ],
+        "no_buy_conditions": [
+            *common_no_buy,
+            "一字板、秒板、缩量加速板不买；买不到就放弃。",
+            "板块没有至少1只同方向助攻，不买。",
+        ],
+        "stop_loss": [
+            "买入后跌破触发买点的承接位，先卖。",
+            "炸板后回封失败，且板块没有修复，卖。",
+            "单笔浮亏达到-3%到-4%且不快速修复，执行止损。",
+        ],
+        "take_profit": [
+            "次日冲高不封板或明显弱于同题材前排，先减仓或兑现。",
+            "达到2R先锁定部分利润，不把盈利票拿成亏损。",
+            "若回封强且板块继续加强，可保留小仓到尾盘确认。",
+        ],
+        "sell_plan": [
+            "连板/补涨票以隔日为主，不做无条件格局。",
+            "买入理由消失时，即使没到硬止损也退出。",
+        ],
+    }
+
+
+def _position_plan(priority_score: float, *, hard_risk: bool) -> str:
+    if hard_risk:
+        return "防守环境：即使触发买点，单票不超过5%–10%；没有完美买点直接空仓。"
+    if priority_score >= 88:
+        return "A级计划：满足买点后单票最多20%，禁止一次性满仓；失败立即按止损处理。"
+    return "B级试错：满足买点后单票最多10%–15%；只试错，不加仓摊平。"
+
+
 def build_planned_targets(
     cores: list[dict[str, Any]],
     ladder: list[dict[str, Any]],
@@ -102,11 +211,10 @@ def build_planned_targets(
         is_max_height = height > 0 and height == max_height
         if is_max_height and height >= 4:
             continue
+
         mainline_match = _matches_any(concepts, mainlines)
         if not mainlines:
             mainline_match = kind in {"趋势容量核心", "创业板20cm弹性核心"}
-
-        # 最高板是情绪温度计，不是默认交易标的；4板以上默认只进连板梯队观察，不进正式计划。
 
         # 3板以上的非主线连板，只保留观察，不进入正式计划。
         if kind == "连板情绪核心" and height >= 3 and mainlines and not mainline_match:
@@ -129,18 +237,14 @@ def build_planned_targets(
         elif kind == "连板情绪核心":
             score += 3 if height <= 2 else 0
             score -= max(0, height - 2) * 3
-            if is_max_height and height >= 4:
-                score -= 12
 
         if score < execute_threshold:
             continue
 
         setup = _setup(kind, height, is_max_height)
         logic = str(core.get("evidence", "核心评分与市场反馈共振"))
-        if kind == "连板情绪核心" and height >= 4:
-            logic = f"{logic}；注意：该股为高位连板，只作为情绪锚，必须等待分歧回封确认。"
-        else:
-            logic = f"{logic}；买点类型：{setup}。"
+        logic = f"{logic}；买点类型：{setup}。"
+        execution = _execution_plan(kind, setup, hard_risk=hard_risk)
 
         candidate = {
             "name": str(core.get("name", code)),
@@ -154,6 +258,7 @@ def build_planned_targets(
             "risk_note": "市场亏钱效应较强，宁可空仓也不追高。" if hard_risk else "仅在计划买点出现时执行，不做盘中冲动追高。",
             "source": str(ladder_item.get("source") or core.get("source") or "本地规则引擎"),
             "confidence": confidence,
+            **execution,
         }
         previous = candidates.get(code)
         if previous is None or candidate["score"] > previous["score"]:
@@ -162,4 +267,5 @@ def build_planned_targets(
     ranked = sorted(candidates.values(), key=lambda item: (-item["score"], item["code"]))[:3]
     for index, item in enumerate(ranked):
         item["priority"] = "A" if index == 0 and item["score"] >= 88 else "B"
+        item["position_plan"] = _position_plan(float(item["score"]), hard_risk=hard_risk)
     return ranked

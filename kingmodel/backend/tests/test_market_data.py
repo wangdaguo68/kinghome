@@ -96,6 +96,13 @@ def test_planned_targets_are_ranked_deduplicated_and_exclude_unsupported_markets
     assert targets[0]["holding_period"] == "3–10日"
     assert targets[1]["holding_period"] == "1–3日"
     assert all(item["code"] != "600353" for item in targets)
+    required_plan_fields = {
+        "entry_preconditions", "entry_trigger", "no_buy_conditions", "position_plan",
+        "stop_loss", "take_profit", "sell_plan",
+    }
+    for item in targets:
+        assert required_plan_fields <= item.keys()
+        assert all(item[field] for field in required_plan_fields)
     assert len({item["code"] for item in targets}) == len(targets)
 
 

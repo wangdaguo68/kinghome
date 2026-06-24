@@ -11,7 +11,13 @@ export interface DashboardData {
   negative: Array<{ name: string; change: number; severity: string }>;
   alerts: Array<{ level: string; title: string; detail: string }>;
   ladder: Array<{ name: string; code: string; height: number; recent_limit_count?: number; recent_window_days?: number; change: number; concepts: string[]; primary_factor: string; factor_type: string; confidence: string; evidence: string; source: string }>;
-  planned_targets: Array<{ name: string; code: string; kind: string; priority: string; score: number; logic: string; observation: string; invalidation: string; holding_period: string; source: string; confidence: string; setup?: string; payoff?: string; risk_note?: string }>;
+  planned_targets: Array<{
+    name: string; code: string; kind: string; priority: string; score: number; logic: string;
+    observation: string; invalidation: string; holding_period: string; source: string; confidence: string;
+    setup?: string; payoff?: string; risk_note?: string; position_plan?: string;
+    entry_preconditions?: string[]; entry_trigger?: string[]; no_buy_conditions?: string[];
+    stop_loss?: string[]; take_profit?: string[]; sell_plan?: string[];
+  }>;
   ml_shadow?: {
     mode: "shadow";
     status: string;

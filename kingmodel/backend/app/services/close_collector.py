@@ -30,7 +30,9 @@ from ..engine.rule_selector import FEATURE_VERSION, PLAN_VERSION, build_shadow_t
 from ..ml.inference import inference_status, regime_probabilities, sector_probability, stock_probability
 from ..ml.outcome_tracker import OutcomeTracker
 from ..ml.training_pipeline import TrainingPipeline
+from .capacity_core import build_capacity_cores, capacity_cores_as_candidates
 from .collector import Collector, DEMO_DASHBOARD, _capacity_label
+from .decision_context import build_event_signals, build_market_graph
 from .free_market import EastMoneyFreeClient, FreeMarketError
 from .market_validation import is_trade_candidate
 from .planning import build_planned_targets
@@ -86,6 +88,14 @@ class CloseCollector:
         payload["feature_store_status"] = feature_store_status()
         payload["ml_system"] = inference_status()
         payload["ml_review"] = outcome_review()
+        payload.setdefault("capacity_cores", [])
+        payload["event_signals"] = build_event_signals(
+            payload.get("sentiment", []),
+            mainlines=payload.get("mainlines", []),
+            sector_linkage=payload.get("sector_linkage", []),
+            ml_review=payload.get("ml_review", {}),
+        )
+        payload["market_graph"] = build_market_graph(payload)
         return payload
 
     def bootstrap_shadow(self) -> None:
@@ -349,6 +359,30 @@ class CloseCollector:
                     "source": "东方财富涨停池 + Tushare行业日线" if market_rows else "东方财富涨停池",
                     "status": "validated" if payload["sector_linkage"] else "empty",
                 }
+                payload["capacity_cores"] = build_capacity_cores(
+                    market_rows,
+                    mainlines=payload.get("mainlines", []),
+                    sector_linkage=payload.get("sector_linkage", []),
+                    reference_rows=today_rows,
+                    limit_codes={str(row.get("code", "")) for row in today_rows},
+                )
+                payload["data_quality"]["capacity_cores"] = {
+                    "source": market_source if market_rows else "同日全市场日线缺失",
+                    "status": "validated" if payload["capacity_cores"] else "empty",
+                }
+                existing_core_codes = {str(item.get("code", "")) for item in cores}
+                for candidate in capacity_cores_as_candidates(payload["capacity_cores"]):
+                    if candidate["code"] not in existing_core_codes:
+                        cores.append(candidate)
+                        existing_core_codes.add(candidate["code"])
+                payload["cores"] = cores
+                payload["ml_review"] = outcome_review()
+                payload["event_signals"] = build_event_signals(
+                    payload.get("sentiment", []),
+                    mainlines=payload.get("mainlines", []),
+                    sector_linkage=payload.get("sector_linkage", []),
+                    ml_review=payload.get("ml_review", {}),
+                )
                 assessment = assess_market(payload)
                 payload.setdefault("state", {}).update({
                     "money": assessment["money"], "loss": assessment["loss"],
@@ -362,8 +396,10 @@ class CloseCollector:
                     negative_names=[str(item.get("name", "")) for item in payload.get("negative", [])],
                     mainline_names=[str(item.get("name", "")) for item in payload.get("mainlines", [])],
                     sector_linkage=payload.get("sector_linkage", []),
+                    event_signals=payload.get("event_signals", []),
                     market_data_complete=bool(payload.get("breadth", {}).get("eligible")),
                 )
+                payload["market_graph"] = build_market_graph(payload)
                 payload["ml_shadow"] = build_shadow_top3(payload, assessment)
                 payload["ml_regime"] = regime_probabilities(assessment)
                 payload["ml_shadow"]["regime"] = payload["ml_regime"]

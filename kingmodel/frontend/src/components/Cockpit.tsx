@@ -55,6 +55,29 @@ function SectorLinkage({ items = [] }: { items?: NonNullable<DashboardData["sect
   </article>)}</div>;
 }
 
+function CapacityCores({ items = [] }: { items?: NonNullable<DashboardData["capacity_cores"]> }) {
+  if (!items.length) return <div className="linkage-empty"><Database size={22} /><span>暂无同日成交额核心数据；趋势容量模式不会强行补票。</span></div>;
+  return <div className="capacity-core-list">{items.slice(0, 8).map((item) => <article key={item.code} className={!item.tradable ? "disabled" : ""}>
+    <div className="capacity-rank">#{item.rank}</div>
+    <div className="capacity-core-main">
+      <header><strong>{item.name}<small>{item.code}</small></strong><em className={item.change >= 0 ? "up" : "down"}>{item.change >= 0 ? "+" : ""}{item.change.toFixed(2)}%</em></header>
+      <p>{item.reason}</p>
+      <footer>{item.tags.slice(0, 5).map((tag) => <span key={tag}>{tag}</span>)}</footer>
+    </div>
+    <div className="capacity-core-score"><b>{item.score.toFixed(1)}</b><small>{item.amount_label}</small></div>
+  </article>)}</div>;
+}
+
+function EventSignals({ items = [] }: { items?: NonNullable<DashboardData["event_signals"]> }) {
+  if (!items.length) return <div className="linkage-empty"><ShieldAlert size={22} /><span>暂无可审计的隔夜舆情/盘后复盘信号；计划不会使用空数据加分。</span></div>;
+  return <div className="event-signal-list">{items.slice(0, 6).map((item) => <article key={`${item.type}-${item.topic}`}>
+    <header><div><small>{item.type === "overnight_sentiment" ? "隔夜舆情" : item.type === "post_market_review" ? "盘后复盘" : "模型复盘"}</small><strong>{item.topic}</strong></div><em>{item.score.toFixed(1)}</em></header>
+    <p>{item.catalyst}</p>
+    <div><span>验证：{item.validation}</span><span>风险：{item.risk}</span></div>
+    <footer><b>{item.crowding}</b><small>{item.source}</small></footer>
+  </article>)}</div>;
+}
+
 function PlannedTargets({ items }: { items: DashboardData["planned_targets"] }) {
   if (!items.length) return <div className="plan-empty"><Target size={24} /><div><strong>当前没有达到执行门槛的计划标的</strong><span>系统不会用弱标的补足数量，等待市场许可与核心评分改善。</span></div></div>;
   return <div className="plan-grid">{items.map((item, index) => <article key={item.code}>
@@ -64,6 +87,8 @@ function PlannedTargets({ items }: { items: DashboardData["planned_targets"] }) 
     {item.payoff ? <div className="plan-condition observe"><TrendingUp size={15} /><span><b>盈亏比/胜率</b>{item.payoff}</span></div> : null}
     {item.sector_linkage_level ? <div className="plan-condition observe"><Zap size={15} /><span><b>板块联动</b>{item.sector_linkage_level} {typeof item.sector_linkage_score === "number" ? `${item.sector_linkage_score.toFixed(1)}分` : ""} · {item.leader_effect}</span></div> : null}
     <PlanBullets title="联动证据" items={item.sector_linkage_evidence} />
+    {item.event_signal_score ? <div className="plan-condition observe"><Radio size={15} /><span><b>舆情/复盘</b>{item.event_signal_score.toFixed(1)}分 · 只作为预期差与次日验证条件，不替代盘面确认</span></div> : null}
+    <PlanBullets title="舆情验证" items={item.event_signals?.map((signal) => `${signal.topic}：${signal.validation}`)} />
     <PlanBullets title="买入前提" items={item.entry_preconditions} />
     <PlanBullets title="触发买点" items={item.entry_trigger} />
     <PlanBullets title="禁买条件" items={item.no_buy_conditions} tone="invalid" />
@@ -124,6 +149,8 @@ export function Cockpit({ data }: { data: DashboardData }) {
 
     <Panel title="板块联动性" kicker="SECTOR LINKAGE · 龙头带动/后排扩散" source={qualitySource(data, "sector_linkage")} className="linkage-panel"><SectorLinkage items={data.sector_linkage} /></Panel>
 
+    <Panel title="容量核心" kicker="CAPACITY CORES · 趋势/中军候选" source={qualitySource(data, "capacity_cores")} className="capacity-cores-panel"><CapacityCores items={data.capacity_cores} /></Panel>
+
     <Panel title="实时风险与容量反馈" kicker="LIVE RISK · NO STATIC COPY" source={data.capacity.source} className="alerts-panel">
       <div className="capacity-strip"><div><small>成交额样本</small><strong>TOP {data.capacity.sample}</strong></div><div><small>上涨 / 下跌</small><strong><i className="up">{data.capacity.up}</i> / <i className="down">{data.capacity.down}</i></strong></div><div><small>中位涨跌幅</small><strong className={data.capacity.median >= 0 ? "up" : "down"}>{data.capacity.median >= 0 ? "+" : ""}{data.capacity.median.toFixed(2)}%</strong></div><div><small>容量判断</small><strong>{data.capacity.label}</strong></div></div>
       <div className="alert-stack">{data.alerts.map((alert) => <div className={`alert-item ${alert.level}`} key={alert.title}><AlertTriangle size={15} /><span><strong>{alert.title}</strong><small>{alert.detail}</small></span></div>)}</div>
@@ -143,8 +170,8 @@ export function Cockpit({ data }: { data: DashboardData }) {
     </Panel>
 
     <Panel title="隔夜预期" kicker="SENTIMENT" className="sentiment-panel">
-      <div className="sentiment-mini">{data.sentiment.map((item) => <article key={item.topic}><div><Target size={15} /><strong>{item.topic}</strong><em>热度 {item.heat}</em></div><p>{item.catalyst}</p><footer><span>拥挤度 {item.crowding}</span><span>验证：{item.validation}</span></footer></article>)}</div>
-      <p className="sentiment-policy"><ShieldAlert size={14} />舆情只提示预期与拥挤，不直接改变评分和仓位。</p>
+      <EventSignals items={data.event_signals} />
+      <p className="sentiment-policy"><ShieldAlert size={14} />舆情/复盘已进入计划评分，但只改变预期差和验证条件；盘面不确认时不得买入。</p>
     </Panel>
   </div>;
 }

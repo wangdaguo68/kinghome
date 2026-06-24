@@ -6,6 +6,15 @@ export interface DashboardData {
   state: { cycle: string; structure: string; money: number; loss: number; trend: number; speculation: number };
   breadth: { eligible: number; up: number; down: number; flat: number; median: number; limit_up: number; limit_down: number; failed_limit: number; continuous: number };
   capacity: { sample: number; up: number; down: number; median: number; label: string; source: string };
+  market_graph?: {
+    nodes: Array<{ id: string; label: string; type: string; score: number; detail: string }>;
+    edges: Array<{ source: string; target: string; label: string; tone: string }>;
+  };
+  capacity_cores?: Array<{
+    name: string; code: string; industry: string; rank: number; score: number; change: number;
+    amount: number; amount_label: string; capacity_median: number; linkage_score?: number | null;
+    linkage_level: string; mainline_match: boolean; tradable: boolean; tags: string[]; reason: string; source: string;
+  }>;
   mainlines: Array<{ name: string; score: number; role: string; change: number; flow: string; tags: string[] }>;
   sector_linkage?: Array<{
     name: string; score: number; level: string; leader: string; leader_code: string;
@@ -25,6 +34,8 @@ export interface DashboardData {
     sector_linkage_score?: number | null; sector_linkage_level?: string; sector_linkage_evidence?: string[];
     leader_effect?: string; followers?: Array<{ name: string; code: string; change: number; role: string }>;
     is_isolated?: boolean;
+    event_signal_score?: number | null;
+    event_signals?: Array<{ topic: string; type: string; score: number; catalyst: string; validation: string; risk: string }>;
     entry_preconditions?: string[]; entry_trigger?: string[]; no_buy_conditions?: string[];
     stop_loss?: string[]; take_profit?: string[]; sell_plan?: string[];
   }>;
@@ -61,6 +72,11 @@ export interface DashboardData {
     items: Array<{ trade_date: string; code: string; name: string; rank?: number; horizon: number; tradable: boolean; net_return: number; mfe: number; mae: number; blocked_reason?: string }>;
   };
   data_quality: Record<string, { source: string; status: string; reason?: string }>;
+  event_signals?: Array<{
+    topic: string; score: number; type: string; heat?: number | null; crowding: string;
+    catalyst: string; validation: string; mainline_match: boolean; linkage_match: boolean;
+    source: string; usable: boolean; risk: string;
+  }>;
   sentiment: Array<{ topic: string; heat: number; crowding: string; catalyst: string; validation: string }>;
   checkpoints: string[];
   collection_status: {

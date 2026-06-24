@@ -179,6 +179,7 @@ def build_planned_targets(
     negative_names: list[str] | None = None,
     mainline_names: list[str] | None = None,
     sector_linkage: list[dict[str, Any]] | None = None,
+    event_signals: list[dict[str, Any]] | None = None,
     market_data_complete: bool = True,
 ) -> list[dict[str, Any]]:
     if freshness != "live" or not market_data_complete:
@@ -196,6 +197,7 @@ def build_planned_targets(
         for follower in item.get("followers", []) or []:
             if follower.get("code"):
                 linkage_by_code[str(follower["code"])] = item
+    signal_by_topic = {str(item.get("topic", "")): item for item in (event_signals or []) if item.get("topic")}
     hard_risk = loss_score >= 80 or cycle in {"退潮", "退潮防守", "冰点"}
     execute_threshold = 86 if hard_risk else 78
     candidates: dict[str, dict[str, Any]] = {}
@@ -228,6 +230,14 @@ def build_planned_targets(
             (item for name, item in linkage_by_name.items() if any(name in concept or concept in name for concept in concepts)),
             None,
         )
+        matched_names = list(concepts)
+        if mainline_match:
+            matched_names.extend(name for name in mainlines if _matches_any(concepts, [name]))
+        matched_signals = [
+            signal for topic, signal in signal_by_topic.items()
+            if any(topic in name or name in topic for name in matched_names)
+        ]
+        event_score = max((float(signal.get("score") or 0) for signal in matched_signals), default=0.0)
 
         # 3板以上的非主线连板，只保留观察，不进入正式计划。
         if kind == "连板情绪核心" and height >= 3 and mainlines and not mainline_match:
@@ -247,6 +257,10 @@ def build_planned_targets(
                 score -= 6
             if linkage.get("isolated"):
                 score -= 8
+        if matched_signals:
+            score += min(7.0, event_score * 0.07)
+            if any(str(signal.get("crowding")) == "高" for signal in matched_signals) and not linkage:
+                score -= 5.0
 
         payoff_note, payoff_bonus = _payoff_label(kind, height, mainline_match)
         score += payoff_bonus
@@ -273,7 +287,8 @@ def build_planned_targets(
             "name": str(core.get("name", code)),
             "code": code,
             "kind": kind,
-            "score": round(score, 1),
+            "score": round(max(0.0, min(100.0, score)), 1),
+            "_rank_score": round(score, 1),
             "logic": logic,
             **TEMPLATES[kind],
             "setup": setup,
@@ -287,14 +302,27 @@ def build_planned_targets(
             "leader_effect": f"{linkage.get('leader')}带动{linkage.get('follower_count')}只后排、{linkage.get('elastic_count')}只20cm弹性" if linkage else "暂无板块联动证据",
             "followers": list(linkage.get("followers") or []) if linkage else [],
             "is_isolated": bool(linkage.get("isolated")) if linkage else False,
+            "event_signal_score": round(event_score, 1) if matched_signals else None,
+            "event_signals": [
+                {
+                    "topic": str(signal.get("topic", "")),
+                    "type": str(signal.get("type", "")),
+                    "score": float(signal.get("score") or 0),
+                    "catalyst": str(signal.get("catalyst", "")),
+                    "validation": str(signal.get("validation", "")),
+                    "risk": str(signal.get("risk", "")),
+                }
+                for signal in sorted(matched_signals, key=lambda item: -float(item.get("score") or 0))[:3]
+            ],
             **execution,
         }
         previous = candidates.get(code)
         if previous is None or candidate["score"] > previous["score"]:
             candidates[code] = candidate
 
-    ranked = sorted(candidates.values(), key=lambda item: (-item["score"], item["code"]))[:3]
+    ranked = sorted(candidates.values(), key=lambda item: (-float(item.get("_rank_score", item["score"])), item["code"]))[:3]
     for index, item in enumerate(ranked):
-        item["priority"] = "A" if index == 0 and item["score"] >= 88 else "B"
-        item["position_plan"] = _position_plan(float(item["score"]), hard_risk=hard_risk)
+        rank_score = float(item.pop("_rank_score", item["score"]))
+        item["priority"] = "A" if index == 0 and rank_score >= 88 else "B"
+        item["position_plan"] = _position_plan(rank_score, hard_risk=hard_risk)
     return ranked

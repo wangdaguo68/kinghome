@@ -115,6 +115,17 @@ class EastMoneyFreeClient:
 
         return {
             "trade_date": trade_date,
+            "rows": [
+                {
+                    "ts_code": str(row.get("f12") or ""),
+                    "code": str(row.get("f12") or ""),
+                    "name": str(row.get("f14") or ""),
+                    "pct_chg": float(self._value(row.get("f3")) or 0),
+                    "amount": float(self._value(row.get("f6")) or 0),
+                    "industry": "",
+                }
+                for row in valid
+            ],
             "breadth": {
                 "eligible": len(valid),
                 "up": sum(value > 0 for value in changes),

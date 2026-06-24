@@ -7,6 +7,8 @@ from app.services.collector import _factor_type
 from app.services.ladder import calculate_ladder_metrics, trade_dates_from_tdx_kline
 from app.services.planning import build_planned_targets
 from app.services.sector_linkage import build_sector_linkage
+from app.services.capacity_core import build_capacity_cores, capacity_cores_as_candidates
+from app.services.decision_context import build_event_signals, build_market_graph
 from app.services.tushare_fallback import TushareFallback
 
 
@@ -146,6 +148,69 @@ def test_sector_linkage_feeds_planned_target_evidence() -> None:
     assert targets[0]["sector_linkage_score"] == semiconductor["score"]
     assert targets[0]["sector_linkage_evidence"]
     assert "带动" in targets[0]["leader_effect"]
+
+
+def test_capacity_cores_feed_trend_candidates_and_market_graph() -> None:
+    market_rows = [
+        {"ts_code": "601138.SH", "name": "工业富联", "industry": "元件", "pct_chg": 7.5, "amount": 33_000_000_000},
+        {"ts_code": "688001.SH", "name": "科创样本", "industry": "元件", "pct_chg": 12.0, "amount": 30_000_000_000},
+        {"ts_code": "600000.SH", "name": "容量跟随", "industry": "银行", "pct_chg": 1.0, "amount": 10_000_000_000},
+    ]
+    linkage = [{"name": "元件", "score": 82, "level": "强联动", "leader": "法拉电子", "follower_count": 6, "elastic_count": 2}]
+    cores = build_capacity_cores(market_rows, mainlines=[{"name": "元件"}], sector_linkage=linkage)
+    assert cores[0]["code"] == "601138"
+    assert cores[0]["tradable"] is True
+    assert any(item["code"] == "688001" and item["tradable"] is False for item in cores)
+
+    candidates = capacity_cores_as_candidates(cores)
+    assert candidates and candidates[0]["kind"] == "趋势容量核心"
+    assert all(item["code"] != "688001" for item in candidates)
+
+    payload = {
+        "state": {"cycle": "主升", "structure": "趋势容量风格", "money": 75, "loss": 25},
+        "breadth": {"up": 3000, "down": 2000},
+        "capacity": {"sample": 100, "up": 70, "median": 2.4, "label": "容量正反馈"},
+        "mainlines": [{"name": "元件", "score": 88, "flow": "容量主动进攻"}],
+        "negative": [{"name": "地产", "change": -3.2}],
+        "sector_linkage": [{"name": "元件", "score": 82, "level": "强联动", "leader": "法拉电子", "leader_code": "600563", "follower_count": 6, "elastic_count": 2, "limit_up_count": 7}],
+        "capacity_cores": cores,
+        "planned_targets": [{"name": "工业富联", "code": "601138", "score": 93, "priority": "A", "setup": "主线容量核心分歧回踩"}],
+    }
+    graph = build_market_graph(payload)
+    assert any(node["type"] == "capacity_core" for node in graph["nodes"])
+    assert any(edge["label"] == "交易计划" for edge in graph["edges"])
+
+
+def test_capacity_core_normalizes_tushare_amount_and_reference_names() -> None:
+    cores = build_capacity_cores(
+        [{"ts_code": "603986.SH", "name": "", "industry": "", "pct_chg": 10, "amount": 39_944_848.281}],
+        reference_rows=[{"code": "603986", "name": "兆易创新", "industry": "半导体"}],
+        limit_codes={"603986"},
+    )
+    assert cores[0]["name"] == "兆易创新"
+    assert cores[0]["industry"] == "半导体"
+    assert cores[0]["amount"] == pytest.approx(39_944_848_281)
+    assert cores[0]["amount_label"].endswith("亿")
+
+
+def test_event_signals_affect_planned_target_validation() -> None:
+    signals = build_event_signals(
+        [{"topic": "元件", "heat": 80, "crowding": "中", "catalyst": "盘后复盘集中提及", "validation": "竞价容量确认"}],
+        mainlines=[{"name": "元件", "score": 88, "change": 4, "flow": "容量主动"}],
+        sector_linkage=[{"name": "元件", "score": 82, "level": "强联动"}],
+    )
+    targets = build_planned_targets(
+        [{"name": "趋势核心", "code": "601138", "kind": "趋势容量核心", "score": 88, "evidence": "成交额主动", "concepts": ["元件"]}],
+        [],
+        cycle="主升",
+        loss_score=25,
+        freshness="live",
+        mainline_names=["元件"],
+        event_signals=signals,
+    )
+    assert targets
+    assert targets[0]["event_signal_score"] is not None
+    assert targets[0]["event_signals"][0]["validation"] == "竞价容量确认"
 
 
 def test_planned_targets_do_not_fill_below_threshold() -> None:

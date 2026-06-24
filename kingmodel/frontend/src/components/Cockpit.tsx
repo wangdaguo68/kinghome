@@ -36,8 +36,11 @@ function PlannedTargets({ items }: { items: DashboardData["planned_targets"] }) 
   return <div className="plan-grid">{items.map((item, index) => <article key={item.code}>
     <header><span className={`plan-priority priority-${item.priority}`}>{item.priority}</span><div><small>{String(index + 1).padStart(2, "0")} · {item.kind}</small><strong>{item.name}<b>{item.code}</b></strong></div><em>{item.score.toFixed(1)}</em></header>
     <p className="plan-logic">{item.logic}</p>
+    {item.setup ? <div className="plan-condition observe"><Target size={15} /><span><b>买点类型</b>{item.setup}</span></div> : null}
+    {item.payoff ? <div className="plan-condition observe"><TrendingUp size={15} /><span><b>盈亏比/胜率</b>{item.payoff}</span></div> : null}
     <div className="plan-condition observe"><Eye size={15} /><span><b>次日观察</b>{item.observation}</span></div>
     <div className="plan-condition invalid"><CircleX size={15} /><span><b>失效条件</b>{item.invalidation}</span></div>
+    {item.risk_note ? <div className="plan-condition invalid"><ShieldAlert size={15} /><span><b>风险约束</b>{item.risk_note}</span></div> : null}
     <footer><span>{item.holding_period}</span><small>{item.source} · {item.confidence}置信</small></footer>
   </article>)}</div>;
 }

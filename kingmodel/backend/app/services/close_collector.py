@@ -351,6 +351,8 @@ class CloseCollector:
                     cores, ladder, cycle=str(payload["state"].get("cycle", "高波动分歧")),
                     loss_score=float(payload["state"].get("loss", 50)), freshness="live",
                     negative_names=[str(item.get("name", "")) for item in payload.get("negative", [])],
+                    mainline_names=[str(item.get("name", "")) for item in payload.get("mainlines", [])],
+                    market_data_complete=bool(payload.get("breadth", {}).get("eligible")),
                 )
                 payload["ml_shadow"] = build_shadow_top3(payload, assessment)
                 payload["ml_regime"] = regime_probabilities(assessment)

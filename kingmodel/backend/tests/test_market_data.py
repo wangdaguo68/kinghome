@@ -84,11 +84,18 @@ def test_planned_targets_are_ranked_deduplicated_and_exclude_unsupported_markets
         {"name": "弱样本", "code": "600001", "kind": "趋势容量核心", "score": 79, "evidence": "不补足"},
     ]
     ladder = [{"code": "600353", "height": 4, "confidence": "高", "source": "通达信涨停分析", "concepts": ["可控核聚变"]}]
-    targets = build_planned_targets(cores, ladder, cycle="主升", loss_score=30, freshness="live")
-    assert [item["code"] for item in targets] == ["600353", "300001", "601138"]
-    assert targets[0]["holding_period"] == "隔日观察"
+    targets = build_planned_targets(
+        cores,
+        ladder,
+        cycle="主升",
+        loss_score=30,
+        freshness="live",
+        mainline_names=["可控核聚变"],
+    )
+    assert [item["code"] for item in targets] == ["601138", "300001"]
+    assert targets[0]["holding_period"] == "3–10日"
     assert targets[1]["holding_period"] == "1–3日"
-    assert targets[2]["holding_period"] == "3–10日"
+    assert all(item["code"] != "600353" for item in targets)
     assert len({item["code"] for item in targets}) == len(targets)
 
 
@@ -99,6 +106,18 @@ def test_planned_targets_do_not_fill_below_threshold() -> None:
         cycle="高波动分歧",
         loss_score=60,
         freshness="live",
+    )
+    assert targets == []
+
+
+def test_planned_targets_empty_when_market_data_is_incomplete() -> None:
+    targets = build_planned_targets(
+        [{"name": "强样本", "code": "601138", "kind": "趋势容量核心", "score": 98, "evidence": "容量主动"}],
+        [],
+        cycle="主升",
+        loss_score=30,
+        freshness="live",
+        market_data_complete=False,
     )
     assert targets == []
 

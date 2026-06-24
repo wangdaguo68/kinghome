@@ -466,6 +466,8 @@ class Collector:
             loss_score=scores["loss"],
             freshness=payload["meta"]["freshness"],
             negative_names=[str(item.get("name", "")) for item in payload.get("negative", [])],
+            mainline_names=[str(item.get("name", "")) for item in payload.get("mainlines", [])],
+            market_data_complete=bool(payload.get("breadth", {}).get("eligible")),
         )
         quality["breadth"] = {"source": breadth_source, "status": "validated" if breadth_source != "最近可信快照" else "stale"}
         quality["capacity"] = {"source": capacity["source"], "status": "validated" if capacity["source"] != "最近可信快照" else "stale"}

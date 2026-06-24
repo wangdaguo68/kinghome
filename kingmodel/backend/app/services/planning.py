@@ -178,6 +178,7 @@ def build_planned_targets(
     freshness: str,
     negative_names: list[str] | None = None,
     mainline_names: list[str] | None = None,
+    sector_linkage: list[dict[str, Any]] | None = None,
     market_data_complete: bool = True,
 ) -> list[dict[str, Any]]:
     if freshness != "live" or not market_data_complete:
@@ -187,6 +188,14 @@ def build_planned_targets(
     max_height = max((int(item.get("height", 0) or 0) for item in ladder), default=0)
     negative = [name for name in (negative_names or []) if name]
     mainlines = [name for name in (mainline_names or []) if name]
+    linkage_by_name = {str(item.get("name", "")): item for item in (sector_linkage or [])}
+    linkage_by_code: dict[str, dict[str, Any]] = {}
+    for item in sector_linkage or []:
+        if item.get("leader_code"):
+            linkage_by_code[str(item["leader_code"])] = item
+        for follower in item.get("followers", []) or []:
+            if follower.get("code"):
+                linkage_by_code[str(follower["code"])] = item
     hard_risk = loss_score >= 80 or cycle in {"退潮", "退潮防守", "冰点"}
     execute_threshold = 86 if hard_risk else 78
     candidates: dict[str, dict[str, Any]] = {}
@@ -199,7 +208,7 @@ def build_planned_targets(
             continue
 
         ladder_item = ladder_by_code.get(code, {})
-        concepts = [str(item) for item in ladder_item.get("concepts", []) if str(item)]
+        concepts = [str(item) for item in (ladder_item.get("concepts") or core.get("concepts") or []) if str(item)]
         if _matches_any(concepts, negative):
             continue
 
@@ -215,6 +224,10 @@ def build_planned_targets(
         mainline_match = _matches_any(concepts, mainlines)
         if not mainlines:
             mainline_match = kind in {"趋势容量核心", "创业板20cm弹性核心"}
+        linkage = linkage_by_code.get(code) or next(
+            (item for name, item in linkage_by_name.items() if any(name in concept or concept in name for concept in concepts)),
+            None,
+        )
 
         # 3板以上的非主线连板，只保留观察，不进入正式计划。
         if kind == "连板情绪核心" and height >= 3 and mainlines and not mainline_match:
@@ -224,6 +237,16 @@ def build_planned_targets(
         score += _confidence_score(confidence)
         score += 8 if mainline_match else -4
         score -= max(0.0, loss_score - 45) * 0.25
+        if linkage:
+            linkage_score = float(linkage.get("score") or 0)
+            if linkage_score >= 80:
+                score += 8
+            elif linkage_score >= 50:
+                score += 4
+            elif linkage_score < 35:
+                score -= 6
+            if linkage.get("isolated"):
+                score -= 8
 
         payoff_note, payoff_bonus = _payoff_label(kind, height, mainline_match)
         score += payoff_bonus
@@ -258,6 +281,12 @@ def build_planned_targets(
             "risk_note": "市场亏钱效应较强，宁可空仓也不追高。" if hard_risk else "仅在计划买点出现时执行，不做盘中冲动追高。",
             "source": str(ladder_item.get("source") or core.get("source") or "本地规则引擎"),
             "confidence": confidence,
+            "sector_linkage_score": float(linkage.get("score") or 0) if linkage else None,
+            "sector_linkage_level": str(linkage.get("level") or "") if linkage else "未识别",
+            "sector_linkage_evidence": list(linkage.get("evidence") or []) if linkage else [],
+            "leader_effect": f"{linkage.get('leader')}带动{linkage.get('follower_count')}只后排、{linkage.get('elastic_count')}只20cm弹性" if linkage else "暂无板块联动证据",
+            "followers": list(linkage.get("followers") or []) if linkage else [],
+            "is_isolated": bool(linkage.get("isolated")) if linkage else False,
             **execution,
         }
         previous = candidates.get(code)

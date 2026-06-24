@@ -34,6 +34,7 @@ from .collector import Collector, DEMO_DASHBOARD, _capacity_label
 from .free_market import EastMoneyFreeClient, FreeMarketError
 from .market_validation import is_trade_candidate
 from .planning import build_planned_targets
+from .sector_linkage import build_sector_linkage
 from .tushare_fallback import TushareFallback
 
 
@@ -301,6 +302,7 @@ class CloseCollector:
                         "failed_limit": {"source": market_source if market_snapshot.get("calibrated_breadth") else "东方财富炸板池", "status": breadth_status},
                         "negative": {"source": market_source, "status": "validated" if negative else "empty"},
                     })
+                    market_rows = market_snapshot.get("rows") or []
                 else:
                     missing_breadth, missing_capacity, missing_negative = self._same_day_market_missing_payload(market_error)
                     payload["breadth"].update(missing_breadth)
@@ -312,6 +314,7 @@ class CloseCollector:
                         "median": {"source": "东方财富沪深A行情列表", "status": "missing", "reason": market_error},
                         "negative": {"source": "东方财富容量聚合", "status": "missing", "reason": market_error},
                     })
+                    market_rows = []
                 payload["breadth"]["limit_up"] = len(today_rows)
                 payload["breadth"]["continuous"] = len(ladder)
                 payload["data_quality"]["limit_up"] = {"source": "东方财富免费涨停池", "status": "validated"}
@@ -334,12 +337,18 @@ class CloseCollector:
                             "score": min(96, round(72 + float(row["change"]))), "change": float(row["change"]),
                             "evidence": "创业板高弹性涨停，观察板块扩散与次日溢价",
                             "source": "东方财富免费涨停池", "confidence": "中",
+                            "concepts": [str(row.get("industry") or "弹性方向")],
                         })
                 payload["cores"] = cores
                 mainlines = self._mainlines_from_limit_pool(today_rows)
                 if mainlines:
                     payload["mainlines"] = mainlines
                     payload["data_quality"]["mainlines"] = {"source": "东方财富免费涨停池行业聚合", "status": "validated"}
+                payload["sector_linkage"] = build_sector_linkage(today_rows, market_rows=market_rows, ladder=ladder)
+                payload["data_quality"]["sector_linkage"] = {
+                    "source": "东方财富涨停池 + Tushare行业日线" if market_rows else "东方财富涨停池",
+                    "status": "validated" if payload["sector_linkage"] else "empty",
+                }
                 assessment = assess_market(payload)
                 payload.setdefault("state", {}).update({
                     "money": assessment["money"], "loss": assessment["loss"],
@@ -352,6 +361,7 @@ class CloseCollector:
                     loss_score=float(payload["state"].get("loss", 50)), freshness="live",
                     negative_names=[str(item.get("name", "")) for item in payload.get("negative", [])],
                     mainline_names=[str(item.get("name", "")) for item in payload.get("mainlines", [])],
+                    sector_linkage=payload.get("sector_linkage", []),
                     market_data_complete=bool(payload.get("breadth", {}).get("eligible")),
                 )
                 payload["ml_shadow"] = build_shadow_top3(payload, assessment)

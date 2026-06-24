@@ -7,6 +7,13 @@ export interface DashboardData {
   breadth: { eligible: number; up: number; down: number; flat: number; median: number; limit_up: number; limit_down: number; failed_limit: number; continuous: number };
   capacity: { sample: number; up: number; down: number; median: number; label: string; source: string };
   mainlines: Array<{ name: string; score: number; role: string; change: number; flow: string; tags: string[] }>;
+  sector_linkage?: Array<{
+    name: string; score: number; level: string; leader: string; leader_code: string;
+    limit_up_count: number; follower_count: number; elastic_count: number; low_level_count: number;
+    tier_count: number; max_height: number; strong_count: number; positive_count: number;
+    median_change: number; isolated: boolean; evidence: string[]; risks: string[];
+    followers: Array<{ name: string; code: string; change: number; role: string }>;
+  }>;
   cores: Array<{ name: string; code: string; kind: string; score: number; change: number; evidence: string; source?: string; confidence?: string }>;
   negative: Array<{ name: string; change: number; severity: string }>;
   alerts: Array<{ level: string; title: string; detail: string }>;
@@ -15,6 +22,9 @@ export interface DashboardData {
     name: string; code: string; kind: string; priority: string; score: number; logic: string;
     observation: string; invalidation: string; holding_period: string; source: string; confidence: string;
     setup?: string; payoff?: string; risk_note?: string; position_plan?: string;
+    sector_linkage_score?: number | null; sector_linkage_level?: string; sector_linkage_evidence?: string[];
+    leader_effect?: string; followers?: Array<{ name: string; code: string; change: number; role: string }>;
+    is_isolated?: boolean;
     entry_preconditions?: string[]; entry_trigger?: string[]; no_buy_conditions?: string[];
     stop_loss?: string[]; take_profit?: string[]; sell_plan?: string[];
   }>;

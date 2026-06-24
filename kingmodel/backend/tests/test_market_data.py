@@ -6,6 +6,7 @@ from app.services.market_validation import InvalidMarketData, is_trade_candidate
 from app.services.collector import _factor_type
 from app.services.ladder import calculate_ladder_metrics, trade_dates_from_tdx_kline
 from app.services.planning import build_planned_targets
+from app.services.sector_linkage import build_sector_linkage
 from app.services.tushare_fallback import TushareFallback
 
 
@@ -104,6 +105,47 @@ def test_planned_targets_are_ranked_deduplicated_and_exclude_unsupported_markets
         assert required_plan_fields <= item.keys()
         assert all(item[field] for field in required_plan_fields)
     assert len({item["code"] for item in targets}) == len(targets)
+
+
+def test_sector_linkage_feeds_planned_target_evidence() -> None:
+    limit_rows = [
+        {"code": "600100", "name": "核心龙头", "industry": "半导体", "change": 10, "amount": 3_000_000_000, "vendor_ladder": 2},
+        {"code": "300100", "name": "弹性小弟", "industry": "半导体", "change": 20, "amount": 1_000_000_000, "vendor_ladder": 1},
+        {"code": "002100", "name": "后排跟随", "industry": "半导体", "change": 10, "amount": 800_000_000, "vendor_ladder": 1},
+        {"code": "600200", "name": "孤立高标", "industry": "纺织", "change": 10, "amount": 700_000_000, "vendor_ladder": 4},
+    ]
+    market_rows = [
+        {"ts_code": "600100.SH", "industry": "半导体", "pct_chg": 10},
+        {"ts_code": "300100.SZ", "industry": "半导体", "pct_chg": 20},
+        {"ts_code": "002100.SZ", "industry": "半导体", "pct_chg": 10},
+        {"ts_code": "002101.SZ", "industry": "半导体", "pct_chg": 6},
+        {"ts_code": "600200.SH", "industry": "纺织", "pct_chg": 10},
+        {"ts_code": "600201.SH", "industry": "纺织", "pct_chg": -2},
+    ]
+
+    linkage = build_sector_linkage(limit_rows, market_rows=market_rows)
+
+    semiconductor = next(item for item in linkage if item["name"] == "半导体")
+    textile = next(item for item in linkage if item["name"] == "纺织")
+    assert semiconductor["score"] > textile["score"]
+    assert semiconductor["elastic_count"] == 1
+    assert semiconductor["follower_count"] == 2
+    assert textile["isolated"] is True
+
+    targets = build_planned_targets(
+        [{"name": "核心龙头", "code": "600100", "kind": "连板情绪核心", "score": 86, "evidence": "板块核心", "concepts": ["半导体"]}],
+        [{"code": "600100", "height": 2, "confidence": "中", "concepts": ["半导体"]}],
+        cycle="高位震荡",
+        loss_score=45,
+        freshness="live",
+        mainline_names=["半导体"],
+        sector_linkage=linkage,
+    )
+    assert targets
+    assert targets[0]["sector_linkage_level"] in {"强联动", "中联动"}
+    assert targets[0]["sector_linkage_score"] == semiconductor["score"]
+    assert targets[0]["sector_linkage_evidence"]
+    assert "带动" in targets[0]["leader_effect"]
 
 
 def test_planned_targets_do_not_fill_below_threshold() -> None:

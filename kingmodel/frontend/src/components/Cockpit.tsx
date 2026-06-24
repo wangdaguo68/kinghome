@@ -36,6 +36,25 @@ function PlanBullets({ title, items, tone = "observe" }: { title: string; items?
   return <div className={`plan-condition ${tone}`}><ChevronRight size={15} /><span><b>{title}</b><ul>{items.map((item) => <li key={item}>{item}</li>)}</ul></span></div>;
 }
 
+function SectorLinkage({ items = [] }: { items?: NonNullable<DashboardData["sector_linkage"]> }) {
+  if (!items.length) return <div className="linkage-empty"><Zap size={22} /><span>暂无可验证的板块联动数据，计划标的不会因孤立强票获得加分。</span></div>;
+  return <div className="linkage-grid">{items.slice(0, 6).map((item) => <article key={item.name} className={`linkage-${item.level}`}>
+    <header><div><small>{item.level}</small><strong>{item.name}</strong></div><em>{item.score.toFixed(1)}</em></header>
+    <div className="linkage-leader"><span>核心</span><b>{item.leader}<small>{item.leader_code}</small></b></div>
+    <div className="linkage-metrics">
+      <div><span>涨停</span><b>{item.limit_up_count}</b></div>
+      <div><span>跟随</span><b>{item.follower_count}</b></div>
+      <div><span>20cm</span><b>{item.elastic_count}</b></div>
+      <div><span>梯队</span><b>{item.tier_count}</b></div>
+      <div><span>大涨</span><b>{item.strong_count}</b></div>
+      <div><span>中位</span><b className={item.median_change >= 0 ? "up" : "down"}>{item.median_change >= 0 ? "+" : ""}{item.median_change.toFixed(2)}%</b></div>
+    </div>
+    <div className="linkage-evidence">{item.evidence.slice(0, 4).map((text) => <span key={text}>{text}</span>)}</div>
+    {item.followers.length ? <div className="linkage-followers">{item.followers.slice(0, 4).map((follower) => <span key={follower.code}>{follower.name}<b>{follower.change.toFixed(1)}%</b></span>)}</div> : null}
+    {item.risks.length ? <p>{item.risks.join("；")}</p> : <p>后排有扩散，暂未识别明显孤立风险。</p>}
+  </article>)}</div>;
+}
+
 function PlannedTargets({ items }: { items: DashboardData["planned_targets"] }) {
   if (!items.length) return <div className="plan-empty"><Target size={24} /><div><strong>当前没有达到执行门槛的计划标的</strong><span>系统不会用弱标的补足数量，等待市场许可与核心评分改善。</span></div></div>;
   return <div className="plan-grid">{items.map((item, index) => <article key={item.code}>
@@ -43,6 +62,8 @@ function PlannedTargets({ items }: { items: DashboardData["planned_targets"] }) 
     <p className="plan-logic">{item.logic}</p>
     {item.setup ? <div className="plan-condition observe"><Target size={15} /><span><b>买点类型</b>{item.setup}</span></div> : null}
     {item.payoff ? <div className="plan-condition observe"><TrendingUp size={15} /><span><b>盈亏比/胜率</b>{item.payoff}</span></div> : null}
+    {item.sector_linkage_level ? <div className="plan-condition observe"><Zap size={15} /><span><b>板块联动</b>{item.sector_linkage_level} {typeof item.sector_linkage_score === "number" ? `${item.sector_linkage_score.toFixed(1)}分` : ""} · {item.leader_effect}</span></div> : null}
+    <PlanBullets title="联动证据" items={item.sector_linkage_evidence} />
     <PlanBullets title="买入前提" items={item.entry_preconditions} />
     <PlanBullets title="触发买点" items={item.entry_trigger} />
     <PlanBullets title="禁买条件" items={item.no_buy_conditions} tone="invalid" />
@@ -100,6 +121,8 @@ export function Cockpit({ data }: { data: DashboardData }) {
       <div className="feedback-compare"><section className="positive-zones"><header><div><span>POSITIVE</span><strong>正反馈板块</strong></div><em>{data.mainlines.length}</em></header>{data.mainlines.map((item) => <article key={item.name}><div><b>{item.name}</b><small>{item.role}</small></div><strong>+{item.change.toFixed(2)}%</strong><i style={{ width: `${Math.min(100, Math.abs(item.change) * 14)}%` }} /></article>)}</section>
       <section className="loss-zones"><header><div><span>NEGATIVE</span><strong>负反馈板块</strong></div><em>{data.negative.length}</em></header>{data.negative.map((item) => <article key={item.name}><div><b>{item.name}</b><small>{item.severity === "high" ? "高风险" : "扩散观察"}</small></div><strong>{item.change.toFixed(2)}%</strong><i style={{ width: `${Math.min(100, Math.abs(item.change) * 14)}%` }} /></article>)}</section></div>
     </Panel>
+
+    <Panel title="板块联动性" kicker="SECTOR LINKAGE · 龙头带动/后排扩散" source={qualitySource(data, "sector_linkage")} className="linkage-panel"><SectorLinkage items={data.sector_linkage} /></Panel>
 
     <Panel title="实时风险与容量反馈" kicker="LIVE RISK · NO STATIC COPY" source={data.capacity.source} className="alerts-panel">
       <div className="capacity-strip"><div><small>成交额样本</small><strong>TOP {data.capacity.sample}</strong></div><div><small>上涨 / 下跌</small><strong><i className="up">{data.capacity.up}</i> / <i className="down">{data.capacity.down}</i></strong></div><div><small>中位涨跌幅</small><strong className={data.capacity.median >= 0 ? "up" : "down"}>{data.capacity.median >= 0 ? "+" : ""}{data.capacity.median.toFixed(2)}%</strong></div><div><small>容量判断</small><strong>{data.capacity.label}</strong></div></div>

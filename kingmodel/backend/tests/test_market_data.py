@@ -8,6 +8,7 @@ from app.services.ladder import calculate_ladder_metrics, trade_dates_from_tdx_k
 from app.services.planning import build_planned_targets
 from app.services.sector_linkage import build_sector_linkage
 from app.services.capacity_core import build_capacity_cores, capacity_cores_as_candidates
+from app.services.close_collector import CloseCollector
 from app.services.decision_context import build_event_signals, build_market_graph
 from app.services.tushare_fallback import TushareFallback
 
@@ -258,3 +259,21 @@ def test_tushare_snapshot_computes_capacity(monkeypatch) -> None:
     assert snapshot["breadth"]["eligible"] == 3
     assert snapshot["breadth"]["limit_up"] == 1
     assert snapshot["capacity"] == {"sample": 3, "up": 2, "down": 1, "median": 10.0}
+
+
+def test_market_negative_fallback_uses_breadth_and_capacity_divergence() -> None:
+    negative = CloseCollector._market_negative_fallback(
+        {
+            "eligible": 5511,
+            "up": 1231,
+            "down": 4228,
+            "median": -1.9868,
+            "limit_down": 18,
+            "failed_limit": 39,
+        },
+        {"sample": 100, "up": 81, "down": 19, "median": 4.3712},
+        "Tushare备用日线",
+    )
+
+    assert [item["name"] for item in negative] == ["全市场普跌负反馈", "跌停炸板负反馈", "容量抱团与小票背离"]
+    assert negative[0]["severity"] == "high"

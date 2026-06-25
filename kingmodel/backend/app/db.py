@@ -109,6 +109,13 @@ CREATE TABLE IF NOT EXISTS market_bars (
   created_at TEXT NOT NULL,
   PRIMARY KEY (code, trade_date)
 );
+CREATE TABLE IF NOT EXISTS stock_meta_cache (
+  code TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  industry TEXT NOT NULL DEFAULT '',
+  source TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS model_registry (
   model_id INTEGER PRIMARY KEY AUTOINCREMENT,
   task TEXT NOT NULL,
@@ -403,6 +410,47 @@ def load_market_bars(code: str, after_trade_date: str) -> list[dict[str, Any]]:
             (code, after_trade_date),
         ).fetchall()
     return [json.loads(row["payload"]) for row in rows]
+
+
+def load_stock_meta(codes: list[str]) -> dict[str, dict[str, Any]]:
+    normalized = sorted({str(code).split(".", 1)[0] for code in codes if str(code).strip()})
+    if not normalized:
+        return {}
+    placeholders = ",".join("?" for _ in normalized)
+    with connect() as conn:
+        rows = conn.execute(
+            f"SELECT code,name,industry,source,updated_at FROM stock_meta_cache WHERE code IN ({placeholders})",
+            normalized,
+        ).fetchall()
+    return {str(row["code"]): dict(row) for row in rows}
+
+
+def upsert_stock_meta(rows: list[dict[str, Any]], updated_at: str) -> None:
+    payload = []
+    for row in rows:
+        code = str(row.get("code") or "").split(".", 1)[0]
+        name = str(row.get("name") or "").strip()
+        if not code or not name or name == code:
+            continue
+        payload.append(
+            (
+                code,
+                name,
+                str(row.get("industry") or "").strip(),
+                str(row.get("source") or "stock_meta_cache"),
+                updated_at,
+            )
+        )
+    if not payload:
+        return
+    with connect() as conn:
+        conn.executemany(
+            "INSERT INTO stock_meta_cache(code,name,industry,source,updated_at) VALUES(?,?,?,?,?) "
+            "ON CONFLICT(code) DO UPDATE SET "
+            "name=excluded.name,industry=COALESCE(NULLIF(excluded.industry,''),stock_meta_cache.industry),"
+            "source=excluded.source,updated_at=excluded.updated_at",
+            payload,
+        )
 
 
 def save_plan_outcomes(

@@ -1,5 +1,8 @@
 from app.ml.modeling import LogisticModel, classification_metrics, evaluation_metrics, purged_walk_forward_dates
-from app.ml.outcome_tracker import calculate_outcomes
+import asyncio
+from unittest.mock import AsyncMock
+
+from app.ml.outcome_tracker import OutcomeTracker, calculate_outcomes
 from app.ml.training_pipeline import TrainingPipeline, classification_promotion_eligible, promotion_eligible
 
 
@@ -98,5 +101,43 @@ def test_training_pipeline_creates_shadow_challengers_without_early_promotion(mo
     assert any(model["role"] == "challenger" for model in status["models"])
     assert not any(model["role"] == "champion" for model in status["models"])
     get_settings.cache_clear()
+
+
+def test_outcome_backfill_uses_tushare_fallback_and_continues_after_single_failure(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "outcomes.db"))
+    get_settings.cache_clear()
+    initialize()
+    save_shadow_plans(
+        "20260624",
+        "shadow-rule-v1",
+        [
+            {"rank": 1, "code": "600001", "name": "甲"},
+            {"rank": 2, "code": "600002", "name": "乙"},
+        ],
+        "2026-06-24T15:10:00+08:00",
+    )
+
+    free = type("Free", (), {})()
+    free.stock_bars = AsyncMock(side_effect=RuntimeError("eastmoney down"))
+    tushare = type("Tushare", (), {"configured": True})()
+
+    async def tushare_bars(code: str, trade_date: str, limit: int = 40):
+        if code == "600002":
+            raise RuntimeError("single code failed")
+        return [
+            {"trade_date": "20260625", "open": 10.0, "close": 10.5, "high": 10.8, "low": 9.9, "volume": 1000, "pre_close": 9.8}
+        ]
+
+    tushare.stock_bars = AsyncMock(side_effect=tushare_bars)
+    result = asyncio.run(OutcomeTracker(free, tushare).backfill("20260625"))
+
+    assert result["pending_plans"] == 2
+    assert result["free_requests"] == 2
+    assert result["tushare_requests"] == 2
+    assert result["failed_requests"] == 1
+    assert result["outcomes_written"] == 1
+    assert result["errors"][0]["code"] == "600002"
+    assert feature_store_status()["outcome_days"] == 1
+    get_settings.cache_clear()
 from app.config import get_settings
-from app.db import initialize, model_system_status, save_feature_snapshots
+from app.db import feature_store_status, initialize, model_system_status, save_feature_snapshots, save_shadow_plans

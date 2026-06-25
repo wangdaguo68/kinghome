@@ -155,6 +155,45 @@ class TushareFallback:
         }
 
     @staticmethod
+    def _ts_code(code: str) -> str:
+        normalized = str(code).split(".", 1)[0]
+        if normalized.startswith(("4", "8", "9")):
+            return f"{normalized}.BJ"
+        if normalized.startswith(("5", "6")):
+            return f"{normalized}.SH"
+        return f"{normalized}.SZ"
+
+    async def stock_bars(self, code: str, start_date: str, limit: int = 40) -> list[dict[str, Any]]:
+        target = start_date.replace("-", "").replace(".", "")
+        rows = await self._query(
+            "daily",
+            {"ts_code": self._ts_code(code), "start_date": target},
+            ["ts_code", "trade_date", "open", "high", "low", "close", "pre_close", "vol", "amount"],
+        )
+        normalized_rows: list[dict[str, Any]] = []
+        for row in sorted(rows, key=lambda item: str(item.get("trade_date") or "")):
+            if str(row.get("trade_date") or "") <= target:
+                continue
+            try:
+                normalized_rows.append(
+                    {
+                        "trade_date": str(row["trade_date"]),
+                        "open": float(row.get("open") or 0),
+                        "close": float(row.get("close") or 0),
+                        "high": float(row.get("high") or 0),
+                        "low": float(row.get("low") or 0),
+                        "volume": float(row.get("vol") or 0),
+                        "amount": float(row.get("amount") or 0) * 1000,
+                        "pre_close": float(row.get("pre_close") or 0),
+                    }
+                )
+            except (KeyError, TypeError, ValueError):
+                continue
+            if len(normalized_rows) >= limit:
+                break
+        return normalized_rows
+
+    @staticmethod
     def _negative_sectors(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         grouped: dict[str, list[float]] = {}
         for row in rows:

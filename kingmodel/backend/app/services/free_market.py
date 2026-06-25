@@ -18,6 +18,7 @@ class EastMoneyFreeClient:
     FAILED_POOL_URL = "https://push2ex.eastmoney.com/getTopicZBPool"
     CLIST_URL = "https://push2.eastmoney.com/api/qt/clist/get"
     KLINE_URL = "https://push2his.eastmoney.com/api/qt/stock/kline/get"
+    QUOTE_URL = "https://push2.eastmoney.com/api/qt/stock/get"
     HEADERS = {"User-Agent": "Mozilla/5.0", "Referer": "https://quote.eastmoney.com/"}
     A_SHARE_FS = "m:0+t:6,m:0+t:80,m:0+t:81,m:1+t:2,m:1+t:23"
 
@@ -228,3 +229,21 @@ class EastMoneyFreeClient:
             except ValueError:
                 continue
         return rows
+
+    async def stock_meta(self, code: str) -> dict[str, Any]:
+        normalized = str(code).split(".", 1)[0]
+        market = "1" if normalized.startswith(("5", "6", "9")) else "0"
+        payload = await self._get_json(
+            self.QUOTE_URL,
+            {
+                "secid": f"{market}.{normalized}",
+                "ut": "fa5fd1943c7b386f172d6893dbfba10b",
+                "fields": "f57,f58,f127,f128",
+            },
+        )
+        data = payload.get("data") or {}
+        name = str(data.get("f58") or "").strip()
+        industry = str(data.get("f127") or "").strip()
+        if not name:
+            raise FreeMarketError(f"{normalized} 单票名称缺失")
+        return {"code": normalized, "name": name, "industry": industry, "source": "东方财富单票行情"}

@@ -16,12 +16,14 @@ from ..db import (
     latest_reliable_snapshot_before,
     latest_snapshot,
     latest_trusted_snapshot,
+    load_stock_meta,
     load_daily_pools,
     reserve_tdx_call,
     save_cause_cache,
     save_feature_snapshots,
     save_shadow_plans,
     save_snapshot,
+    upsert_stock_meta,
     start_collection_job,
     upsert_daily_pool,
     outcome_review,
@@ -35,7 +37,7 @@ from .capacity_core import build_capacity_cores, capacity_cores_as_candidates
 from .collector import Collector, DEMO_DASHBOARD, _capacity_label
 from .decision_context import build_event_signals, build_market_graph
 from .free_market import EastMoneyFreeClient, FreeMarketError
-from .market_validation import is_trade_candidate
+from .market_validation import field_value, is_trade_candidate, result_rows
 from .planning import build_planned_targets
 from .sector_linkage import build_sector_linkage
 from .tushare_fallback import TushareFallback
@@ -66,9 +68,12 @@ class CloseCollector:
         self.free = EastMoneyFreeClient()
         self.tdx = Collector()
         self.tushare = TushareFallback(self.settings.tushare_token, self.settings.tushare_api_url)
-        self.outcomes = OutcomeTracker(self.free)
+        self.outcomes = OutcomeTracker(self.free, self.tushare)
         self.training = TrainingPipeline()
         self._lock = asyncio.Lock()
+
+    FREE_META_LIMIT = 24
+    TDX_META_LIMIT = 5
 
     @staticmethod
     def _compact_date(value: str) -> str:
@@ -183,6 +188,160 @@ class CloseCollector:
             {"sample": 0, "up": 0, "down": 0, "median": 0, "source": "同日Tushare缺失", "label": "容量数据缺失"},
             [{"name": "同日负反馈缺失", "change": 0, "severity": "medium", "source": reason[:120]}],
         )
+
+    @staticmethod
+    def _row_code(row: dict[str, Any]) -> str:
+        return str(row.get("code") or row.get("ts_code") or "").split(".", 1)[0]
+
+    @staticmethod
+    def _has_real_name(row: dict[str, Any]) -> bool:
+        code = CloseCollector._row_code(row)
+        name = str(row.get("name") or "").strip()
+        return bool(name and name != code)
+
+    @staticmethod
+    def _apply_stock_meta(rows: list[dict[str, Any]], meta: dict[str, dict[str, Any]]) -> None:
+        for row in rows:
+            code = CloseCollector._row_code(row)
+            info = meta.get(code) or {}
+            if not info:
+                continue
+            if not CloseCollector._has_real_name(row):
+                row["name"] = str(info.get("name") or row.get("name") or code)
+            if not str(row.get("industry") or "").strip():
+                row["industry"] = str(info.get("industry") or "")
+
+    @staticmethod
+    def _seed_meta_from_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        seeded: list[dict[str, Any]] = []
+        for row in rows:
+            code = CloseCollector._row_code(row)
+            name = str(row.get("name") or "").strip()
+            if not code or not name or name == code:
+                continue
+            seeded.append(
+                {
+                    "code": code,
+                    "name": name,
+                    "industry": str(row.get("industry") or "").strip(),
+                    "source": str(row.get("source") or "行情快照"),
+                }
+            )
+        return seeded
+
+    @staticmethod
+    def _market_negative_fallback(
+        breadth: dict[str, Any], capacity: dict[str, Any], source: str
+    ) -> list[dict[str, Any]]:
+        eligible = max(1, int(breadth.get("eligible") or 1))
+        down_ratio = float(breadth.get("down") or 0) / eligible
+        median_value = float(breadth.get("median") or 0)
+        limit_down = int(breadth.get("limit_down") or 0)
+        failed_limit = int(breadth.get("failed_limit") or 0)
+        capacity_median = float(capacity.get("median") or 0)
+        items: list[dict[str, Any]] = []
+        if median_value <= -0.5 or down_ratio >= 0.55:
+            items.append(
+                {
+                    "name": "全市场普跌负反馈",
+                    "change": round(median_value, 2),
+                    "severity": "high" if median_value <= -2 or down_ratio >= 0.68 else "medium",
+                    "source": f"{source}市场广度兜底",
+                    "detail": f"下跌占比{down_ratio * 100:.1f}%，全市场中位{median_value:+.2f}%",
+                }
+            )
+        if limit_down >= 15 or failed_limit >= 35:
+            pressure = -max(limit_down / 10, failed_limit / 20)
+            items.append(
+                {
+                    "name": "跌停炸板负反馈",
+                    "change": round(pressure, 2),
+                    "severity": "high" if limit_down >= 30 or failed_limit >= 55 else "medium",
+                    "source": f"{source}跌停/炸板统计",
+                    "detail": f"跌停{limit_down}只，炸板{failed_limit}只",
+                }
+            )
+        if capacity_median >= 1 and median_value <= -0.5 and down_ratio >= 0.55:
+            items.append(
+                {
+                    "name": "容量抱团与小票背离",
+                    "change": round(median_value, 2),
+                    "severity": "medium",
+                    "source": f"{source}容量/广度对比",
+                    "detail": f"容量中位{capacity_median:+.2f}%，全市场中位{median_value:+.2f}%",
+                }
+            )
+        return items[:4]
+
+    async def _tdx_stock_meta(self, trade_date: str, code: str) -> dict[str, Any] | None:
+        now = datetime.now(SHANGHAI).isoformat(timespec="seconds")
+        if not reserve_tdx_call(trade_date, code, "stock_meta", now, self.settings.tdx_daily_call_limit):
+            return None
+        try:
+            result = await self.tdx.client.call_tool(
+                self.tdx.tool_name,
+                {"message": f"查询股票代码{code}的股票名称和所属行业", "rang": "全部A股", "pageNo": "1", "pageSize": "5"},
+            )
+            matched = None
+            for row in result_rows(result):
+                row_code = str(field_value(row, "sec_code", "代码", default="")).split(".", 1)[0]
+                if row_code == code:
+                    matched = row
+                    break
+            matched = matched or (result_rows(result)[0] if result_rows(result) else None)
+            if not matched:
+                raise FreeMarketError("通达信未返回股票元数据")
+            name = str(field_value(matched, "sec_name", "名称", "股票名称", default="")).strip()
+            industry = str(field_value(matched, "行业", "所属行业", "板块", default="")).strip()
+            if not name:
+                raise FreeMarketError("通达信股票名称为空")
+            complete_tdx_call(trade_date, code, "stock_meta", "success")
+            return {"code": code, "name": name, "industry": industry, "source": "通达信MCP股票元数据"}
+        except Exception:
+            complete_tdx_call(trade_date, code, "stock_meta", "failed")
+            return None
+
+    async def _enrich_stock_meta(
+        self,
+        trade_date: str,
+        market_rows: list[dict[str, Any]],
+        reference_rows: list[dict[str, Any]],
+        *,
+        allow_tdx: bool,
+    ) -> dict[str, dict[str, Any]]:
+        candidate_rows = sorted(market_rows, key=lambda row: float(row.get("amount") or 0), reverse=True)[:140]
+        codes = [self._row_code(row) for row in candidate_rows if self._row_code(row)]
+        now = datetime.now(SHANGHAI).isoformat(timespec="seconds")
+        seeded = self._seed_meta_from_rows(reference_rows + market_rows)
+        upsert_stock_meta(seeded, now)
+        meta = load_stock_meta(codes)
+        missing = [
+            code for code in codes
+            if code and (code not in meta or not meta[code].get("name") or meta[code].get("name") == code)
+        ]
+        fetched: list[dict[str, Any]] = []
+        for code in missing[: self.FREE_META_LIMIT]:
+            try:
+                fetched.append(await self.free.stock_meta(code))
+            except Exception:
+                continue
+        if fetched:
+            upsert_stock_meta(fetched, now)
+            meta.update({str(row["code"]): row for row in fetched})
+        if allow_tdx:
+            missing = [
+                code for code in codes
+                if code and (code not in meta or not meta[code].get("name") or meta[code].get("name") == code)
+            ]
+            tdx_rows: list[dict[str, Any]] = []
+            for code in missing[: self.TDX_META_LIMIT]:
+                item = await self._tdx_stock_meta(trade_date, code)
+                if item:
+                    tdx_rows.append(item)
+            if tdx_rows:
+                upsert_stock_meta(tdx_rows, now)
+                meta.update({str(row["code"]): row for row in tdx_rows})
+        return meta
 
     async def _same_day_market_snapshot(self, trade_date: str, limit_up_count: int) -> tuple[dict[str, Any] | None, str]:
         try:
@@ -304,6 +463,7 @@ class CloseCollector:
                     capacity["label"] = _capacity_label(capacity)
                     payload["capacity"] = capacity
                     negative = market_snapshot.get("negative_sectors") or []
+                    negative_from_fallback = False
                     if not negative and capacity["median"] < 0:
                         negative = [
                             {
@@ -313,6 +473,9 @@ class CloseCollector:
                                 "source": market_source,
                             }
                         ]
+                    if not negative:
+                        negative = self._market_negative_fallback(payload["breadth"], capacity, market_source)
+                        negative_from_fallback = bool(negative)
                     payload["negative"] = negative
                     payload["data_quality"].update({
                         "breadth": {"source": market_source, "status": breadth_status, "scope": "全A股，含科创板、北交所"},
@@ -320,7 +483,10 @@ class CloseCollector:
                         "median": {"source": market_source, "status": "validated"},
                         "limit_down": {"source": market_source if market_snapshot.get("calibrated_breadth") else "东方财富跌停池", "status": breadth_status},
                         "failed_limit": {"source": market_source if market_snapshot.get("calibrated_breadth") else "东方财富炸板池", "status": breadth_status},
-                        "negative": {"source": market_source, "status": "validated" if negative else "empty"},
+                        "negative": {
+                            "source": market_source if not negative_from_fallback else f"{market_source}市场级兜底",
+                            "status": "fallback" if negative_from_fallback else "validated" if negative else "empty",
+                        },
                     })
                     market_rows = market_snapshot.get("rows") or []
                 else:
@@ -385,6 +551,21 @@ class CloseCollector:
                 if mainlines:
                     payload["mainlines"] = mainlines
                     payload["data_quality"]["mainlines"] = {"source": "东方财富免费涨停池行业聚合", "status": "validated"}
+                if market_rows:
+                    stock_meta = await self._enrich_stock_meta(
+                        trade_date, market_rows, today_rows, allow_tdx=allow_tdx
+                    )
+                    self._apply_stock_meta(market_rows, stock_meta)
+                    unresolved = [
+                        self._row_code(row)
+                        for row in sorted(market_rows, key=lambda item: float(item.get("amount") or 0), reverse=True)[:120]
+                        if not self._has_real_name(row)
+                    ]
+                    payload["data_quality"]["stock_meta"] = {
+                        "source": "本地缓存 + 东方财富单票行情 + 通达信MCP限额兜底",
+                        "status": "validated" if not unresolved else "partial",
+                        "unresolved_top_count": len(unresolved),
+                    }
                 payload["sector_linkage"] = build_sector_linkage(today_rows, market_rows=market_rows, ladder=ladder)
                 payload["data_quality"]["sector_linkage"] = {
                     "source": "东方财富涨停池 + Tushare行业日线" if market_rows else "东方财富涨停池",

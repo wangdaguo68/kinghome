@@ -109,7 +109,7 @@ def dashboard(_: Annotated[str, Depends(require_user)]) -> dict:
 
 @app.post("/api/refresh")
 async def refresh(_: Annotated[str, Depends(require_user)]) -> dict:
-    return await collector.refresh(allow_tdx=False)
+    return await collector.refresh(allow_tdx=True)
 
 
 @app.get("/api/history")

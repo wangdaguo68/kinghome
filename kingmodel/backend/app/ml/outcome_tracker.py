@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Any
 
 from ..db import load_market_bars, load_pending_shadow_plans, save_plan_outcomes, upsert_market_bars
+from ..services.tushare_fallback import TushareFallback
 from ..services.free_market import EastMoneyFreeClient
 
 
@@ -43,23 +44,45 @@ def calculate_outcomes(code: str, bars: list[dict[str, Any]], cost_rate: float =
 
 
 class OutcomeTracker:
-    def __init__(self, client: EastMoneyFreeClient) -> None:
+    def __init__(self, client: EastMoneyFreeClient, tushare: TushareFallback | None = None) -> None:
         self.client = client
+        self.tushare = tushare
 
-    async def backfill(self, current_trade_date: str) -> dict[str, int]:
+    async def backfill(self, current_trade_date: str) -> dict[str, Any]:
         pending = [row for row in load_pending_shadow_plans() if row["trade_date"] < current_trade_date]
-        fetched = completed = 0
+        fetched = tushare_fetched = completed = failed = 0
+        errors: list[dict[str, str]] = []
         now = datetime.now().astimezone().isoformat(timespec="seconds")
         for item in pending:
             code = str(item["code"])
-            bars = load_market_bars(code, item["trade_date"])
-            if len(bars) < 10:
-                rows = await self.client.stock_bars(code, 40)
-                upsert_market_bars(code, rows, "东方财富免费日线", now)
-                bars = [row for row in rows if row["trade_date"] > item["trade_date"]]
-                fetched += 1
-            outcomes = calculate_outcomes(code, bars)
-            if outcomes:
-                save_plan_outcomes(item["trade_date"], item["plan_version"], code, outcomes, now)
-                completed += len(outcomes)
-        return {"pending_plans": len(pending), "free_requests": fetched, "outcomes_written": completed}
+            try:
+                bars = load_market_bars(code, item["trade_date"])
+                if len(bars) < 10:
+                    try:
+                        fetched += 1
+                        rows = await self.client.stock_bars(code, 40)
+                        source = "东方财富免费日线"
+                    except Exception as exc:
+                        if not self.tushare or not self.tushare.configured:
+                            raise exc
+                        tushare_fetched += 1
+                        rows = await self.tushare.stock_bars(code, item["trade_date"], 40)
+                        source = "Tushare备用日线"
+                    upsert_market_bars(code, rows, source, now)
+                    bars = [row for row in rows if row["trade_date"] > item["trade_date"]]
+                outcomes = calculate_outcomes(code, bars)
+                if outcomes:
+                    save_plan_outcomes(item["trade_date"], item["plan_version"], code, outcomes, now)
+                    completed += len(outcomes)
+            except Exception as exc:
+                failed += 1
+                errors.append({"trade_date": str(item["trade_date"]), "code": code, "error": str(exc)[:160]})
+                continue
+        return {
+            "pending_plans": len(pending),
+            "free_requests": fetched,
+            "tushare_requests": tushare_fetched,
+            "failed_requests": failed,
+            "outcomes_written": completed,
+            "errors": errors[:8],
+        }

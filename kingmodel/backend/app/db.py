@@ -205,6 +205,31 @@ def latest_trusted_snapshot() -> dict[str, Any] | None:
     return json.loads(rows[0]["payload"]) if rows else None
 
 
+def _compact_trade_date(value: Any) -> str:
+    return str(value or "").replace(".", "").replace("-", "")
+
+
+def _has_reliable_market_context(payload: dict[str, Any]) -> bool:
+    breadth = payload.get("breadth") or {}
+    capacity = payload.get("capacity") or {}
+    return int(breadth.get("eligible") or 0) > 0 and int(capacity.get("sample") or 0) > 0
+
+
+def latest_reliable_snapshot_before(trade_date: str) -> dict[str, Any] | None:
+    """Return the newest official snapshot before trade_date with usable breadth/capacity context."""
+    target = _compact_trade_date(trade_date)
+    with connect() as conn:
+        rows = conn.execute("SELECT payload FROM snapshots WHERE is_official=1 ORDER BY id DESC LIMIT 200").fetchall()
+    for row in rows:
+        payload = json.loads(row["payload"])
+        payload_date = _compact_trade_date(payload.get("meta", {}).get("trade_date"))
+        if not payload_date or payload_date >= target:
+            continue
+        if _has_reliable_market_context(payload):
+            return payload
+    return None
+
+
 def upsert_daily_pool(trade_date: str, rows: list[dict[str, Any]]) -> None:
     with connect() as conn:
         conn.execute("DELETE FROM limit_up_daily_pool WHERE trade_date=?", (trade_date,))

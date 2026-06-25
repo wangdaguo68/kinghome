@@ -13,6 +13,7 @@ from ..db import (
     finish_collection_job,
     feature_store_status,
     get_cause_cache,
+    latest_reliable_snapshot_before,
     latest_snapshot,
     latest_trusted_snapshot,
     load_daily_pools,
@@ -74,10 +75,15 @@ class CloseCollector:
         return value.replace(".", "").replace("-", "")
 
     def current(self) -> dict[str, Any]:
-        payload = deepcopy(latest_trusted_snapshot() or latest_snapshot() or DEMO_DASHBOARD)
-        trade_date = self._compact_date(str(payload.get("meta", {}).get("trade_date", "")))
+        latest = latest_snapshot()
+        trusted = latest_trusted_snapshot()
         today = datetime.now(SHANGHAI).strftime("%Y%m%d")
-        payload.setdefault("meta", {})["version_label"] = "今日收盘版" if trade_date == today else "上一可信收盘版"
+        latest_date = self._compact_date(str((latest or {}).get("meta", {}).get("trade_date", "")))
+        payload = deepcopy(latest if latest and latest_date == today else trusted or latest or DEMO_DASHBOARD)
+        trade_date = self._compact_date(str(payload.get("meta", {}).get("trade_date", "")))
+        payload.setdefault("meta", {})
+        if payload["meta"].get("version_label") != "今日部分收盘版":
+            payload["meta"]["version_label"] = "今日收盘版" if trade_date == today else "上一可信收盘版"
         payload["collection_status"] = collection_status(today, self.settings.tdx_daily_call_limit)
         if "ml_shadow" not in payload:
             assessment = assess_market(payload)
@@ -197,7 +203,7 @@ class CloseCollector:
                 snapshot["source"] = "Tushare备用日线"
         if str(snapshot.get("trade_date")) != trade_date:
             return None, f"东方财富返回日期 {snapshot.get('trade_date')} 与发布日期 {trade_date} 不一致"
-        snapshot.setdefault("source", "东方财富沪深A行情列表")
+        snapshot.setdefault("source", "东方财富全A行情列表")
         return snapshot, ""
 
     async def _enrich_causes(self, trade_date: str, ladder: list[dict[str, Any]]) -> None:
@@ -285,8 +291,12 @@ class CloseCollector:
 
                 market_snapshot, market_error = await self._same_day_market_snapshot(trade_date, len(today_rows))
                 payload.setdefault("data_quality", {})
+                same_day_market_complete = bool(market_snapshot)
+                stale_market_fallback = False
+                fallback_market_date = ""
+                market_source = "东方财富全A行情列表"
                 if market_snapshot:
-                    market_source = str(market_snapshot.get("source") or "东方财富沪深A行情列表")
+                    market_source = str(market_snapshot.get("source") or "东方财富全A行情列表")
                     breadth_status = "calibrated" if market_snapshot.get("calibrated_breadth") else "validated"
                     payload["breadth"].update(market_snapshot["breadth"])
                     capacity = dict(market_snapshot["capacity"])
@@ -305,7 +315,7 @@ class CloseCollector:
                         ]
                     payload["negative"] = negative
                     payload["data_quality"].update({
-                        "breadth": {"source": market_source, "status": breadth_status, "scope": "沪深A股，不含北交所"},
+                        "breadth": {"source": market_source, "status": breadth_status, "scope": "全A股，含科创板、北交所"},
                         "capacity": {"source": market_source, "status": "validated"},
                         "median": {"source": market_source, "status": "validated"},
                         "limit_down": {"source": market_source if market_snapshot.get("calibrated_breadth") else "东方财富跌停池", "status": breadth_status},
@@ -314,16 +324,37 @@ class CloseCollector:
                     })
                     market_rows = market_snapshot.get("rows") or []
                 else:
-                    missing_breadth, missing_capacity, missing_negative = self._same_day_market_missing_payload(market_error)
-                    payload["breadth"].update(missing_breadth)
-                    payload["capacity"] = missing_capacity
-                    payload["negative"] = missing_negative
-                    payload["data_quality"].update({
-                        "breadth": {"source": "东方财富沪深A行情列表", "status": "missing", "reason": market_error},
-                        "capacity": {"source": "东方财富沪深A行情列表", "status": "missing", "reason": market_error},
-                        "median": {"source": "东方财富沪深A行情列表", "status": "missing", "reason": market_error},
-                        "negative": {"source": "东方财富容量聚合", "status": "missing", "reason": market_error},
-                    })
+                    fallback = latest_reliable_snapshot_before(trade_date)
+                    if fallback:
+                        stale_market_fallback = True
+                        fallback_market_date = str(fallback.get("meta", {}).get("trade_date") or "")
+                        fallback_label = f"上一可信收盘版 {fallback_market_date}".strip()
+                        payload["breadth"] = deepcopy(fallback.get("breadth") or {})
+                        payload["capacity"] = deepcopy(fallback.get("capacity") or {})
+                        if payload["capacity"]:
+                            payload["capacity"]["source"] = fallback_label
+                            payload["capacity"]["label"] = _capacity_label(payload["capacity"])
+                        payload["negative"] = deepcopy(fallback.get("negative") or [])
+                        fallback_quality = {"source": fallback_label, "status": "stale_fallback", "reason": market_error}
+                        payload["data_quality"].update({
+                            "breadth": {**fallback_quality, "scope": "全A股，含科创板、北交所"},
+                            "capacity": fallback_quality,
+                            "median": fallback_quality,
+                            "limit_down": fallback_quality,
+                            "failed_limit": fallback_quality,
+                            "negative": fallback_quality,
+                        })
+                    else:
+                        missing_breadth, missing_capacity, missing_negative = self._same_day_market_missing_payload(market_error)
+                        payload["breadth"].update(missing_breadth)
+                        payload["capacity"] = missing_capacity
+                        payload["negative"] = missing_negative
+                        payload["data_quality"].update({
+                            "breadth": {"source": "东方财富全A行情列表", "status": "missing", "reason": market_error},
+                            "capacity": {"source": "东方财富全A行情列表", "status": "missing", "reason": market_error},
+                            "median": {"source": "东方财富全A行情列表", "status": "missing", "reason": market_error},
+                            "negative": {"source": "东方财富容量聚合", "status": "missing", "reason": market_error},
+                        })
                     market_rows = []
                 payload["breadth"]["limit_up"] = len(today_rows)
                 payload["breadth"]["continuous"] = len(ladder)
@@ -359,22 +390,38 @@ class CloseCollector:
                     "source": "东方财富涨停池 + Tushare行业日线" if market_rows else "东方财富涨停池",
                     "status": "validated" if payload["sector_linkage"] else "empty",
                 }
-                payload["capacity_cores"] = build_capacity_cores(
-                    market_rows,
-                    mainlines=payload.get("mainlines", []),
-                    sector_linkage=payload.get("sector_linkage", []),
-                    reference_rows=today_rows,
-                    limit_codes={str(row.get("code", "")) for row in today_rows},
-                )
-                payload["data_quality"]["capacity_cores"] = {
-                    "source": market_source if market_rows else "同日全市场日线缺失",
-                    "status": "validated" if payload["capacity_cores"] else "empty",
-                }
+                if market_rows:
+                    payload["capacity_cores"] = build_capacity_cores(
+                        market_rows,
+                        mainlines=payload.get("mainlines", []),
+                        sector_linkage=payload.get("sector_linkage", []),
+                        reference_rows=today_rows,
+                        limit_codes={str(row.get("code", "")) for row in today_rows},
+                    )
+                    payload["data_quality"]["capacity_cores"] = {
+                        "source": market_source,
+                        "status": "validated" if payload["capacity_cores"] else "empty",
+                    }
+                elif stale_market_fallback:
+                    payload["capacity_cores"] = deepcopy((fallback or {}).get("capacity_cores") or [])
+                    payload["data_quality"]["capacity_cores"] = {
+                        "source": f"上一可信收盘版 {fallback_market_date}".strip(),
+                        "status": "stale_fallback",
+                        "reason": market_error,
+                    }
+                else:
+                    payload["capacity_cores"] = []
+                    payload["data_quality"]["capacity_cores"] = {
+                        "source": "同日全市场日线缺失",
+                        "status": "missing",
+                        "reason": market_error,
+                    }
                 existing_core_codes = {str(item.get("code", "")) for item in cores}
-                for candidate in capacity_cores_as_candidates(payload["capacity_cores"]):
-                    if candidate["code"] not in existing_core_codes:
-                        cores.append(candidate)
-                        existing_core_codes.add(candidate["code"])
+                if same_day_market_complete:
+                    for candidate in capacity_cores_as_candidates(payload["capacity_cores"]):
+                        if candidate["code"] not in existing_core_codes:
+                            cores.append(candidate)
+                            existing_core_codes.add(candidate["code"])
                 payload["cores"] = cores
                 payload["ml_review"] = outcome_review()
                 payload["event_signals"] = build_event_signals(
@@ -392,12 +439,13 @@ class CloseCollector:
                 payload["permission"] = build_market_permission(assessment)
                 payload["planned_targets"] = build_planned_targets(
                     cores, ladder, cycle=str(payload["state"].get("cycle", "高波动分歧")),
-                    loss_score=float(payload["state"].get("loss", 50)), freshness="live",
+                    loss_score=float(payload["state"].get("loss", 50)),
+                    freshness="live" if same_day_market_complete else "stale",
                     negative_names=[str(item.get("name", "")) for item in payload.get("negative", [])],
                     mainline_names=[str(item.get("name", "")) for item in payload.get("mainlines", [])],
                     sector_linkage=payload.get("sector_linkage", []),
                     event_signals=payload.get("event_signals", []),
-                    market_data_complete=bool(payload.get("breadth", {}).get("eligible")),
+                    market_data_complete=same_day_market_complete,
                 )
                 payload["market_graph"] = build_market_graph(payload)
                 payload["ml_shadow"] = build_shadow_top3(payload, assessment)
@@ -410,10 +458,11 @@ class CloseCollector:
                     core = next((item for item in cores if str(item.get("code", "")) == plan["code"]), {})
                     plan["model_prediction"] = stock_probability(core, assessment, ladder_by_code.get(plan["code"]))
                 created_at = now.isoformat(timespec="seconds")
-                save_feature_snapshots(
-                    trade_date, FEATURE_VERSION, build_feature_snapshots(payload, assessment), created_at
-                )
-                save_shadow_plans(trade_date, PLAN_VERSION, payload["ml_shadow"]["plans"], created_at)
+                if same_day_market_complete:
+                    save_feature_snapshots(
+                        trade_date, FEATURE_VERSION, build_feature_snapshots(payload, assessment), created_at
+                    )
+                    save_shadow_plans(trade_date, PLAN_VERSION, payload["ml_shadow"]["plans"], created_at)
                 try:
                     payload["outcome_backfill"] = await self.outcomes.backfill(trade_date)
                 except Exception as exc:
@@ -434,20 +483,45 @@ class CloseCollector:
                     "level": "low", "title": "涨停承接",
                     "detail": f"免费涨停池{len(today_rows)}只、可交易真实连板{len(ladder)}只；逐股原因使用持久化缓存",
                 }]
+                if same_day_market_complete:
+                    meta_source = f"{market_source} + 东方财富涨停池 + 本地持久化缓存"
+                    meta_freshness = "live"
+                    version_label = "今日收盘版"
+                    meta_warning = f"手动刷新不调用通达信 MCP；广度为全A股口径，含科创板、北交所；市场广度来源：{market_source}。"
+                    official_snapshot = True
+                    job_status = "published"
+                    job_error = None
+                elif stale_market_fallback:
+                    fallback_label = f"上一可信收盘版 {fallback_market_date}".strip()
+                    meta_source = f"东方财富免费涨停池 + {fallback_label}广度/容量"
+                    meta_freshness = "stale"
+                    version_label = "今日部分收盘版"
+                    meta_warning = (
+                        f"手动刷新不调用通达信 MCP；今日全市场广度/容量暂缺，已沿用{fallback_label}作参考；"
+                        f"正式计划等待同日数据补齐：{market_error}"
+                    )
+                    official_snapshot = False
+                    job_status = "failed"
+                    job_error = f"same-day market missing, carried {fallback_label}: {market_error}"[:300]
+                else:
+                    meta_source = "东方财富免费涨停池 + 同日广度缺失"
+                    meta_freshness = "stale"
+                    version_label = "今日部分收盘版"
+                    meta_warning = f"手动刷新不调用通达信 MCP；今日全市场广度/容量缺失，暂无可信兜底；正式计划已暂停：{market_error}"
+                    official_snapshot = False
+                    job_status = "failed"
+                    job_error = f"same-day market missing: {market_error}"[:300]
                 payload["meta"].update({
                     "trade_date": f"{trade_date[:4]}.{trade_date[4:6]}.{trade_date[6:]}",
                     "updated_at": now.isoformat(timespec="seconds"),
-                    "source": f"{market_source} + 东方财富涨停池 + 本地持久化缓存" if market_snapshot else "东方财富免费涨停池 + 同日广度缺失",
-                    "freshness": "live", "version_label": "今日收盘版",
-                    "warning": (
-                        f"手动刷新不调用通达信 MCP；广度为沪深A股口径，不含北交所；市场广度来源：{market_source}。"
-                        if market_snapshot else
-                        f"手动刷新不调用通达信 MCP；今日广度/容量缺失，已禁止沿用旧日数据：{market_error}"
-                    ),
+                    "source": meta_source,
+                    "freshness": meta_freshness,
+                    "version_label": version_label,
+                    "warning": meta_warning,
                 })
                 payload["collection_status"] = collection_status(trade_date, self.settings.tdx_daily_call_limit)
-                save_snapshot(payload, official=True)
-                finish_collection_job(trade_date, "published", now.isoformat(timespec="seconds"))
+                save_snapshot(payload, official=official_snapshot)
+                finish_collection_job(trade_date, job_status, now.isoformat(timespec="seconds"), job_error)
                 return self.current()
             except Exception as exc:
                 finish_collection_job(trade_date, "failed", datetime.now(SHANGHAI).isoformat(timespec="seconds"), str(exc)[:300])

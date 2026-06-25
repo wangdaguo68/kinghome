@@ -19,7 +19,7 @@ class EastMoneyFreeClient:
     CLIST_URL = "https://push2.eastmoney.com/api/qt/clist/get"
     KLINE_URL = "https://push2his.eastmoney.com/api/qt/stock/kline/get"
     HEADERS = {"User-Agent": "Mozilla/5.0", "Referer": "https://quote.eastmoney.com/"}
-    HS_A_FS = "m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23"
+    A_SHARE_FS = "m:0+t:6,m:0+t:80,m:0+t:81,m:1+t:2,m:1+t:23"
 
     def __init__(self, timeout: float = 20.0) -> None:
         self.timeout = timeout
@@ -49,8 +49,8 @@ class EastMoneyFreeClient:
             return await self._get_json_with_client(client, url, params)
 
     @staticmethod
-    def _is_hs_code(code: str) -> bool:
-        return code.startswith(("000", "001", "002", "003", "300", "301", "600", "601", "603", "605", "688"))
+    def _is_a_share_code(code: str) -> bool:
+        return code.startswith(("000", "001", "002", "003", "300", "301", "600", "601", "603", "605", "688", "8", "4", "92"))
 
     @staticmethod
     def _value(value: Any) -> float | None:
@@ -83,7 +83,7 @@ class EastMoneyFreeClient:
                 payload = await self._get_json_with_client(client, self.CLIST_URL, {
                     "pn": str(page), "pz": "100", "po": "1", "np": "1",
                     "ut": "bd1d9ddb04089700cf9c27f6f7426281", "fltt": "2", "invt": "2",
-                    "fid": "f3", "fs": self.HS_A_FS, "fields": fields,
+                    "fid": "f3", "fs": self.A_SHARE_FS, "fields": fields,
                 })
                 data = payload.get("data") or {}
                 if page == 1:
@@ -100,10 +100,10 @@ class EastMoneyFreeClient:
             row for row in rows
             if self._value(row.get("f3")) is not None
             and self._value(row.get("f2")) is not None
-            and self._is_hs_code(str(row.get("f12") or ""))
+            and self._is_a_share_code(str(row.get("f12") or ""))
         ]
         if len(valid) < 4_000:
-            raise FreeMarketError(f"{trade_date} 东方财富沪深A行情列表不完整：{len(valid)}")
+            raise FreeMarketError(f"{trade_date} 东方财富全A行情列表不完整：{len(valid)}")
 
         changes = [float(self._value(row.get("f3")) or 0) for row in valid]
         amount_top = sorted(valid, key=lambda row: float(self._value(row.get("f6")) or 0), reverse=True)[:100]
@@ -142,7 +142,7 @@ class EastMoneyFreeClient:
                 "down": sum(value < 0 for value in capacity_changes),
                 "median": round(float(median(capacity_changes)), 4) if capacity_changes else 0,
             },
-            "source": "东方财富沪深A行情列表",
+            "source": "东方财富全A行情列表",
         }
 
     async def trade_dates(self, count: int = 10) -> list[str]:
@@ -184,7 +184,7 @@ class EastMoneyFreeClient:
                 "vendor_ladder": int(row.get("lbc") or 1),
             }
             for row in raw_rows
-            if str(row.get("c", "")).isdigit() and self._is_hs_code(str(row.get("c", "")))
+            if str(row.get("c", "")).isdigit() and self._is_a_share_code(str(row.get("c", "")))
         ]
 
     async def recent_pools(self, count: int = 6) -> tuple[list[str], dict[str, list[dict[str, Any]]]]:

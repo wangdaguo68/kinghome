@@ -122,6 +122,9 @@ class EastMoneyFreeClient:
                     "code": str(row.get("f12") or ""),
                     "name": str(row.get("f14") or ""),
                     "pct_chg": float(self._value(row.get("f3")) or 0),
+                    "close": float(self._value(row.get("f2")) or 0),
+                    "high": float(self._value(row.get("f15")) or 0),
+                    "pre_close": float(self._value(row.get("f18")) or 0),
                     "amount": float(self._value(row.get("f6")) or 0),
                     "industry": "",
                 }

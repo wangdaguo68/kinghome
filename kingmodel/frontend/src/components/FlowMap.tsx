@@ -16,7 +16,7 @@ export function FlowMap({ data }: { data: DashboardData }) {
   }
 
   const columns = [
-    { key: "negative", title: "负反馈", types: ["negative"] },
+    { key: "negative", title: "负反馈", types: ["negative", "negative_stock"] },
     { key: "market", title: "市场状态", types: ["market", "capacity"] },
     { key: "sector", title: "正反馈/联动", types: ["mainline", "sector", "linkage"] },
     { key: "core", title: "核心/计划", types: ["leader", "capacity_core", "plan"] },

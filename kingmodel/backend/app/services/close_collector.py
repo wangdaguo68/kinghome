@@ -100,6 +100,7 @@ class CloseCollector:
         payload["ml_system"] = inference_status()
         payload["ml_review"] = outcome_review()
         payload.setdefault("capacity_cores", [])
+        payload.setdefault("negative_stocks", [])
         payload["event_signals"] = build_event_signals(
             payload.get("sentiment", []),
             mainlines=payload.get("mainlines", []),
@@ -273,6 +274,115 @@ class CloseCollector:
             )
         return items[:4]
 
+    @staticmethod
+    def _amount_label(amount: float) -> str:
+        if amount >= 100_000_000:
+            return f"{amount / 100_000_000:.1f}亿"
+        if amount >= 10_000:
+            return f"{amount / 10_000:.0f}万"
+        return f"{amount:.0f}"
+
+    @staticmethod
+    def _limit_factor(code: str, direction: str) -> float:
+        if code.startswith(("4", "8", "9")):
+            return 1.30 if direction == "up" else 0.70
+        if code.startswith(("300", "301", "688")):
+            return 1.20 if direction == "up" else 0.80
+        return 1.10 if direction == "up" else 0.90
+
+    @staticmethod
+    def _build_negative_stocks(
+        market_rows: list[dict[str, Any]],
+        *,
+        recent_limit_codes: set[str] | None = None,
+        limit_codes: set[str] | None = None,
+        limit: int = 16,
+    ) -> list[dict[str, Any]]:
+        rows = [row for row in market_rows if CloseCollector._row_code(row)]
+        if not rows:
+            return []
+        max_raw_amount = max((float(row.get("amount") or 0) for row in rows), default=1.0)
+        amount_unit = 1000.0 if max_raw_amount < 1_000_000_000 else 1.0
+        recent_limit_codes = recent_limit_codes or set()
+        limit_codes = limit_codes or set()
+        items_by_code: dict[str, dict[str, Any]] = {}
+
+        def upsert(row: dict[str, Any], tag: str, severity: str, base_score: float, detail: str) -> None:
+            code = CloseCollector._row_code(row)
+            if not code:
+                return
+            name = str(row.get("name") or code)
+            if "ST" in name.upper() or "退" in name:
+                return
+            change = float(row.get("pct_chg") or row.get("change") or 0)
+            high = float(row.get("high") or 0)
+            close = float(row.get("close") or 0)
+            pre_close = float(row.get("pre_close") or 0)
+            high_change = (high / pre_close - 1) * 100 if high > 0 and pre_close > 0 else max(change, 0.0)
+            drawdown = max(0.0, high_change - change)
+            amount = float(row.get("amount") or 0) * amount_unit
+            current = items_by_code.get(code)
+            score = base_score + min(20.0, amount / 1_000_000_000) + min(18.0, drawdown)
+            if current and float(current.get("_score") or 0) >= score:
+                if tag not in current["tags"]:
+                    current["tags"].append(tag)
+                return
+            tags = [tag]
+            if code in recent_limit_codes:
+                tags.append("前强负反馈")
+            if code in limit_codes:
+                tags.append("当日涨停后风险")
+            items_by_code[code] = {
+                "name": name,
+                "code": code,
+                "industry": str(row.get("industry") or "未分行业"),
+                "change": round(change, 2),
+                "drawdown": round(drawdown, 2),
+                "amount": amount,
+                "amount_label": CloseCollector._amount_label(amount),
+                "severity": severity,
+                "reason": detail,
+                "tags": tags,
+                "source": str(row.get("source") or "同日全市场日线"),
+                "_score": round(score, 2),
+            }
+
+        for row in rows:
+            code = CloseCollector._row_code(row)
+            change = float(row.get("pct_chg") or row.get("change") or 0)
+            high = float(row.get("high") or 0)
+            close = float(row.get("close") or 0)
+            pre_close = float(row.get("pre_close") or 0)
+            amount = float(row.get("amount") or 0) * amount_unit
+            up_limit = pre_close * CloseCollector._limit_factor(code, "up") if pre_close > 0 else 0
+            down_limit = pre_close * CloseCollector._limit_factor(code, "down") if pre_close > 0 else 0
+            high_change = (high / pre_close - 1) * 100 if high > 0 and pre_close > 0 else 0.0
+            drawdown = max(0.0, high_change - change)
+            if down_limit > 0 and close > 0 and close <= down_limit + 0.011:
+                upsert(row, "跌停", "high", 95, "收盘触及跌停，是最直接的亏钱效应来源")
+                continue
+            if up_limit > 0 and high >= up_limit - 0.011 and change < CloseCollector._limit_factor(code, "up") * 100 - 100 - 1.0:
+                upsert(row, "炸板大面", "high" if drawdown >= 10 else "medium", 88, f"盘中触及涨停后回落{drawdown:.1f}个百分点")
+            if drawdown >= 8 and high_change >= 4:
+                upsert(row, "冲高回落", "high" if drawdown >= 12 else "medium", 78, f"盘中最高涨幅{high_change:.1f}%，收盘回撤{drawdown:.1f}个百分点")
+            if amount >= 4_000_000_000 and change <= -4:
+                upsert(row, "容量杀跌", "high" if change <= -7 else "medium", 82, f"成交额{CloseCollector._amount_label(amount)}且收跌{change:.1f}%")
+            if code in recent_limit_codes and code not in limit_codes and (change <= -4 or drawdown >= 7):
+                upsert(row, "前强断板", "high" if change <= -7 or drawdown >= 10 else "medium", 84, "近期涨停/连板活跃股出现断板或大幅回撤")
+
+        result = sorted(
+            items_by_code.values(),
+            key=lambda item: (
+                0 if item["severity"] == "high" else 1,
+                -float(item.get("_score") or 0),
+                float(item.get("change") or 0),
+                item["code"],
+            ),
+        )[:limit]
+        for item in result:
+            item.pop("_score", None)
+        return result
+
     async def _tdx_stock_meta(self, trade_date: str, code: str) -> dict[str, Any] | None:
         now = datetime.now(SHANGHAI).isoformat(timespec="seconds")
         if not reserve_tdx_call(trade_date, code, "stock_meta", now, self.settings.tdx_daily_call_limit):
@@ -308,8 +418,17 @@ class CloseCollector:
         reference_rows: list[dict[str, Any]],
         *,
         allow_tdx: bool,
+        priority_codes: list[str] | None = None,
     ) -> dict[str, dict[str, Any]]:
-        candidate_rows = sorted(market_rows, key=lambda row: float(row.get("amount") or 0), reverse=True)[:140]
+        priority = priority_codes or []
+        priority_set = set(priority)
+        priority_rows = [row for row in market_rows if self._row_code(row) in priority_set]
+        amount_rows = sorted(
+            [row for row in market_rows if self._row_code(row) not in priority_set],
+            key=lambda row: float(row.get("amount") or 0),
+            reverse=True,
+        )
+        candidate_rows = priority_rows + amount_rows[:140]
         codes = [self._row_code(row) for row in candidate_rows if self._row_code(row)]
         now = datetime.now(SHANGHAI).isoformat(timespec="seconds")
         seeded = self._seed_meta_from_rows(reference_rows + market_rows)
@@ -501,6 +620,7 @@ class CloseCollector:
                             payload["capacity"]["source"] = fallback_label
                             payload["capacity"]["label"] = _capacity_label(payload["capacity"])
                         payload["negative"] = deepcopy(fallback.get("negative") or [])
+                        payload["negative_stocks"] = deepcopy(fallback.get("negative_stocks") or [])
                         fallback_quality = {"source": fallback_label, "status": "stale_fallback", "reason": market_error}
                         payload["data_quality"].update({
                             "breadth": {**fallback_quality, "scope": "全A股，含科创板、北交所"},
@@ -509,22 +629,26 @@ class CloseCollector:
                             "limit_down": fallback_quality,
                             "failed_limit": fallback_quality,
                             "negative": fallback_quality,
+                            "negative_stocks": fallback_quality,
                         })
                     else:
                         missing_breadth, missing_capacity, missing_negative = self._same_day_market_missing_payload(market_error)
                         payload["breadth"].update(missing_breadth)
                         payload["capacity"] = missing_capacity
                         payload["negative"] = missing_negative
+                        payload["negative_stocks"] = []
                         payload["data_quality"].update({
                             "breadth": {"source": "东方财富全A行情列表", "status": "missing", "reason": market_error},
                             "capacity": {"source": "东方财富全A行情列表", "status": "missing", "reason": market_error},
                             "median": {"source": "东方财富全A行情列表", "status": "missing", "reason": market_error},
                             "negative": {"source": "东方财富容量聚合", "status": "missing", "reason": market_error},
+                            "negative_stocks": {"source": "同日全市场日线", "status": "missing", "reason": market_error},
                         })
                     market_rows = []
                 payload["breadth"]["limit_up"] = len(today_rows)
                 payload["breadth"]["continuous"] = len(ladder)
                 payload["data_quality"]["limit_up"] = {"source": "东方财富免费涨停池", "status": "validated"}
+                payload.setdefault("negative_stocks", [])
 
                 cores: list[dict[str, Any]] = [
                     {
@@ -552,10 +676,30 @@ class CloseCollector:
                     payload["mainlines"] = mainlines
                     payload["data_quality"]["mainlines"] = {"source": "东方财富免费涨停池行业聚合", "status": "validated"}
                 if market_rows:
+                    recent_limit_codes = {
+                        code
+                        for date in trade_dates[1:4]
+                        for code in code_sets.get(date, set())
+                    }
+                    today_limit_codes = {str(row.get("code", "")) for row in today_rows}
+                    preliminary_negative_stocks = self._build_negative_stocks(
+                        market_rows,
+                        recent_limit_codes=recent_limit_codes,
+                        limit_codes=today_limit_codes,
+                    )
                     stock_meta = await self._enrich_stock_meta(
-                        trade_date, market_rows, today_rows, allow_tdx=allow_tdx
+                        trade_date,
+                        market_rows,
+                        today_rows,
+                        allow_tdx=allow_tdx,
+                        priority_codes=[str(item.get("code", "")) for item in preliminary_negative_stocks],
                     )
                     self._apply_stock_meta(market_rows, stock_meta)
+                    payload["negative_stocks"] = self._build_negative_stocks(
+                        market_rows,
+                        recent_limit_codes=recent_limit_codes,
+                        limit_codes=today_limit_codes,
+                    )
                     unresolved = [
                         self._row_code(row)
                         for row in sorted(market_rows, key=lambda item: float(item.get("amount") or 0), reverse=True)[:120]
@@ -565,6 +709,10 @@ class CloseCollector:
                         "source": "本地缓存 + 东方财富单票行情 + 通达信MCP限额兜底",
                         "status": "validated" if not unresolved else "partial",
                         "unresolved_top_count": len(unresolved),
+                    }
+                    payload["data_quality"]["negative_stocks"] = {
+                        "source": f"{market_source} + 本地涨停池交易日缓存",
+                        "status": "validated" if payload["negative_stocks"] else "empty",
                     }
                 payload["sector_linkage"] = build_sector_linkage(today_rows, market_rows=market_rows, ladder=ladder)
                 payload["data_quality"]["sector_linkage"] = {

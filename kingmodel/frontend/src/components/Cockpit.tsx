@@ -68,6 +68,16 @@ function CapacityCores({ items = [] }: { items?: NonNullable<DashboardData["capa
   </article>)}</div>;
 }
 
+function NegativeStocks({ items = [] }: { items?: NonNullable<DashboardData["negative_stocks"]> }) {
+  if (!items.length) return <div className="linkage-empty"><ShieldAlert size={22} /><span>暂无可验证的个股负反馈；风险仅按市场/板块层展示。</span></div>;
+  return <div className="negative-stock-grid">{items.slice(0, 12).map((item) => <article key={item.code} className={`severity-${item.severity}`}>
+    <header><div><small>{item.industry || "未分行业"}</small><strong>{item.name}<b>{item.code}</b></strong></div><em className="down">{item.change.toFixed(2)}%</em></header>
+    <p>{item.reason}</p>
+    <div className="negative-stock-metrics"><span>回撤 <b>{item.drawdown.toFixed(1)}%</b></span><span>成交 <b>{item.amount_label}</b></span></div>
+    <footer>{item.tags.slice(0, 5).map((tag) => <span key={tag}>{tag}</span>)}</footer>
+  </article>)}</div>;
+}
+
 function EventSignals({ items = [] }: { items?: NonNullable<DashboardData["event_signals"]> }) {
   if (!items.length) return <div className="linkage-empty"><ShieldAlert size={22} /><span>暂无可审计的隔夜舆情/盘后复盘信号；计划不会使用空数据加分。</span></div>;
   return <div className="event-signal-list">{items.slice(0, 6).map((item) => <article key={`${item.type}-${item.topic}`}>
@@ -146,6 +156,8 @@ export function Cockpit({ data }: { data: DashboardData }) {
       <div className="feedback-compare"><section className="positive-zones"><header><div><span>POSITIVE</span><strong>正反馈板块</strong></div><em>{data.mainlines.length}</em></header>{data.mainlines.map((item) => <article key={item.name}><div><b>{item.name}</b><small>{item.role}</small></div><strong>+{item.change.toFixed(2)}%</strong><i style={{ width: `${Math.min(100, Math.abs(item.change) * 14)}%` }} /></article>)}</section>
       <section className="loss-zones"><header><div><span>NEGATIVE</span><strong>负反馈板块</strong></div><em>{data.negative.length}</em></header>{data.negative.map((item) => <article key={item.name}><div><b>{item.name}</b><small>{item.severity === "high" ? "高风险" : "扩散观察"}</small></div><strong>{item.change.toFixed(2)}%</strong><i style={{ width: `${Math.min(100, Math.abs(item.change) * 14)}%` }} /></article>)}</section></div>
     </Panel>
+
+    <Panel title="个股负反馈池" kicker="LOSS STOCKS · 跌停/炸板/大回撤" source={qualitySource(data, "negative_stocks")} className="negative-stocks-panel"><NegativeStocks items={data.negative_stocks} /></Panel>
 
     <Panel title="板块联动性" kicker="SECTOR LINKAGE · 龙头带动/后排扩散" source={qualitySource(data, "sector_linkage")} className="linkage-panel"><SectorLinkage items={data.sector_linkage} /></Panel>
 

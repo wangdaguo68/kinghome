@@ -152,6 +152,29 @@ def build_market_graph(payload: dict[str, Any]) -> dict[str, Any]:
         )
         edges.append({"source": node_id, "target": "market", "label": "拖累风险偏好", "tone": "negative"})
 
+    for index, item in enumerate(payload.get("negative_stocks", [])[:6], start=1):
+        code = str(item.get("code") or index)
+        node_id = f"negstock-{code}"
+        nodes.append(
+            {
+                "id": node_id,
+                "label": str(item.get("name") or code),
+                "type": "negative_stock",
+                "score": min(100, abs(_float(item.get("change"))) * 8 + _float(item.get("drawdown")) * 3),
+                "detail": f"{code} {_float(item.get('change')):+.2f}% / 回撤{_float(item.get('drawdown')):.1f}%；{item.get('reason', '')}",
+            }
+        )
+        target = next(
+            (
+                f"neg-{i}"
+                for i, sector in enumerate(payload.get("negative", [])[:4], start=1)
+                if str(sector.get("name", "")) in str(item.get("industry", ""))
+                or str(item.get("industry", "")) in str(sector.get("name", ""))
+            ),
+            "market",
+        )
+        edges.append({"source": node_id, "target": target, "label": "个股亏钱效应", "tone": "negative"})
+
     for index, line in enumerate(payload.get("mainlines", [])[:4], start=1):
         node_id = f"line-{index}"
         nodes.append(

@@ -277,3 +277,24 @@ def test_market_negative_fallback_uses_breadth_and_capacity_divergence() -> None
 
     assert [item["name"] for item in negative] == ["全市场普跌负反馈", "跌停炸板负反馈", "容量抱团与小票背离"]
     assert negative[0]["severity"] == "high"
+
+
+def test_negative_stocks_include_limit_down_drawdown_capacity_and_previous_strength() -> None:
+    rows = [
+        {"ts_code": "600001.SH", "name": "跌停样本", "industry": "风险", "pct_chg": -10, "high": 10, "close": 9, "pre_close": 10, "amount": 500_000},
+        {"ts_code": "600002.SH", "name": "炸板样本", "industry": "风险", "pct_chg": 2, "high": 11, "close": 10.2, "pre_close": 10, "amount": 600_000},
+        {"ts_code": "600003.SH", "name": "容量样本", "industry": "风险", "pct_chg": -5, "high": 10.2, "close": 9.5, "pre_close": 10, "amount": 8_000_000},
+        {"ts_code": "600004.SH", "name": "前强样本", "industry": "风险", "pct_chg": -4.5, "high": 10.4, "close": 9.55, "pre_close": 10, "amount": 100_000},
+    ]
+
+    result = CloseCollector._build_negative_stocks(
+        rows,
+        recent_limit_codes={"600004"},
+        limit_codes=set(),
+    )
+    by_code = {item["code"]: item for item in result}
+
+    assert "跌停" in by_code["600001"]["tags"]
+    assert "炸板大面" in by_code["600002"]["tags"]
+    assert "容量杀跌" in by_code["600003"]["tags"]
+    assert "前强负反馈" in by_code["600004"]["tags"]

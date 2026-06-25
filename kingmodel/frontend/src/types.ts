@@ -24,7 +24,11 @@ export interface DashboardData {
     followers: Array<{ name: string; code: string; change: number; role: string }>;
   }>;
   cores: Array<{ name: string; code: string; kind: string; score: number; change: number; evidence: string; source?: string; confidence?: string }>;
-  negative: Array<{ name: string; change: number; severity: string }>;
+  negative: Array<{ name: string; change: number; severity: string; detail?: string; source?: string }>;
+  negative_stocks?: Array<{
+    name: string; code: string; industry: string; change: number; drawdown: number;
+    amount: number; amount_label: string; severity: string; reason: string; tags: string[]; source: string;
+  }>;
   alerts: Array<{ level: string; title: string; detail: string }>;
   ladder: Array<{ name: string; code: string; height: number; recent_limit_count?: number; recent_window_days?: number; change: number; concepts: string[]; primary_factor: string; factor_type: string; confidence: string; evidence: string; source: string }>;
   planned_targets: Array<{

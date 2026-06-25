@@ -668,7 +668,7 @@ class CloseCollector:
                     meta_source = f"{market_source} + 东方财富涨停池 + 本地持久化缓存"
                     meta_freshness = "live"
                     version_label = "今日收盘版"
-                    meta_warning = f"手动刷新不调用通达信 MCP；广度为全A股口径，含科创板、北交所；市场广度来源：{market_source}。"
+                    meta_warning = f"通达信 MCP 仅在免费/缓存缺失时按审计额度兜底；广度为全A股口径，含科创板、北交所；市场广度来源：{market_source}。"
                     official_snapshot = True
                     job_status = "published"
                     job_error = None
@@ -678,7 +678,7 @@ class CloseCollector:
                     meta_freshness = "stale"
                     version_label = "今日部分收盘版"
                     meta_warning = (
-                        f"手动刷新不调用通达信 MCP；今日全市场广度/容量暂缺，已沿用{fallback_label}作参考；"
+                        f"通达信 MCP 仅在免费/缓存缺失时按审计额度兜底；今日全市场广度/容量暂缺，已沿用{fallback_label}作参考；"
                         f"正式计划等待同日数据补齐：{market_error}"
                     )
                     official_snapshot = False
@@ -688,7 +688,7 @@ class CloseCollector:
                     meta_source = "东方财富免费涨停池 + 同日广度缺失"
                     meta_freshness = "stale"
                     version_label = "今日部分收盘版"
-                    meta_warning = f"手动刷新不调用通达信 MCP；今日全市场广度/容量缺失，暂无可信兜底；正式计划已暂停：{market_error}"
+                    meta_warning = f"通达信 MCP 仅在免费/缓存缺失时按审计额度兜底；今日全市场广度/容量缺失，暂无可信兜底；正式计划已暂停：{market_error}"
                     official_snapshot = False
                     job_status = "failed"
                     job_error = f"same-day market missing: {market_error}"[:300]

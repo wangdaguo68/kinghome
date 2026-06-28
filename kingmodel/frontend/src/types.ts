@@ -11,6 +11,12 @@ export interface HistoryItem {
 
 export interface DashboardData {
   meta: { trade_date: string; updated_at: string; source: string; freshness: Freshness; warning?: string; version_label?: string };
+  daily_brief?: {
+    text: string;
+    source: string;
+    is_complete: boolean;
+    observations: Array<{ name?: string; code?: string; type?: string; reason?: string }>;
+  };
   permission: { label: string; position_limit: number; allowed: string; forbidden: string };
   state: { cycle: string; structure: string; money: number; loss: number; trend: number; speculation: number };
   breadth: { eligible: number; up: number; down: number; flat: number; median: number; limit_up: number; limit_down: number; failed_limit: number; continuous: number };

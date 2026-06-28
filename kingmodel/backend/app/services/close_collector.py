@@ -112,6 +112,7 @@ class CloseCollector:
         )
         payload["checkpoints"] = self._build_checkpoints(payload)
         payload["market_graph"] = build_market_graph(payload)
+        payload["daily_brief"] = self._build_daily_brief(payload)
         return payload
 
     def bootstrap_shadow(self) -> None:
@@ -384,6 +385,85 @@ class CloseCollector:
                 f"无达标计划时保持空仓；若上涨{breadth.get('up', 0)}、下跌{breadth.get('down', 0)}的广度不修复，不做弱标补位。"
             )
         return checkpoints[:5]
+
+    @staticmethod
+    def _names(items: list[dict[str, Any]] | None, *, limit: int = 3, with_change: bool = False) -> str:
+        names: list[str] = []
+        for item in items or []:
+            name = str(item.get("name") or "").strip()
+            if not name:
+                continue
+            if with_change and item.get("change") is not None:
+                names.append(f"{name}{float(item.get('change') or 0):+.2f}%")
+            else:
+                names.append(name)
+            if len(names) >= limit:
+                break
+        return "、".join(names)
+
+    @staticmethod
+    def _truncate_zh(text: str, limit: int = 300) -> str:
+        compact = " ".join(str(text).replace("\n", " ").split())
+        return compact if len(compact) <= limit else compact[: limit - 1].rstrip("；，。 ") + "…"
+
+    @classmethod
+    def _build_daily_brief(cls, payload: dict[str, Any]) -> dict[str, Any]:
+        state = payload.get("state") or {}
+        breadth = payload.get("breadth") or {}
+        capacity = payload.get("capacity") or {}
+        mainlines = payload.get("mainlines") or []
+        linkage = payload.get("sector_linkage") or []
+        negative = payload.get("negative") or []
+        negative_stocks = payload.get("negative_stocks") or []
+        capacity_cores = payload.get("capacity_cores") or []
+        plans = payload.get("planned_targets") or []
+
+        mainline_text = cls._names(mainlines, limit=3, with_change=True) or "无清晰主线"
+        linkage_text = "、".join(
+            f"{item.get('name')}({item.get('leader', '无核心')}/{float(item.get('median_change') or 0):+.2f}%)"
+            for item in linkage[:3]
+            if item.get("name")
+        ) or mainline_text
+        negative_sector_text = cls._names(negative, limit=2, with_change=True)
+        negative_stock_text = cls._names(negative_stocks, limit=2, with_change=True)
+        negative_text = "、".join(part for part in [negative_sector_text, negative_stock_text] if part) or "暂无显著扩散"
+        capacity_text = cls._names(capacity_cores, limit=2, with_change=True) or "暂无容量核心"
+        plan_text = cls._names(plans, limit=3) or "无达标计划标的"
+        risk_trigger = (
+            f"{linkage[0].get('name')}后排不扩散或{negative_stocks[0].get('name')}继续负反馈"
+            if linkage and negative_stocks
+            else "广度不修复或主线核心不及预期"
+        )
+        text = (
+            f"今日盘面：{state.get('cycle', '未识别周期')}，{state.get('structure', '风格未明')}；"
+            f"上涨{breadth.get('up', 0)}、下跌{breadth.get('down', 0)}，涨停{breadth.get('limit_up', 0)}、跌停{breadth.get('limit_down', 0)}，"
+            f"赚钱{state.get('money', 0)}、亏钱{state.get('loss', 0)}。"
+            f"赚钱效应集中在{mainline_text}，负反馈看{negative_text}。"
+            f"板块轮动：{linkage_text}；容量核心{capacity_text}。"
+            f"明日观察：{plan_text}；若{risk_trigger}，降低仓位或空仓。"
+        )
+        observations: list[dict[str, Any]] = []
+        for item in plans[:3]:
+            observations.append({
+                "name": item.get("name"),
+                "code": item.get("code"),
+                "type": "计划标的",
+                "reason": item.get("observation") or item.get("logic") or "按计划买点确认",
+            })
+        if not observations:
+            for item in linkage[:3]:
+                observations.append({
+                    "name": item.get("leader") or item.get("name"),
+                    "code": item.get("leader_code"),
+                    "type": str(item.get("name") or "板块观察"),
+                    "reason": f"观察{item.get('name')}后排扩散与板块中位{float(item.get('median_change') or 0):+.2f}%",
+                })
+        return {
+            "text": cls._truncate_zh(text, 300),
+            "observations": observations[:3],
+            "source": "系统收盘快照自动生成；未调用通达信MCP",
+            "is_complete": bool(mainlines or linkage or capacity_cores or negative_stocks),
+        }
 
     @staticmethod
     def _limit_factor(code: str, direction: str) -> float:
@@ -957,6 +1037,7 @@ class CloseCollector:
                     "warning": meta_warning,
                 })
                 payload["collection_status"] = collection_status(trade_date, self.settings.tdx_daily_call_limit)
+                payload["daily_brief"] = self._build_daily_brief(payload)
                 save_snapshot(payload, official=official_snapshot)
                 finish_collection_job(trade_date, job_status, now.isoformat(timespec="seconds"), job_error)
                 return self.current()

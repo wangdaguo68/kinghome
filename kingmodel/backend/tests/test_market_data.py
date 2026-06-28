@@ -355,3 +355,23 @@ def test_checkpoints_are_generated_from_current_payload() -> None:
     assert "光学光电" in joined
     assert "中天科技" in joined
     assert "德明利" in joined
+
+
+def test_daily_brief_is_short_and_actionable() -> None:
+    payload = {
+        "state": {"cycle": "高位震荡", "structure": "趋势风格", "money": 66, "loss": 42},
+        "breadth": {"up": 1958, "down": 3139, "limit_up": 91, "limit_down": 12},
+        "mainlines": [{"name": "光学光电", "change": 1.23}, {"name": "半导体", "change": -1.73}],
+        "sector_linkage": [{"name": "光学光电", "leader": "凯盛科技", "leader_code": "600552", "median_change": 1.23}],
+        "negative": [{"name": "通信设备", "change": -2.1}],
+        "negative_stocks": [{"name": "中天科技", "code": "600522", "change": -10.0}],
+        "capacity_cores": [{"name": "兆易创新", "code": "603986", "change": -3.2}],
+        "planned_targets": [{"name": "德明利", "code": "001309", "observation": "看半导体容量承接"}],
+    }
+
+    brief = CloseCollector._build_daily_brief(payload)
+    assert len(brief["text"]) <= 300
+    assert "今日盘面" in brief["text"]
+    assert "明日观察" in brief["text"]
+    assert brief["observations"][0]["name"] == "德明利"
+    assert brief["is_complete"] is True

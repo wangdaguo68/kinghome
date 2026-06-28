@@ -92,6 +92,24 @@ function EventSignals({ items = [] }: { items?: NonNullable<DashboardData["event
   </article>)}</div>;
 }
 
+function DailyBrief({ brief }: { brief?: DashboardData["daily_brief"] }) {
+  if (!brief?.text) return null;
+  return <section className="daily-brief-card">
+    <header><div><span>DAILY REVIEW · ≤300字</span><h2>盘面复盘总结</h2></div><small>{brief.source}</small></header>
+    <div className="daily-brief-body">
+      <p>{brief.text}</p>
+      <aside>
+        <span>明日观察标</span>
+        {(brief.observations ?? []).length ? (brief.observations ?? []).map((item, index) => <article key={`${item.code ?? item.name}-${index}`}>
+          <b>{item.name ?? "观察方向"}{item.code ? <small>{item.code}</small> : null}</b>
+          <em>{item.type ?? "观察"}</em>
+          <p>{item.reason ?? "等待盘面确认"}</p>
+        </article>) : <article><b>暂无达标观察标</b><em>空仓条件</em><p>等待主线、广度和容量承接同步确认。</p></article>}
+      </aside>
+    </div>
+  </section>;
+}
+
 function PlannedTargets({ items }: { items: DashboardData["planned_targets"] }) {
   if (!items.length) return <div className="plan-empty"><Target size={24} /><div><strong>当前没有达到执行门槛的计划标的</strong><span>系统不会用弱标的补足数量，等待市场许可与核心评分改善。</span></div></div>;
   return <div className="plan-grid">{items.map((item, index) => <article key={item.code}>
@@ -137,6 +155,8 @@ function ShadowTop3({ shadow, featureDays = 0 }: { shadow: DashboardData["ml_sha
 export function Cockpit({ data }: { data: DashboardData }) {
   const upRatio = Math.round(data.breadth.up / Math.max(1, data.breadth.eligible) * 100);
   return <div className="cockpit-grid">
+    <DailyBrief brief={data.daily_brief} />
+
     <section className="permission-card">
       <div className="permission-top"><span className="live-tag"><Radio size={13} /> DECISION</span><span>仓位上限</span></div>
       <div className="permission-main"><div><small>市场许可</small><h1>{data.permission.label}</h1></div><strong>{data.permission.position_limit}<i>%</i></strong></div>

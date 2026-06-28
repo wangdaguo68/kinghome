@@ -298,3 +298,60 @@ def test_negative_stocks_include_limit_down_drawdown_capacity_and_previous_stren
     assert "炸板大面" in by_code["600002"]["tags"]
     assert "容量杀跌" in by_code["600003"]["tags"]
     assert "前强负反馈" in by_code["600004"]["tags"]
+
+
+def test_negative_stocks_exclude_unbounded_new_share_drawdown() -> None:
+    rows = [
+        {
+            "ts_code": "001399.SZ",
+            "name": "N惠科股份",
+            "industry": "元器件",
+            "pct_chg": 315.02,
+            "high": 65.1,
+            "close": 41.5,
+            "pre_close": 10,
+            "amount": 13_000_000_000,
+        },
+        {"ts_code": "600001.SH", "name": "跌停样本", "industry": "风险", "pct_chg": -10, "high": 10, "close": 9, "pre_close": 10, "amount": 500_000},
+    ]
+
+    result = CloseCollector._build_negative_stocks(rows)
+    assert [item["code"] for item in result] == ["600001"]
+
+
+def test_static_sentiment_is_not_treated_as_auditable_signal() -> None:
+    payload = {
+        "sentiment": [
+            {"topic": "AI硬件", "heat": 82, "crowding": "高", "catalyst": "静态", "validation": "静态"},
+            {"topic": "真实舆情", "source": "人工录入-20260626复盘", "heat": 60, "crowding": "中", "catalyst": "有来源", "validation": "看竞价"},
+        ]
+    }
+
+    result = CloseCollector._validated_sentiment(payload)
+    assert [item["topic"] for item in result] == ["真实舆情"]
+
+
+def test_existing_negative_stock_snapshot_is_sanitized() -> None:
+    result = CloseCollector._sanitize_negative_stock_items([
+        {"name": "N惠科股份", "code": "001399", "change": 315.02, "drawdown": 335.97},
+        {"name": "中天科技", "code": "600522", "change": -10.0, "drawdown": 7.62},
+    ])
+    assert [item["code"] for item in result] == ["600522"]
+
+
+def test_checkpoints_are_generated_from_current_payload() -> None:
+    payload = {
+        "mainlines": [{"name": "光学光电"}],
+        "sector_linkage": [{"name": "光学光电", "limit_up_count": 4, "follower_count": 3, "median_change": 1.23}],
+        "negative_stocks": [{"name": "中天科技", "code": "600522"}],
+        "capacity_cores": [{"name": "兆易创新", "code": "603986"}],
+        "planned_targets": [{"name": "德明利"}],
+        "breadth": {"up": 790, "down": 4676},
+        "capacity": {"sample": 100, "median": -2.95},
+    }
+
+    checkpoints = CloseCollector._build_checkpoints(payload)
+    joined = "\n".join(checkpoints)
+    assert "光学光电" in joined
+    assert "中天科技" in joined
+    assert "德明利" in joined

@@ -101,12 +101,16 @@ class CloseCollector:
         payload["ml_review"] = outcome_review()
         payload.setdefault("capacity_cores", [])
         payload.setdefault("negative_stocks", [])
+        payload["negative_stocks"] = self._sanitize_negative_stock_items(payload.get("negative_stocks", []))
+        payload["sentiment"] = self._validated_sentiment(payload)
+        self._apply_linkage_to_mainlines(payload)
         payload["event_signals"] = build_event_signals(
             payload.get("sentiment", []),
             mainlines=payload.get("mainlines", []),
             sector_linkage=payload.get("sector_linkage", []),
             ml_review=payload.get("ml_review", {}),
         )
+        payload["checkpoints"] = self._build_checkpoints(payload)
         payload["market_graph"] = build_market_graph(payload)
         return payload
 
@@ -283,6 +287,105 @@ class CloseCollector:
         return f"{amount:.0f}"
 
     @staticmethod
+    def _is_unbounded_new_share(row: dict[str, Any]) -> bool:
+        """Exclude IPO/new-share no-limit moves from normal loss-feedback math."""
+        name = str(row.get("name") or "").strip().upper()
+        if name.startswith(("N", "C")):
+            return True
+        change = float(row.get("pct_chg") or row.get("change") or 0)
+        high = float(row.get("high") or 0)
+        pre_close = float(row.get("pre_close") or 0)
+        high_change = (high / pre_close - 1) * 100 if high > 0 and pre_close > 0 else 0.0
+        return change >= 30 or high_change >= 35
+
+    @staticmethod
+    def _validated_sentiment(payload: dict[str, Any]) -> list[dict[str, Any]]:
+        """Keep only auditable sentiment; drop built-in/static placeholders."""
+        result: list[dict[str, Any]] = []
+        for item in payload.get("sentiment", []) or []:
+            topic = str(item.get("topic") or "").strip()
+            source = str(item.get("source") or "").strip()
+            if not topic:
+                continue
+            if not source and topic in {"AI硬件", "稀有金属", "新材料/稀有金属"}:
+                continue
+            if source in {"本地舆情清单/人工录入", "内置核验快照"}:
+                continue
+            if not source:
+                continue
+            result.append(item)
+        return result
+
+    @staticmethod
+    def _sanitize_negative_stock_items(items: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+        result: list[dict[str, Any]] = []
+        for item in items or []:
+            name = str(item.get("name") or "").strip().upper()
+            change = float(item.get("change") or 0)
+            drawdown = float(item.get("drawdown") or 0)
+            if name.startswith(("N", "C")) or change >= 30 or drawdown >= 35:
+                continue
+            result.append(item)
+        return result
+
+    @staticmethod
+    def _apply_linkage_to_mainlines(payload: dict[str, Any]) -> None:
+        linkage_by_name = {str(item.get("name", "")): item for item in payload.get("sector_linkage", []) if item.get("name")}
+        for line in payload.get("mainlines", []) or []:
+            name = str(line.get("name") or "")
+            linkage = linkage_by_name.get(name) or next(
+                (
+                    item for item in linkage_by_name.values()
+                    if name and (name in str(item.get("name", "")) or str(item.get("name", "")) in name)
+                ),
+                None,
+            )
+            if not linkage:
+                continue
+            line["change"] = round(float(linkage.get("median_change") or 0), 2)
+            tags = list(line.get("tags") or [])
+            if "全板块中位涨跌" not in tags:
+                tags.append("全板块中位涨跌")
+            line["tags"] = tags
+
+    @staticmethod
+    def _build_checkpoints(payload: dict[str, Any]) -> list[str]:
+        checkpoints: list[str] = []
+        mainline = (payload.get("mainlines") or [{}])[0]
+        linkage = (payload.get("sector_linkage") or [{}])[0]
+        negative_stock = (payload.get("negative_stocks") or [{}])[0]
+        capacity_core = (payload.get("capacity_cores") or [{}])[0]
+        plan = (payload.get("planned_targets") or [{}])[0]
+        breadth = payload.get("breadth") or {}
+        capacity = payload.get("capacity") or {}
+
+        if mainline.get("name"):
+            checkpoints.append(
+                f"主线{mainline['name']}：竞价后看龙头溢价、后排是否继续扩散，板块中位涨跌需不弱于全市场中位。"
+            )
+        if linkage.get("name"):
+            checkpoints.append(
+                f"板块联动{linkage['name']}：涨停{linkage.get('limit_up_count', 0)}只、后排{linkage.get('follower_count', 0)}只，板块中位{float(linkage.get('median_change') or 0):+.2f}%。"
+            )
+        if negative_stock.get("name"):
+            checkpoints.append(
+                f"负反馈扩散：重点盯{negative_stock['name']}({negative_stock.get('code', '')})及同板块是否继续跌停/大回撤。"
+            )
+        if capacity_core.get("name"):
+            checkpoints.append(
+                f"容量承接：{capacity_core['name']}({capacity_core.get('code', '')})不能继续放量杀跌，容量TOP{capacity.get('sample', 0)}中位{float(capacity.get('median') or 0):+.2f}%。"
+            )
+        if plan.get("name"):
+            checkpoints.append(
+                f"计划标的{plan['name']}：只在买入前提和触发买点同时满足时执行，不满足则放弃。"
+            )
+        else:
+            checkpoints.append(
+                f"无达标计划时保持空仓；若上涨{breadth.get('up', 0)}、下跌{breadth.get('down', 0)}的广度不修复，不做弱标补位。"
+            )
+        return checkpoints[:5]
+
+    @staticmethod
     def _limit_factor(code: str, direction: str) -> float:
         if code.startswith(("4", "8", "9")):
             return 1.30 if direction == "up" else 0.70
@@ -312,7 +415,7 @@ class CloseCollector:
             if not code:
                 return
             name = str(row.get("name") or code)
-            if "ST" in name.upper() or "退" in name:
+            if "ST" in name.upper() or "退" in name or CloseCollector._is_unbounded_new_share(row):
                 return
             change = float(row.get("pct_chg") or row.get("change") or 0)
             high = float(row.get("high") or 0)
@@ -353,6 +456,8 @@ class CloseCollector:
             high = float(row.get("high") or 0)
             close = float(row.get("close") or 0)
             pre_close = float(row.get("pre_close") or 0)
+            if CloseCollector._is_unbounded_new_share(row):
+                continue
             amount = float(row.get("amount") or 0) * amount_unit
             up_limit = pre_close * CloseCollector._limit_factor(code, "up") if pre_close > 0 else 0
             down_limit = pre_close * CloseCollector._limit_factor(code, "down") if pre_close > 0 else 0
@@ -719,6 +824,7 @@ class CloseCollector:
                     "source": "东方财富涨停池 + Tushare行业日线" if market_rows else "东方财富涨停池",
                     "status": "validated" if payload["sector_linkage"] else "empty",
                 }
+                self._apply_linkage_to_mainlines(payload)
                 if market_rows:
                     payload["capacity_cores"] = build_capacity_cores(
                         market_rows,
@@ -753,6 +859,7 @@ class CloseCollector:
                             existing_core_codes.add(candidate["code"])
                 payload["cores"] = cores
                 payload["ml_review"] = outcome_review()
+                payload["sentiment"] = self._validated_sentiment(payload)
                 payload["event_signals"] = build_event_signals(
                     payload.get("sentiment", []),
                     mainlines=payload.get("mainlines", []),
@@ -776,6 +883,7 @@ class CloseCollector:
                     event_signals=payload.get("event_signals", []),
                     market_data_complete=same_day_market_complete,
                 )
+                payload["checkpoints"] = self._build_checkpoints(payload)
                 payload["market_graph"] = build_market_graph(payload)
                 payload["ml_shadow"] = build_shadow_top3(payload, assessment)
                 payload["ml_regime"] = regime_probabilities(assessment)

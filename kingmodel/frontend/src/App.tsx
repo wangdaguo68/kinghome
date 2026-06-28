@@ -5,7 +5,7 @@ import { Cockpit } from "./components/Cockpit";
 import { FlowMap } from "./components/FlowMap";
 import { LoginPage } from "./components/LoginPage";
 import { SettingsPage } from "./components/SettingsPage";
-import type { DashboardData, Workspace } from "./types";
+import type { DashboardData, HistoryItem, Workspace } from "./types";
 
 const nav: Array<{ id: Workspace; label: string; icon: typeof Activity }> = [
   { id: "cockpit", label: "决策驾驶舱", icon: LayoutDashboard },
@@ -47,6 +47,7 @@ function SectorsWorkspace({ data }: { data: DashboardData }) {
             <span>后排 <b>{linkage?.follower_count ?? "—"}</b></span>
             <span>20cm <b>{linkage?.elastic_count ?? "—"}</b></span>
             <span>联动 <b>{linkage?.score?.toFixed(1) ?? "—"}</b></span>
+            <span>板块涨跌 <b className={(linkage?.median_change ?? 0) >= 0 ? "up" : "down"}>{typeof linkage?.median_change === "number" ? `${linkage.median_change >= 0 ? "+" : ""}${linkage.median_change.toFixed(2)}%` : "—"}</b></span>
           </div>
           <footer>{line.tags.map((tag) => <span key={tag}>{tag}</span>)}{linkage?.risks?.map((risk) => <span className="risk" key={risk}>{risk}</span>)}</footer>
         </article>;
@@ -58,8 +59,8 @@ function SectorsWorkspace({ data }: { data: DashboardData }) {
 function CoresWorkspace({ data }: { data: DashboardData }) {
   return <div className="workspace-page">
     <div className="page-heading"><span>CORE CANDIDATES</span><h1>核心标的</h1><p>核心地位来自主动性、容量承接、板块带动和可交易性，不等于静态涨幅排名。</p></div>
-    <div className="capacity-core-list workspace-capacity">{(data.capacity_cores ?? []).slice(0, 12).map((item) => <article key={item.code} className={!item.tradable ? "disabled" : ""}>
-      <div className="capacity-rank">#{item.rank}</div>
+    <div className="capacity-core-list workspace-capacity">{(data.capacity_cores ?? []).slice(0, 12).map((item, index) => <article key={item.code} className={!item.tradable ? "disabled" : ""}>
+      <div className="capacity-rank"><b>#{index + 1}</b><small>成交额#{item.rank}</small></div>
       <div className="capacity-core-main"><header><strong>{item.name}<small>{item.code}</small></strong><em className={item.change >= 0 ? "up" : "down"}>{item.change >= 0 ? "+" : ""}{item.change.toFixed(2)}%</em></header><p>{item.reason}</p><footer>{item.tags.map((tag) => <span key={tag}>{tag}</span>)}</footer></div>
       <div className="capacity-core-score"><b>{item.score.toFixed(1)}</b><small>{item.amount_label}</small></div>
     </article>)}</div>
@@ -76,7 +77,20 @@ function SentimentWorkspace({ data }: { data: DashboardData }) {
       <div><span>次日验证：{entry.validation}</span><span>风险：{entry.risk}</span></div>
       <footer><b>{entry.crowding}</b><small>{entry.source}</small></footer>
     </article>)}</div>
-    <div className="sentiment-board">{data.sentiment.map((entry) => <article key={entry.topic}><div className="heat">{entry.heat}</div><div><span>拥挤度 {entry.crowding}</span><h2>{entry.topic}</h2><p>{entry.catalyst}</p><footer>次日验证：{entry.validation}</footer></div></article>)}</div>
+    {data.sentiment.length ? <div className="sentiment-board">{data.sentiment.map((entry) => <article key={entry.topic}><div className="heat">{entry.heat}</div><div><span>拥挤度 {entry.crowding}</span><h2>{entry.topic}</h2><p>{entry.catalyst}</p><footer>次日验证：{entry.validation}</footer></div></article>)}</div> : <div className="empty-workspace"><ScanSearch size={34} /><h2>暂无可验证隔夜舆情</h2><p>静态兜底话题已剔除；没有来源、时间和验证条件的数据不会参与交易计划。</p></div>}
+  </div>;
+}
+
+function HistoryWorkspace({ items }: { items: HistoryItem[] }) {
+  return <div className="workspace-page">
+    <div className="page-heading"><span>SNAPSHOT HISTORY</span><h1>历史验证</h1><p>这里展示系统已保存的收盘快照，方便检查数据是否持续沉淀。</p></div>
+    {items.length ? <div className="history-table"><header><span>时间</span><span>交易日</span><span>数据层</span><span>来源</span><span>类型</span></header>{items.map((item) => <div key={item.id}>
+      <span>{new Date(item.created_at).toLocaleString("zh-CN", { hour12: false })}</span>
+      <span>{item.trade_date}</span>
+      <span className={item.freshness === "live" ? "up" : "down"}>{item.freshness}</span>
+      <span>{item.source}</span>
+      <span>{item.is_official ? "正式" : "临时"}</span>
+    </div>)}</div> : <div className="empty-workspace"><History size={34} /><h2>暂无历史快照</h2><p>后端没有返回历史记录时才显示这里。</p></div>}
   </div>;
 }
 
@@ -88,19 +102,21 @@ function ReviewWorkspace({ data }: { data: DashboardData }) {
   </div>;
 }
 
-function SecondaryWorkspace({ workspace, data }: { workspace: Workspace; data: DashboardData }) {
+function SecondaryWorkspace({ workspace, data, historyItems }: { workspace: Workspace; data: DashboardData; historyItems: HistoryItem[] }) {
   const item = nav.find((entry) => entry.id === workspace)!;
   if (workspace === "map") return <MarketMapWorkspace data={data} />;
   if (workspace === "sectors") return <SectorsWorkspace data={data} />;
   if (workspace === "cores") return <CoresWorkspace data={data} />;
   if (workspace === "sentiment") return <SentimentWorkspace data={data} />;
   if (workspace === "review") return <ReviewWorkspace data={data} />;
+  if (workspace === "history") return <HistoryWorkspace items={historyItems} />;
   return <div className="workspace-page"><div className="page-heading"><span>WORKSPACE</span><h1>{item.label}</h1><p>该工作区已连接统一快照和认证结构，后续数据会随采集任务持续沉淀。</p></div><div className="empty-workspace"><Database size={34} /><h2>等待数据沉淀</h2><p>当前模式：{data.meta.freshness} · 来源：{data.meta.source}</p></div></div>;
 }
 
 export default function App() {
   const [username, setUsername] = useState<string | null>(null);
   const [data, setData] = useState<DashboardData | null>(null);
+  const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
   const [workspace, setWorkspace] = useState<Workspace>("cockpit");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -120,6 +136,11 @@ export default function App() {
     const timer = window.setInterval(() => loadDashboard().catch(() => undefined), 30_000);
     return () => window.clearInterval(timer);
   }, [loadDashboard, username]);
+
+  useEffect(() => {
+    if (!username || workspace !== "history") return;
+    api.history().then((result) => setHistoryItems(result.items)).catch(() => setHistoryItems([]));
+  }, [workspace, username]);
 
   async function refresh() {
     setRefreshing(true);
@@ -150,7 +171,7 @@ export default function App() {
         <div className="topbar-meta"><span><Clock3 size={14} />{new Date(data.meta.updated_at).toLocaleString("zh-CN", { hour12: false })}</span><span className={`source-badge ${data.meta.freshness}`}>{data.meta.source}</span><button className="icon-button"><Bell size={17} /><i>{data.alerts.length}</i></button><button className="refresh-button" onClick={refresh} disabled={refreshing} title="只调用免费接口与本地缓存；关键数据才允许后端受控调用通达信"><RefreshCw size={15} className={refreshing ? "spinning" : ""} />{refreshing ? "刷新中" : "省Token刷新"}</button></div>
       </header>
       {data.meta.warning ? <div className={`data-warning ${data.meta.freshness}`}><ShieldAlert size={15} />{data.meta.warning}</div> : null}
-      <div className="content-shell">{workspace === "cockpit" ? <Cockpit data={data} /> : workspace === "settings" ? <SettingsPage username={username} collection={data.collection_status} mlSystem={data.ml_system} /> : <SecondaryWorkspace workspace={workspace} data={data} />}</div>
+      <div className="content-shell">{workspace === "cockpit" ? <Cockpit data={data} /> : workspace === "settings" ? <SettingsPage username={username} collection={data.collection_status} mlSystem={data.ml_system} /> : <SecondaryWorkspace workspace={workspace} data={data} historyItems={historyItems} />}</div>
     </main>
   </div>;
 }

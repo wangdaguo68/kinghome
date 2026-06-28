@@ -1,5 +1,14 @@
 export type Freshness = "live" | "stale" | "sample";
 
+export interface HistoryItem {
+  id: number;
+  created_at: string;
+  trade_date: string;
+  source: string;
+  freshness: Freshness;
+  is_official: number;
+}
+
 export interface DashboardData {
   meta: { trade_date: string; updated_at: string; source: string; freshness: Freshness; warning?: string; version_label?: string };
   permission: { label: string; position_limit: number; allowed: string; forbidden: string };

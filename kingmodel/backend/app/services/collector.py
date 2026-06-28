@@ -60,11 +60,8 @@ DEMO_DASHBOARD: dict[str, Any] = {
     "ladder": [],
     "planned_targets": [],
     "data_quality": {},
-    "sentiment": [
-        {"topic": "AI硬件", "heat": 82, "crowding": "高", "catalyst": "产业链与涨价信息集中发酵", "validation": "竞价溢价与中军承接"},
-        {"topic": "稀有金属", "heat": 61, "crowding": "中", "catalyst": "材料供给扰动", "validation": "板块成交占比继续提高"},
-    ],
-    "checkpoints": ["主线成交占比是否继续提高", "容量正反馈能否延续", "负反馈板块是否继续扩散"],
+    "sentiment": [],
+    "checkpoints": ["样例快照仅用于界面验证，正式盘中确认清单由当日主线、联动、负反馈和计划标的动态生成。"],
 }
 
 

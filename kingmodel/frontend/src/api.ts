@@ -1,4 +1,4 @@
-import type { DashboardData } from "./types";
+import type { DashboardData, HistoryItem } from "./types";
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, { credentials: "include", ...init, headers: { "Content-Type": "application/json", ...init?.headers } });
@@ -19,5 +19,5 @@ export const api = {
   }),
   dashboard: () => request<DashboardData>("/api/dashboard"),
   refresh: () => request<DashboardData>("/api/refresh", { method: "POST" }),
-  history: () => request<{ items: unknown[] }>("/api/history")
+  history: () => request<{ items: HistoryItem[] }>("/api/history")
 };

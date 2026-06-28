@@ -42,6 +42,9 @@ def test_outcome_labels_start_at_next_open_and_cover_all_horizons() -> None:
     assert outcomes[0][1]["entry_trade_date"] == "20260602"
     assert outcomes[-1][1]["exit_trade_date"] == "20260611"
     assert outcomes[-1][1]["net_return"] < outcomes[-1][1]["gross_return"]
+    assert outcomes[0][1]["is_backtest"] is False
+    assert outcomes[0][1]["sample_type"] == "shadow_label_not_backtest"
+    assert "次日" in outcomes[0][1]["entry_rule"]
 
 
 def test_one_price_limit_is_not_counted_as_tradable_success() -> None:

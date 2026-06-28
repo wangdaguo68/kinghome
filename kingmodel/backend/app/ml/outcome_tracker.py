@@ -9,6 +9,10 @@ from ..services.free_market import EastMoneyFreeClient
 
 
 HORIZONS = (1, 3, 5, 10)
+LABEL_VERSION = "next-open-v2"
+ENTRY_RULE = "影子标签：次日（计划日后首个交易日）开盘价买入，不代表真实盘中触发买点。"
+EXIT_RULE_TEMPLATE = "影子标签：持有{horizon}个交易日后按收盘价退出；未模拟止损、止盈、回封失败或盘中卖点。"
+SAMPLE_TYPE = "shadow_label_not_backtest"
 
 
 def calculate_outcomes(code: str, bars: list[dict[str, Any]], cost_rate: float = 0.0015) -> list[tuple[int, dict[str, Any]]]:
@@ -33,12 +37,21 @@ def calculate_outcomes(code: str, bars: list[dict[str, Any]], cost_rate: float =
         gross = close / entry_price - 1 if tradable and close > 0 else 0.0
         mfe = max(float(row.get("high") or 0) / entry_price - 1 for row in window) if tradable else 0.0
         mae = min(float(row.get("low") or 0) / entry_price - 1 for row in window) if tradable else 0.0
+        payoff_ratio = round(mfe / abs(mae), 4) if tradable and mae < 0 else None
         outcomes.append((horizon, {
             "entry_trade_date": entry["trade_date"], "exit_trade_date": window[-1]["trade_date"],
             "entry_price": entry_price, "exit_price": close, "tradable": tradable,
             "gross_return": round(gross, 6), "net_return": round(gross - cost_rate if tradable else 0.0, 6),
             "mfe": round(mfe, 6), "mae": round(mae, 6), "cost_rate": cost_rate,
-            "label_version": "next-open-v1", "blocked_reason": "一字涨停不可成交" if one_price_limit else None,
+            "payoff_ratio": payoff_ratio,
+            "holding_days": horizon,
+            "sample_type": SAMPLE_TYPE,
+            "is_backtest": False,
+            "entry_rule": ENTRY_RULE,
+            "exit_rule": EXIT_RULE_TEMPLATE.format(horizon=horizon),
+            "execution_model": "next_open_fixed_horizon",
+            "label_version": LABEL_VERSION,
+            "blocked_reason": "一字涨停不可成交" if one_price_limit else None,
         }))
     return outcomes
 

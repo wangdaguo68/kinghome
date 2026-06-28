@@ -13,7 +13,7 @@ const nav: Array<{ id: Workspace; label: string; icon: typeof Activity }> = [
   { id: "sectors", label: "主线板块", icon: Boxes },
   { id: "cores", label: "核心标的", icon: Target },
   { id: "sentiment", label: "隔夜舆情", icon: ScanSearch },
-  { id: "review", label: "盘后复盘", icon: BookOpenCheck },
+  { id: "review", label: "影子跟踪", icon: BookOpenCheck },
   { id: "history", label: "历史验证", icon: History },
   { id: "settings", label: "系统设置", icon: Settings }
 ];
@@ -96,9 +96,20 @@ function HistoryWorkspace({ items }: { items: HistoryItem[] }) {
 
 function ReviewWorkspace({ data }: { data: DashboardData }) {
   const review = data.ml_review;
-  return <div className="workspace-page"><div className="page-heading"><span>MODEL OUTCOMES</span><h1>盘后复盘</h1><p>按未来收益标签回看计划质量，同时把当日主线/联动作为盘后复盘信号写回次日计划。</p></div>
-    <div className="review-summary">{(review?.summary ?? []).map((entry) => <article key={entry.horizon}><span>{entry.horizon}D</span><div><small>样本</small><strong>{entry.samples}</strong></div><div><small>胜率</small><strong>{entry.win_rate === null ? "—" : `${(entry.win_rate * 100).toFixed(1)}%`}</strong></div><div><small>平均净收益</small><strong className={(entry.average_return ?? 0) >= 0 ? "up" : "down"}>{entry.average_return === null ? "—" : `${entry.average_return >= 0 ? "+" : ""}${(entry.average_return * 100).toFixed(2)}%`}</strong></div></article>)}</div>
-    {review?.items.length ? <div className="review-table"><header><span>日期 / 标的</span><span>周期</span><span>净收益</span><span>MFE</span><span>MAE</span><span>可成交</span></header>{review.items.slice(0, 40).map((entry) => <div key={`${entry.trade_date}-${entry.code}-${entry.horizon}`}><span><b>{entry.name}</b><small>{entry.trade_date} · {entry.code}</small></span><span>{entry.horizon}日</span><span className={entry.net_return >= 0 ? "up" : "down"}>{entry.tradable ? `${entry.net_return >= 0 ? "+" : ""}${(entry.net_return * 100).toFixed(2)}%` : "—"}</span><span className="up">+{(entry.mfe * 100).toFixed(2)}%</span><span className="down">{(entry.mae * 100).toFixed(2)}%</span><span>{entry.tradable ? "是" : entry.blocked_reason ?? "否"}</span></div>)}</div> : <div className="empty-workspace"><Database size={34} /><h2>等待未来收益标签</h2><p>影子计划会在后续交易日自动回填，不调用通达信。</p></div>}
+  const pct = (value?: number | null) => typeof value === "number" ? `${value >= 0 ? "+" : ""}${(value * 100).toFixed(2)}%` : "—";
+  const price = (value?: number | null) => typeof value === "number" ? value.toFixed(2) : "—";
+  return <div className="workspace-page"><div className="page-heading"><span>SHADOW OUTCOME TRACKING</span><h1>影子计划跟踪</h1><p>这里不是实盘回测。当前只按统一标签回看计划：次日开盘买入、固定周期收盘退出，用于机器学习样本沉淀和规则校验。</p></div>
+    <div className="review-warning"><ShieldAlert size={16} /><span>{review?.notice ?? "当前为影子计划收益标签，不是实盘回测；尚未模拟你的真实盘中买卖点、止损止盈和仓位。"}</span></div>
+    <div className="review-summary">{(review?.summary ?? []).map((entry) => <article key={entry.horizon}><span>{entry.horizon}D</span><div><small>可成交样本</small><strong>{entry.samples}</strong></div><div><small>标签胜率</small><strong>{entry.win_rate === null ? "—" : `${(entry.win_rate * 100).toFixed(1)}%`}</strong></div><div><small>平均净收益</small><strong className={(entry.average_return ?? 0) >= 0 ? "up" : "down"}>{entry.average_return === null ? "—" : `${entry.average_return >= 0 ? "+" : ""}${(entry.average_return * 100).toFixed(2)}%`}</strong></div></article>)}</div>
+    {review?.items.length ? <div className="review-table outcome-table"><header><span>计划 / 标的</span><span>入场</span><span>退出</span><span>收益</span><span>过程风险</span><span>标签规则</span><span>可成交</span></header>{review.items.slice(0, 60).map((entry) => <div key={`${entry.trade_date}-${entry.code}-${entry.horizon}`}>
+      <span><b>{entry.name}</b><small>{entry.trade_date} · {entry.code} · 计划#{entry.rank ?? "—"}</small></span>
+      <span><b>{entry.entry_trade_date ?? "—"}</b><small>开盘 {price(entry.entry_price)}</small></span>
+      <span><b>{entry.exit_trade_date ?? "—"}</b><small>{entry.holding_days ?? entry.horizon}日收盘 {price(entry.exit_price)}</small></span>
+      <span className={entry.net_return >= 0 ? "up" : "down"}><b>{entry.tradable ? pct(entry.net_return) : "—"}</b><small>毛收益 {pct(entry.gross_return)}</small></span>
+      <span><b className="up">MFE {pct(entry.mfe)}</b><small className="down">MAE {pct(entry.mae)} · 盈亏比 {entry.payoff_ratio?.toFixed(2) ?? "—"}</small></span>
+      <span><b>{entry.label_version ?? "—"}</b><small>{entry.entry_rule ?? "次日开盘统一打标"}；{entry.exit_rule ?? `${entry.horizon}日收盘退出`}</small></span>
+      <span>{entry.tradable ? "是" : entry.blocked_reason ?? "否"}</span>
+    </div>)}</div> : <div className="empty-workspace"><Database size={34} /><h2>等待未来收益标签</h2><p>影子计划会在后续交易日自动回填，不调用通达信。</p></div>}
   </div>;
 }
 

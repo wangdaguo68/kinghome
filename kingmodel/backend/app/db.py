@@ -585,7 +585,20 @@ def outcome_review(limit: int = 100) -> dict[str, Any]:
     for row in rows:
         outcome = json.loads(row["payload"])
         plan = json.loads(row["plan"]) if row["plan"] else {}
-        items.append({"trade_date": row["trade_date"], "code": row["code"], "name": plan.get("name", row["code"]), "rank": plan.get("rank"), "horizon": row["horizon"], **outcome})
+        horizon = int(row["horizon"])
+        outcome.setdefault("holding_days", horizon)
+        outcome.setdefault("sample_type", "shadow_label_not_backtest")
+        outcome.setdefault("is_backtest", False)
+        outcome.setdefault("execution_model", "next_open_fixed_horizon")
+        outcome.setdefault("entry_rule", "影子标签：次日（计划日后首个交易日）开盘价买入，不代表真实盘中触发买点。")
+        outcome.setdefault("exit_rule", f"影子标签：持有{horizon}个交易日后按收盘价退出；未模拟止损、止盈、回封失败或盘中卖点。")
+        outcome.setdefault("label_version", "next-open-v1")
+        if outcome.get("payoff_ratio") is None and outcome.get("tradable") and float(outcome.get("mae") or 0) < 0:
+            outcome["payoff_ratio"] = round(float(outcome.get("mfe") or 0) / abs(float(outcome.get("mae") or 0)), 4)
+        items.append({
+            "trade_date": row["trade_date"], "code": row["code"], "name": plan.get("name", row["code"]),
+            "rank": plan.get("rank"), "horizon": horizon, **outcome,
+        })
     summary = []
     for horizon in (1, 3, 5, 10):
         values = [item for item in items if item["horizon"] == horizon and item.get("tradable")]
@@ -595,7 +608,13 @@ def outcome_review(limit: int = 100) -> dict[str, Any]:
             "win_rate": round(sum(value > 0 for value in returns) / len(returns), 4) if returns else None,
             "average_return": round(sum(returns) / len(returns), 6) if returns else None,
         })
-    return {"summary": summary, "items": items}
+    return {
+        "summary": summary,
+        "items": items,
+        "notice": "当前为影子计划收益标签，不是实盘回测；买入价按次日开盘统一打标，卖出价按固定持有周期收盘统一打标。",
+        "is_backtest": False,
+        "label_scope": "shadow_plan_outcome_tracking",
+    }
 
 
 def snapshot_history(limit: int = 30) -> list[dict[str, Any]]:

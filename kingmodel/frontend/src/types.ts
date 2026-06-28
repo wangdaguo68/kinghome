@@ -82,7 +82,16 @@ export interface DashboardData {
   };
   ml_review?: {
     summary: Array<{ horizon: number; samples: number; win_rate: number | null; average_return: number | null }>;
-    items: Array<{ trade_date: string; code: string; name: string; rank?: number; horizon: number; tradable: boolean; net_return: number; mfe: number; mae: number; blocked_reason?: string }>;
+    notice?: string;
+    is_backtest?: boolean;
+    label_scope?: string;
+    items: Array<{
+      trade_date: string; code: string; name: string; rank?: number; horizon: number; holding_days?: number;
+      tradable: boolean; net_return: number; gross_return?: number; mfe: number; mae: number; payoff_ratio?: number | null;
+      entry_trade_date?: string; exit_trade_date?: string; entry_price?: number; exit_price?: number;
+      cost_rate?: number; blocked_reason?: string | null; label_version?: string;
+      sample_type?: string; is_backtest?: boolean; execution_model?: string; entry_rule?: string; exit_rule?: string;
+    }>;
   };
   data_quality: Record<string, { source: string; status: string; reason?: string }>;
   event_signals?: Array<{

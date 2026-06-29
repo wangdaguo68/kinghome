@@ -10,6 +10,7 @@ from app.services.sector_linkage import build_sector_linkage
 from app.services.capacity_core import build_capacity_cores, capacity_cores_as_candidates
 from app.services.close_collector import CloseCollector
 from app.services.decision_context import build_event_signals, build_market_graph
+from app.services.free_market import EastMoneyFreeClient
 from app.services.tushare_fallback import TushareFallback
 
 
@@ -75,6 +76,40 @@ def test_tdx_kline_dates_ignore_future_or_zero_volume_bar() -> None:
         ],
     }
     assert trade_dates_from_tdx_kline(payload, "2026.06.18", 15) == ["20260618", "20260617"]
+
+
+def test_free_market_breadth_paginates_until_total(monkeypatch) -> None:
+    client = EastMoneyFreeClient()
+    total = 8_500
+
+    async def fake_get_json_with_client(_http_client, _url, params, *, attempts=4):
+        page = int(params["pn"])
+        start = (page - 1) * 100
+        end = min(start + 100, total)
+        diff = [
+            {
+                "f2": 10.0,
+                "f3": 1.0 if index % 2 == 0 else -1.0,
+                "f6": float(index + 1),
+                "f12": f"600{index % 1000:03d}",
+                "f14": f"样本{index}",
+                "f15": 10.2,
+                "f18": 9.9,
+            }
+            for index in range(start, end)
+        ]
+        return {"data": {"total": total, "diff": diff}}
+
+    async def fake_pool_count(_url, _trade_date):
+        return 0
+
+    monkeypatch.setattr(client, "_get_json_with_client", fake_get_json_with_client)
+    monkeypatch.setattr(client, "_pool_count", fake_pool_count)
+
+    snapshot = asyncio.run(client.market_breadth("20260629", limit_up_count=88))
+
+    assert snapshot["breadth"]["eligible"] == total
+    assert snapshot["breadth"]["limit_up"] == 88
 
 
 def test_planned_targets_are_ranked_deduplicated_and_exclude_unsupported_markets() -> None:

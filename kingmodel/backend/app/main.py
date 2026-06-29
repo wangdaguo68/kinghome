@@ -23,10 +23,10 @@ async def collection_loop() -> None:
         status = collector.current().get("collection_status", {})
         job = status.get("job") or {}
         ready = (now.hour, now.minute) >= (get_settings().close_collection_hour, get_settings().close_collection_minute)
-        retry_window = now.hour == 15 and now.minute <= 30
-        if now.weekday() < 5 and ready and retry_window and job.get("status") != "published" and int(job.get("free_attempts") or 0) < 3:
+        retry_window = now.hour == 15 or (now.hour == 16 and now.minute <= 10)
+        if now.weekday() < 5 and ready and retry_window and job.get("status") != "published" and int(job.get("free_attempts") or 0) < 6:
             await collector.refresh(allow_tdx=True)
-            await asyncio.sleep(600)
+            await asyncio.sleep(300)
         else:
             await asyncio.sleep(60)
 

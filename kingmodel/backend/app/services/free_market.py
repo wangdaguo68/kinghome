@@ -80,7 +80,8 @@ class EastMoneyFreeClient:
         async with httpx.AsyncClient(
             timeout=self.timeout, headers=self.HEADERS, follow_redirects=True, trust_env=False
         ) as client:
-            for page in range(1, 80):
+            page = 1
+            while True:
                 payload = await self._get_json_with_client(client, self.CLIST_URL, {
                     "pn": str(page), "pz": "100", "po": "1", "np": "1",
                     "ut": "bd1d9ddb04089700cf9c27f6f7426281", "fltt": "2", "invt": "2",
@@ -95,6 +96,9 @@ class EastMoneyFreeClient:
                 rows.extend(diff)
                 if len(rows) >= total or len(diff) < 100:
                     break
+                if page >= 180:
+                    raise FreeMarketError(f"{trade_date} 东方财富全A行情分页超过安全上限：{total}")
+                page += 1
                 await asyncio.sleep(0.08)
 
         valid = [

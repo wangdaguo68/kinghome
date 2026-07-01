@@ -135,6 +135,124 @@ function PlannedTargets({ items }: { items: DashboardData["planned_targets"] }) 
   </article>)}</div>;
 }
 
+const ML_STAGE_LABEL: Record<string, { title: string; tone: string; detail: string }> = {
+  rule_only: { title: "规则影子积累", tone: "cold", detail: "只记录规则影子样本，真实机器学习模型尚未参与决策。" },
+  shadow_learning: { title: "影子学习中", tone: "warm", detail: "已达到首次训练区间，但仍以观察和校准为主。" },
+  assisted: { title: "模型辅助观察", tone: "hot", detail: "模型可作为辅助权重，但仍需要人工和盘面确认。" },
+  live_eligible: { title: "实盘参考候选", tone: "live", detail: "样本达到长期门槛，可进入更严格的实盘参考评估。" },
+};
+
+function formatMaybeDate(value?: string | null) {
+  if (!value) return "暂无";
+  return value.replace("T", " ").replace("+08:00", "").replace("+00:00", " UTC");
+}
+
+function percentMaybe(value: number | null | undefined) {
+  if (typeof value !== "number") return "待回填";
+  return `${(value * 100).toFixed(1)}%`;
+}
+
+function returnMaybe(value: number | null | undefined) {
+  if (typeof value !== "number") return "待回填";
+  return `${value >= 0 ? "+" : ""}${(value * 100).toFixed(2)}%`;
+}
+
+function gateProgress(days: number, gate: number) {
+  return Math.max(0, Math.min(100, Math.round(days / gate * 100)));
+}
+
+function MLLearningProgress({ data }: { data: DashboardData }) {
+  const feature = data.feature_store_status;
+  const system = data.ml_system;
+  const shadow = data.ml_shadow;
+  const review = data.ml_review;
+  if (!feature && !system && !shadow && !review) return null;
+  const featureDays = feature?.feature_days ?? system?.feature_days ?? 0;
+  const outcomeDays = feature?.outcome_days ?? system?.outcome_days ?? 0;
+  const stageKey = system?.stage ?? "rule_only";
+  const stage = ML_STAGE_LABEL[stageKey] ?? ML_STAGE_LABEL.rule_only;
+  const championCount = system?.champion_count ?? 0;
+  const challengerCount = system?.challenger_count ?? 0;
+  const missingFirstTrain = Math.max(0, 20 - outcomeDays);
+  const gates = [
+    { label: "首次训练", days: 20, note: missingFirstTrain > 0 ? `还差 ${missingFirstTrain} 个结果交易日` : "可尝试训练" },
+    { label: "辅助观察", days: 60, note: outcomeDays >= 60 ? "达到辅助观察门槛" : `还差 ${Math.max(0, 60 - outcomeDays)} 天` },
+    { label: "实盘参考", days: 120, note: outcomeDays >= 120 ? "达到长期样本门槛" : `还差 ${Math.max(0, 120 - outcomeDays)} 天` },
+  ];
+  const modules = system?.modules ?? {};
+  const latestPlans = shadow?.plans ?? [];
+  const latestOutcomes = (review?.items ?? []).slice(0, 6);
+  return <Panel title="机器学习进度" kicker="ML LEARNING STATUS · 不等于实盘推荐" className="ml-progress-panel">
+    <div className="ml-progress-hero">
+      <div className={`ml-stage ml-stage-${stage.tone}`}>
+        <BrainCircuit size={22} />
+        <span>当前阶段</span>
+        <strong>{stage.title}</strong>
+        <p>{stage.detail}</p>
+      </div>
+      <div className="ml-verdict">
+        <small>模型是否参与正式计划</small>
+        <strong>{championCount > 0 ? "已有模型可参与辅助评分" : "没有参与，当前仍是规则计划"}</strong>
+        <p>{championCount > 0 ? `Champion ${championCount} 个，Challenger ${challengerCount} 个。` : "Champion=0，Challenger=0；影子 Top3 只用于积累样本，不应按机器学习推荐执行。"}</p>
+      </div>
+      <div className="ml-days">
+        <article><span>特征交易日</span><b>{featureDays}</b><small>最新 {feature?.latest_trade_date ?? "暂无"}</small></article>
+        <article><span>结果标签日</span><b>{outcomeDays}</b><small>训练主要看标签样本</small></article>
+        <article><span>模型数量</span><b>{championCount + challengerCount}</b><small>Champion {championCount} / Challenger {challengerCount}</small></article>
+      </div>
+    </div>
+
+    <div className="ml-gate-grid">
+      {gates.map((gate) => <article key={gate.label}>
+        <header><span>{gate.label}</span><b>{outcomeDays}/{gate.days}</b></header>
+        <div className="ml-gate-bar"><i style={{ width: `${gateProgress(outcomeDays, gate.days)}%` }} /></div>
+        <p>{gate.note}</p>
+      </article>)}
+    </div>
+
+    <div className="ml-progress-body">
+      <section className="ml-review-card">
+        <header><span>结果回填</span><small>{review?.is_backtest === false ? "影子标签，不是实盘回测" : "样本统计"}</small></header>
+        <div className="ml-review-grid">{(review?.summary ?? []).map((item) => <article key={item.horizon}>
+          <b>{item.horizon}日</b>
+          <span>样本 {item.samples}</span>
+          <strong>{percentMaybe(item.win_rate)}</strong>
+          <small>{returnMaybe(item.average_return)}</small>
+        </article>)}</div>
+        <p>{review?.notice ?? "暂无结果标签。样本不足时，胜率和平均收益只用于检查流程，不用于实盘判断。"}</p>
+      </section>
+
+      <section className="ml-shadow-card">
+        <header><span>最新影子 Top3</span><small>{shadow?.plan_version ?? "暂无版本"}</small></header>
+        <div>{latestPlans.length ? latestPlans.map((item) => <article key={item.code}>
+          <b>#{item.rank} {item.name}<small>{item.code}</small></b>
+          <em>{item.score}分</em>
+          <p>{item.blocked_reason || "只记录样本，不进入正式计划。"}</p>
+        </article>) : <article><b>暂无影子计划</b><p>等待收盘快照生成后写入。</p></article>}</div>
+      </section>
+
+      <section className="ml-training-card">
+        <header><span>训练与模块</span><small>{system?.last_training_run?.version ?? "暂无训练"}</small></header>
+        <dl>
+          <div><dt>最近训练</dt><dd>{system?.last_training_run?.status ?? "暂无"}</dd></div>
+          <div><dt>训练样本</dt><dd>{system?.last_training_run?.sample_count ?? 0}</dd></div>
+          <div><dt>完成时间</dt><dd>{formatMaybeDate(system?.last_training_run?.finished_at)}</dd></div>
+        </dl>
+        <div className="ml-module-list">{Object.entries(modules).map(([name, status]) => <span key={name} className={`module-${status}`}>{name}<b>{status}</b></span>)}</div>
+      </section>
+
+      <section className="ml-outcome-card">
+        <header><span>最近标签明细</span><small>最多显示 6 条</small></header>
+        <div>{latestOutcomes.length ? latestOutcomes.map((item) => <article key={`${item.trade_date}-${item.code}-${item.horizon}`}>
+          <b>{item.trade_date} {item.name}<small>{item.code}</small></b>
+          <span>{item.horizon}日 / {item.tradable ? "可交易" : "不可交易"}</span>
+          <em className={item.net_return >= 0 ? "up" : "down"}>{returnMaybe(item.net_return)}</em>
+        </article>) : <article><b>暂无回填</b><span>后续交易日自动补齐 1/3/5/10 日标签。</span></article>}</div>
+      </section>
+    </div>
+  </Panel>;
+}
+
 const SHADOW_METRICS = [
   ["calibrated_probability", "概率"], ["expectancy_payoff", "期望"], ["mainline_core", "主线"],
   ["style_cycle_match", "适配"], ["tradeability", "交易"], ["data_model_reliability", "可靠"],
@@ -193,6 +311,8 @@ export function Cockpit({ data }: { data: DashboardData }) {
     </Panel>
 
     <Panel title="明日计划标的" kicker="EXECUTION WATCHLIST · 只列达标核心" className="plans-panel"><PlannedTargets items={data.planned_targets} /></Panel>
+
+    <MLLearningProgress data={data} />
 
     <ShadowTop3 shadow={data.ml_shadow} featureDays={data.feature_store_status?.feature_days} />
 
